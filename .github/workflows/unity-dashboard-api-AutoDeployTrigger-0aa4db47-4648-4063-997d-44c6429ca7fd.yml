@@ -35,15 +35,12 @@ jobs:
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}/backend
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
+          dockerfilePath: ./Dockerfile
           registryUrl: parivaremindersacr.azurecr.io
           registryUsername: ${{ secrets.UNITYDASHBOARDAPI_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.UNITYDASHBOARDAPI_REGISTRY_PASSWORD }}
           containerAppName: unity-dashboard-api
           resourceGroup: unity-dashboard-rg
           imageToBuild: parivaremindersacr.azurecr.io/unity-dashboard-api:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
 
 

@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - unity-dashboard-api
+name: Build and push Docker image
 
 on:
   push:
@@ -10,34 +7,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          node-version: '22.x'
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
-        run: npm install --omit=dev
-        working-directory: backend
-
-      - name: Login to Azure
-        uses: azure/login@v2
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_983C5A186FFB43B7B387C1CC73D1D825 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_53BC0D4AC5DE407FA6F37C79E55919C6 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_95F2202F4A4A48E4BA9567CFB88312AC }}
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'unity-dashboard-api'
-          slot-name: 'Production'
-          package: backend
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/unity-dashboard-api:latest

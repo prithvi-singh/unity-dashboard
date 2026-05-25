@@ -1,0 +1,1137 @@
+Schema dump started: 2026-05-25T07:25:26.470Z
+Output file: E:\Mom's Belief\Unity Dashboard\schema-dump.txt
+
+Connecting to Azure SQL...
+Connected to: mombelief-unity.database.windows.net / UnityDb
+
+
+============================================================
+  Query 1 — All Tables
+============================================================
+
+  TABLE_NAME                                             
+  -------------------------------------------------------
+  AdminRole                                              
+  AdminUser                                              
+  AdminUserAudit                                         
+  AdminUserCentre                                        
+  AdminUserPasswordHistory                               
+  AdminUserRole                                          
+  AdminUserTrustedDevice                                 
+  AllocatePatient                                        
+  AllocatePatientIfspReport                              
+  AllocatePatientISSAAssessmentGuideline                 
+  AllocatePatientReport                                  
+  AssessmentAllocationHistory                            
+  Centre                                                 
+  CMSAdminRole                                           
+  CMSAdminUser                                           
+  CMSAdminUserAudit                                      
+  CMSAdminUserPasswordHistory                            
+  CMSAdminUserRole                                       
+  CMSAdminUserTrustedDevice                              
+  CMSFile                                                
+  CMSFileMasterTag                                       
+  FnpRecommendation                                      
+  Game                                                   
+  GameMasterTag                                          
+  MasterCity                                             
+  MasterFnpRecommendation                                
+  MasterPatientBroaderProblemStatement                   
+  MasterPatientDP3AssessmentConfidenceInterval           
+  MasterPatientDP3AssessmentDescriptiveCategory          
+  MasterPatientDP3AssessmentDevelopmentalProblemStatement
+  MasterPatientDP3AssessmentGeneralDevelopmentScore      
+  MasterPatientDP3AssessmentPercentileRank               
+  MasterPatientDP3AssessmentQuestion                     
+  MasterPatientDP3AssessmentQuestionProblemStatement     
+  MasterPatientDP3AssessmentRawScore                     
+  MasterPatientDP3AssessmentStandardScore                
+  MasterPatientFspBroaderGoal                            
+  MasterPatientFspBroaderGoalSkillTag                    
+  MasterPatientFspBroaderIntervention                    
+  MasterPatientFspBroaderObjective                       
+  MasterPatientFspDevelopmentalGoal                      
+  MasterPatientFspDevelopmentalGoalSkillTag              
+  MasterPatientFspDevelopmentalIntervention              
+  MasterPatientFspDevelopmentalObjective                 
+  MasterPatientFspToolSkillTag                           
+  MasterPatientISAAAssessmentQuestion                    
+  MasterPatientISAAssessmentFnpGoal                      
+  MasterPatientReelsAssessmentAgeRange                   
+  MasterPatientReelsAssessmentFnpGoal                    
+  MasterPatientReelsAssessmentQuestion                   
+  MasterPatientSPMAssessmentFNPBaseline                  
+  MasterPatientSPMAssessmentQuestion                     
+  MasterPatientSPMAssessmentScore                        
+  MasterState                                            
+  MasterTag                                              
+  Patient                                                
+  PatientAssessmentFile                                  
+  PatientAssessmentNote                                  
+  PatientAuditLog                                        
+  PatientBroaderProblemStatement                         
+  PatientCaseFile                                        
+  PatientCaseHistory                                     
+  PatientCaseNote                                        
+  PatientDP3Assessment                                   
+  PatientDP3AssessmentDevelopmentalProblemStatement      
+  PatientDP3AssessmentItem                               
+  PatientDP3AssessmentReport                             
+  PatientFspBroaderGoal                                  
+  PatientFspBroaderIntervention                          
+  PatientFspBroaderObjective                             
+  PatientFspBroaderTool                                  
+  PatientFspDevelopmentalGoal                            
+  PatientFspDevelopmentalIntervention                    
+  PatientFspDevelopmentalObjective                       
+  PatientFspDevelopmentalTool                            
+  PatientGoalApprovalRequest                             
+  PatientGoalApprovalRequestGoal                         
+  PatientISAAAssessment                                  
+  PatientISAAAssessmentItem                              
+  PatientISAAssessmentFnpGoal                            
+  PatientISAAssessmentFnpGoalProgress                    
+  PatientParent                                          
+  PatientParentRole                                      
+  PatientParentUserAudit                                 
+  PatientParentUserPasswordHistory                       
+  PatientParentUserRole                                  
+  PatientParentUserTrustedDevice                         
+  PatientReelsAssessment                                 
+  PatientReelsAssessmentAgeGroup                         
+  PatientReelsAssessmentFnpBaseline                      
+  PatientReelsAssessmentFnpGoal                          
+  PatientReelsAssessmentFnpGoalProgress                  
+  PatientReelsAssessmentItem                             
+  PatientSPMAssessment                                   
+  PatientSPMAssessmentAgeGroup                           
+  PatientSPMAssessmentFNPBaseline                        
+  PatientSPMAssessmentFNPGoal                            
+  PatientSPMAssessmentFNPGoalPlanAcitivity               
+  PatientSPMAssessmentFNPGoalProgress                    
+  PatientSPMAssessmentItem                               
+  Video                                                  
+  VideoMasterTag                                         
+
+
+============================================================
+  Query 2 — All Columns with Data Types
+============================================================
+
+  TABLE_NAME                                               |  COLUMN_NAME                                                |  DATA_TYPE     
+  ---------------------------------------------------------+-------------------------------------------------------------+----------------
+  AdminRole                                                |  Id                                                         |  bigint        
+  AdminRole                                                |  Name                                                       |  nvarchar      
+  AdminRole                                                |  NormalizedName                                             |  nvarchar      
+  AdminRole                                                |  RowVersion                                                 |  timestamp     
+  AdminUser                                                |  Id                                                         |  bigint        
+  AdminUser                                                |  FirstName                                                  |  nvarchar      
+  AdminUser                                                |  LastName                                                   |  nvarchar      
+  AdminUser                                                |  Status                                                     |  nvarchar      
+  AdminUser                                                |  CreatedBy                                                  |  nvarchar      
+  AdminUser                                                |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AdminUser                                                |  UpdatedBy                                                  |  nvarchar      
+  AdminUser                                                |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AdminUser                                                |  RowVersion                                                 |  timestamp     
+  AdminUser                                                |  ClinicianSpecialization                                    |  nvarchar      
+  AdminUser                                                |  ProfilePictureStoragePath                                  |  nvarchar      
+  AdminUser                                                |  UserID                                                     |  nvarchar      
+  AdminUser                                                |  UserName                                                   |  nvarchar      
+  AdminUser                                                |  NormalizedUserName                                         |  nvarchar      
+  AdminUser                                                |  Email                                                      |  nvarchar      
+  AdminUser                                                |  NormalizedEmail                                            |  nvarchar      
+  AdminUser                                                |  EmailConfirmed                                             |  bit           
+  AdminUser                                                |  PasswordHash                                               |  nvarchar      
+  AdminUser                                                |  SecurityStamp                                              |  nvarchar      
+  AdminUser                                                |  ConcurrencyStamp                                           |  nvarchar      
+  AdminUser                                                |  PhoneNumber                                                |  nvarchar      
+  AdminUser                                                |  PhoneNumberConfirmed                                       |  bit           
+  AdminUser                                                |  LockoutEnd                                                 |  datetimeoffset
+  AdminUser                                                |  LockoutEnabled                                             |  bit           
+  AdminUser                                                |  AccessFailedCount                                          |  int           
+  AdminUser                                                |  LastLoginDateTimeUtc                                       |  datetimeoffset
+  AdminUser                                                |  LicenseNumber                                              |  nvarchar      
+  AdminUserAudit                                           |  Id                                                         |  bigint        
+  AdminUserAudit                                           |  AdminUserId                                                |  bigint        
+  AdminUserAudit                                           |  Type                                                       |  nvarchar      
+  AdminUserAudit                                           |  IpAddress                                                  |  nvarchar      
+  AdminUserAudit                                           |  UserAgent                                                  |  nvarchar      
+  AdminUserAudit                                           |  Description                                                |  nvarchar      
+  AdminUserAudit                                           |  RowVersion                                                 |  timestamp     
+  AdminUserAudit                                           |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserCentre                                          |  Id                                                         |  bigint        
+  AdminUserCentre                                          |  AdminUserId                                                |  bigint        
+  AdminUserCentre                                          |  CentreId                                                   |  bigint        
+  AdminUserCentre                                          |  CreatedBy                                                  |  nvarchar      
+  AdminUserCentre                                          |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserCentre                                          |  UpdatedBy                                                  |  nvarchar      
+  AdminUserCentre                                          |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserCentre                                          |  RowVersion                                                 |  timestamp     
+  AdminUserPasswordHistory                                 |  Id                                                         |  bigint        
+  AdminUserPasswordHistory                                 |  AdminUserId                                                |  bigint        
+  AdminUserPasswordHistory                                 |  PasswordHash                                               |  nvarchar      
+  AdminUserPasswordHistory                                 |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserPasswordHistory                                 |  RowVersion                                                 |  timestamp     
+  AdminUserRole                                            |  UserId                                                     |  bigint        
+  AdminUserRole                                            |  RoleId                                                     |  bigint        
+  AdminUserRole                                            |  RowVersion                                                 |  timestamp     
+  AdminUserTrustedDevice                                   |  Id                                                         |  bigint        
+  AdminUserTrustedDevice                                   |  AdminUserId                                                |  bigint        
+  AdminUserTrustedDevice                                   |  DeviceId                                                   |  nvarchar      
+  AdminUserTrustedDevice                                   |  DeviceName                                                 |  nvarchar      
+  AdminUserTrustedDevice                                   |  IpAddress                                                  |  nvarchar      
+  AdminUserTrustedDevice                                   |  UserAgent                                                  |  nvarchar      
+  AdminUserTrustedDevice                                   |  IsActive                                                   |  bit           
+  AdminUserTrustedDevice                                   |  CreatedBy                                                  |  nvarchar      
+  AdminUserTrustedDevice                                   |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserTrustedDevice                                   |  UpdatedBy                                                  |  nvarchar      
+  AdminUserTrustedDevice                                   |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AdminUserTrustedDevice                                   |  RowVersion                                                 |  timestamp     
+  AllocatePatient                                          |  Id                                                         |  bigint        
+  AllocatePatient                                          |  PatientId                                                  |  bigint        
+  AllocatePatient                                          |  ClinicianUserId                                            |  bigint        
+  AllocatePatient                                          |  Assessment                                                 |  nvarchar      
+  AllocatePatient                                          |  Status                                                     |  nvarchar      
+  AllocatePatient                                          |  CreatedBy                                                  |  nvarchar      
+  AllocatePatient                                          |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatient                                          |  UpdatedBy                                                  |  nvarchar      
+  AllocatePatient                                          |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatient                                          |  RowVersion                                                 |  timestamp     
+  AllocatePatient                                          |  Result                                                     |  int           
+  AllocatePatient                                          |  IsResultGenerate                                           |  bit           
+  AllocatePatient                                          |  AssessmentSerialNumber                                     |  int           
+  AllocatePatient                                          |  IsGoalApprovalRequested                                    |  bit           
+  AllocatePatientIfspReport                                |  Id                                                         |  bigint        
+  AllocatePatientIfspReport                                |  AllocatePatientId                                          |  bigint        
+  AllocatePatientIfspReport                                |  Data                                                       |  nvarchar      
+  AllocatePatientIfspReport                                |  IfspReportStoragePath                                      |  nvarchar      
+  AllocatePatientIfspReport                                |  CreatedBy                                                  |  nvarchar      
+  AllocatePatientIfspReport                                |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientIfspReport                                |  UpdatedBy                                                  |  nvarchar      
+  AllocatePatientIfspReport                                |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientIfspReport                                |  RowVersion                                                 |  timestamp     
+  AllocatePatientIfspReport                                |  GeneratedBy                                                |  nvarchar      
+  AllocatePatientIfspReport                                |  GeneratedOn                                                |  date          
+  AllocatePatientISSAAssessmentGuideline                   |  Id                                                         |  bigint        
+  AllocatePatientISSAAssessmentGuideline                   |  AllocatePatientId                                          |  bigint        
+  AllocatePatientISSAAssessmentGuideline                   |  Data                                                       |  nvarchar      
+  AllocatePatientISSAAssessmentGuideline                   |  CreatedBy                                                  |  nvarchar      
+  AllocatePatientISSAAssessmentGuideline                   |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientISSAAssessmentGuideline                   |  UpdatedBy                                                  |  nvarchar      
+  AllocatePatientISSAAssessmentGuideline                   |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientISSAAssessmentGuideline                   |  RowVersion                                                 |  timestamp     
+  AllocatePatientISSAAssessmentGuideline                   |  Guideline                                                  |  nvarchar      
+  AllocatePatientReport                                    |  Id                                                         |  bigint        
+  AllocatePatientReport                                    |  AllocatePatientId                                          |  bigint        
+  AllocatePatientReport                                    |  Data                                                       |  nvarchar      
+  AllocatePatientReport                                    |  CreatedBy                                                  |  nvarchar      
+  AllocatePatientReport                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientReport                                    |  UpdatedBy                                                  |  nvarchar      
+  AllocatePatientReport                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AllocatePatientReport                                    |  RowVersion                                                 |  timestamp     
+  AllocatePatientReport                                    |  ReportPdfStoragePath                                       |  nvarchar      
+  AllocatePatientReport                                    |  GeneratedBy                                                |  nvarchar      
+  AllocatePatientReport                                    |  GeneratedOn                                                |  date          
+  AssessmentAllocationHistory                              |  Id                                                         |  bigint        
+  AssessmentAllocationHistory                              |  AllocatePatientId                                          |  bigint        
+  AssessmentAllocationHistory                              |  AdminUserId                                                |  bigint        
+  AssessmentAllocationHistory                              |  Summary                                                    |  nvarchar      
+  AssessmentAllocationHistory                              |  CreatedBy                                                  |  nvarchar      
+  AssessmentAllocationHistory                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  AssessmentAllocationHistory                              |  UpdatedBy                                                  |  nvarchar      
+  AssessmentAllocationHistory                              |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  AssessmentAllocationHistory                              |  RowVersion                                                 |  timestamp     
+  Centre                                                   |  Id                                                         |  bigint        
+  Centre                                                   |  MasterCityId                                               |  bigint        
+  Centre                                                   |  CentreName                                                 |  nvarchar      
+  Centre                                                   |  PinCode                                                    |  nvarchar      
+  Centre                                                   |  Address                                                    |  nvarchar      
+  Centre                                                   |  CreatedBy                                                  |  nvarchar      
+  Centre                                                   |  CreatedDateTimeUtc                                         |  datetimeoffset
+  Centre                                                   |  UpdatedBy                                                  |  nvarchar      
+  Centre                                                   |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  Centre                                                   |  RowVersion                                                 |  timestamp     
+  Centre                                                   |  Status                                                     |  nvarchar      
+  CMSAdminRole                                             |  Id                                                         |  bigint        
+  CMSAdminRole                                             |  Name                                                       |  nvarchar      
+  CMSAdminRole                                             |  NormalizedName                                             |  nvarchar      
+  CMSAdminRole                                             |  RowVersion                                                 |  timestamp     
+  CMSAdminUser                                             |  Id                                                         |  bigint        
+  CMSAdminUser                                             |  FirstName                                                  |  nvarchar      
+  CMSAdminUser                                             |  LastName                                                   |  nvarchar      
+  CMSAdminUser                                             |  Status                                                     |  nvarchar      
+  CMSAdminUser                                             |  ProfilePictureStoragePath                                  |  nvarchar      
+  CMSAdminUser                                             |  UserName                                                   |  nvarchar      
+  CMSAdminUser                                             |  NormalizedUserName                                         |  nvarchar      
+  CMSAdminUser                                             |  Email                                                      |  nvarchar      
+  CMSAdminUser                                             |  NormalizedEmail                                            |  nvarchar      
+  CMSAdminUser                                             |  EmailConfirmed                                             |  bit           
+  CMSAdminUser                                             |  PasswordHash                                               |  nvarchar      
+  CMSAdminUser                                             |  PasswordSalt                                               |  nvarchar      
+  CMSAdminUser                                             |  SecurityStamp                                              |  nvarchar      
+  CMSAdminUser                                             |  PhoneNumber                                                |  nvarchar      
+  CMSAdminUser                                             |  PhoneNumberConfirmed                                       |  bit           
+  CMSAdminUser                                             |  ConcurrencyStamp                                           |  nvarchar      
+  CMSAdminUser                                             |  LockoutEnd                                                 |  datetimeoffset
+  CMSAdminUser                                             |  LockoutEnabled                                             |  bit           
+  CMSAdminUser                                             |  AccessFailedCount                                          |  int           
+  CMSAdminUser                                             |  LastLoginDateTimeUtc                                       |  datetimeoffset
+  CMSAdminUser                                             |  LastPasswordChangeDateTimeUtc                              |  datetimeoffset
+  CMSAdminUser                                             |  CreatedBy                                                  |  nvarchar      
+  CMSAdminUser                                             |  CreatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUser                                             |  UpdatedBy                                                  |  nvarchar      
+  CMSAdminUser                                             |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUser                                             |  RowVersion                                                 |  timestamp     
+  CMSAdminUserAudit                                        |  Id                                                         |  bigint        
+  CMSAdminUserAudit                                        |  CMSAdminUserId                                             |  bigint        
+  CMSAdminUserAudit                                        |  Type                                                       |  nvarchar      
+  CMSAdminUserAudit                                        |  IpAddress                                                  |  nvarchar      
+  CMSAdminUserAudit                                        |  UserAgent                                                  |  nvarchar      
+  CMSAdminUserAudit                                        |  Description                                                |  nvarchar      
+  CMSAdminUserAudit                                        |  RowVersion                                                 |  timestamp     
+  CMSAdminUserAudit                                        |  CreatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUserPasswordHistory                              |  CMSAdminUserId                                             |  bigint        
+  CMSAdminUserPasswordHistory                              |  PasswordHash                                               |  nvarchar      
+  CMSAdminUserPasswordHistory                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUserPasswordHistory                              |  Id                                                         |  bigint        
+  CMSAdminUserRole                                         |  UserId                                                     |  bigint        
+  CMSAdminUserRole                                         |  RoleId                                                     |  bigint        
+  CMSAdminUserRole                                         |  RowVersion                                                 |  timestamp     
+  CMSAdminUserTrustedDevice                                |  Id                                                         |  bigint        
+  CMSAdminUserTrustedDevice                                |  CMSAdminUserId                                             |  bigint        
+  CMSAdminUserTrustedDevice                                |  DeviceId                                                   |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  DeviceName                                                 |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  IpAddress                                                  |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  UserAgent                                                  |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  IsActive                                                   |  bit           
+  CMSAdminUserTrustedDevice                                |  CreatedBy                                                  |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  CreatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUserTrustedDevice                                |  UpdatedBy                                                  |  nvarchar      
+  CMSAdminUserTrustedDevice                                |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  CMSAdminUserTrustedDevice                                |  RowVersion                                                 |  timestamp     
+  CMSFile                                                  |  Id                                                         |  bigint        
+  CMSFile                                                  |  Title                                                      |  nvarchar      
+  CMSFile                                                  |  AgeGroup                                                   |  nvarchar      
+  CMSFile                                                  |  PublishTo                                                  |  nvarchar      
+  CMSFile                                                  |  FileStoragePath                                            |  nvarchar      
+  CMSFile                                                  |  PublishedBy                                                |  nvarchar      
+  CMSFile                                                  |  Status                                                     |  nvarchar      
+  CMSFile                                                  |  FileName                                                   |  nvarchar      
+  CMSFile                                                  |  FileSize                                                   |  bigint        
+  CMSFile                                                  |  CreatedBy                                                  |  nvarchar      
+  CMSFile                                                  |  CreatedDateTimeUtc                                         |  datetimeoffset
+  CMSFile                                                  |  UpdatedBy                                                  |  nvarchar      
+  CMSFile                                                  |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  CMSFile                                                  |  RowVersion                                                 |  timestamp     
+  CMSFileMasterTag                                         |  Id                                                         |  bigint        
+  CMSFileMasterTag                                         |  CMSFileId                                                  |  bigint        
+  CMSFileMasterTag                                         |  MasterTagId                                                |  bigint        
+  CMSFileMasterTag                                         |  RowVersion                                                 |  timestamp     
+  database_firewall_rules                                  |  id                                                         |  int           
+  database_firewall_rules                                  |  name                                                       |  nvarchar      
+  database_firewall_rules                                  |  start_ip_address                                           |  varchar       
+  database_firewall_rules                                  |  end_ip_address                                             |  varchar       
+  database_firewall_rules                                  |  create_date                                                |  datetime      
+  database_firewall_rules                                  |  modify_date                                                |  datetime      
+  FnpRecommendation                                        |  Id                                                         |  bigint        
+  FnpRecommendation                                        |  AllocatePatientId                                          |  bigint        
+  FnpRecommendation                                        |  MasterFnpRecommendationId                                  |  bigint        
+  FnpRecommendation                                        |  CreatedBy                                                  |  nvarchar      
+  FnpRecommendation                                        |  CreatedDateTimeUtc                                         |  datetimeoffset
+  FnpRecommendation                                        |  UpdatedBy                                                  |  nvarchar      
+  FnpRecommendation                                        |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  FnpRecommendation                                        |  RowVersion                                                 |  timestamp     
+  Game                                                     |  Id                                                         |  bigint        
+  Game                                                     |  Title                                                      |  nvarchar      
+  Game                                                     |  Description                                                |  nvarchar      
+  Game                                                     |  Link                                                       |  nvarchar      
+  Game                                                     |  AgeGroup                                                   |  nvarchar      
+  Game                                                     |  PublishTo                                                  |  nvarchar      
+  Game                                                     |  PublishedBy                                                |  nvarchar      
+  Game                                                     |  Status                                                     |  nvarchar      
+  Game                                                     |  ThumbNailImagePath                                         |  nvarchar      
+  Game                                                     |  ThumbNailImageFileName                                     |  nvarchar      
+  Game                                                     |  CreatedBy                                                  |  nvarchar      
+  Game                                                     |  CreatedDateTimeUtc                                         |  datetimeoffset
+  Game                                                     |  UpdatedBy                                                  |  nvarchar      
+  Game                                                     |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  Game                                                     |  RowVersion                                                 |  timestamp     
+  GameMasterTag                                            |  Id                                                         |  bigint        
+  GameMasterTag                                            |  GameId                                                     |  bigint        
+  GameMasterTag                                            |  MasterTagId                                                |  bigint        
+  GameMasterTag                                            |  RowVersion                                                 |  timestamp     
+  MasterCity                                               |  MasterStateId                                              |  bigint        
+  MasterCity                                               |  CityName                                                   |  nvarchar      
+  MasterCity                                               |  Id                                                         |  bigint        
+  MasterCity                                               |  RowVersion                                                 |  timestamp     
+  MasterFnpRecommendation                                  |  Id                                                         |  bigint        
+  MasterFnpRecommendation                                  |  Heading                                                    |  nvarchar      
+  MasterFnpRecommendation                                  |  Recommendation                                             |  nvarchar      
+  MasterFnpRecommendation                                  |  CreatedDateTimeUtc                                         |  datetimeoffset
+  MasterFnpRecommendation                                  |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  MasterPatientBroaderProblemStatement                     |  Id                                                         |  bigint        
+  MasterPatientBroaderProblemStatement                     |  MasterPatientFspBroaderGoalId                              |  bigint        
+  MasterPatientBroaderProblemStatement                     |  Domain                                                     |  nvarchar      
+  MasterPatientBroaderProblemStatement                     |  ProblemStatement                                           |  nvarchar      
+  MasterPatientDP3AssessmentConfidenceInterval             |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentConfidenceInterval             |  AgeYear                                                    |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  Physical                                                   |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  AdaptiveBehavior                                           |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  SocialEmotional                                            |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  Cognitive                                                  |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  Communication                                              |  int           
+  MasterPatientDP3AssessmentConfidenceInterval             |  GeneralDevelopmentScore                                    |  int           
+  MasterPatientDP3AssessmentDescriptiveCategory            |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentDescriptiveCategory            |  DescriptiveCategory                                        |  nvarchar      
+  MasterPatientDP3AssessmentDescriptiveCategory            |  MinStandardScore                                           |  int           
+  MasterPatientDP3AssessmentDescriptiveCategory            |  MaxStandardScore                                           |  int           
+  MasterPatientDP3AssessmentDevelopmentalProblemStatement  |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentDevelopmentalProblemStatement  |  ProblemStatement                                           |  nvarchar      
+  MasterPatientDP3AssessmentGeneralDevelopmentScore        |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentGeneralDevelopmentScore        |  SumOfStandardScores                                        |  nvarchar      
+  MasterPatientDP3AssessmentGeneralDevelopmentScore        |  GeneralDevelopmentScore                                    |  int           
+  MasterPatientDP3AssessmentGeneralDevelopmentScore        |  MinSumOfStandardScore                                      |  int           
+  MasterPatientDP3AssessmentGeneralDevelopmentScore        |  MaxSumOfStandardScore                                      |  int           
+  MasterPatientDP3AssessmentPercentileRank                 |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentPercentileRank                 |  StandardScore                                              |  decimal       
+  MasterPatientDP3AssessmentPercentileRank                 |  PercentileRank                                             |  decimal       
+  MasterPatientDP3AssessmentQuestion                       |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentQuestion                       |  Domain                                                     |  nvarchar      
+  MasterPatientDP3AssessmentQuestion                       |  Question                                                   |  nvarchar      
+  MasterPatientDP3AssessmentQuestion                       |  QuestionNumber                                             |  nvarchar      
+  MasterPatientDP3AssessmentQuestionProblemStatement       |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentQuestionProblemStatement       |  MasterPatientDP3AssessmentQuestionId                       |  bigint        
+  MasterPatientDP3AssessmentQuestionProblemStatement       |  MasterPatientDP3AssessmentDevelopmentalProblemStatementId  |  bigint        
+  MasterPatientDP3AssessmentQuestionProblemStatement       |  MasterPatientFspDevelopmentalGoalId                        |  bigint        
+  MasterPatientDP3AssessmentRawScore                       |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentRawScore                       |  RawScore                                                   |  int           
+  MasterPatientDP3AssessmentRawScore                       |  Physical                                                   |  nvarchar      
+  MasterPatientDP3AssessmentRawScore                       |  AdaptiveBehavior                                           |  nvarchar      
+  MasterPatientDP3AssessmentRawScore                       |  SocialEmotional                                            |  nvarchar      
+  MasterPatientDP3AssessmentRawScore                       |  Cognitive                                                  |  nvarchar      
+  MasterPatientDP3AssessmentRawScore                       |  Communication                                              |  nvarchar      
+  MasterPatientDP3AssessmentStandardScore                  |  Id                                                         |  bigint        
+  MasterPatientDP3AssessmentStandardScore                  |  AgeMinimumYear                                             |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  AgeMinimumMonth                                            |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  AgeMaximumYear                                             |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  AgeMaximumMonth                                            |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  StandardScore                                              |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  Physical                                                   |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  AdaptiveBehavior                                           |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  SocialEmotional                                            |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  Cognitive                                                  |  int           
+  MasterPatientDP3AssessmentStandardScore                  |  Communication                                              |  int           
+  MasterPatientFspBroaderGoal                              |  Id                                                         |  bigint        
+  MasterPatientFspBroaderGoal                              |  Domain                                                     |  nvarchar      
+  MasterPatientFspBroaderGoal                              |  Goal                                                       |  nvarchar      
+  MasterPatientFspBroaderGoalSkillTag                      |  Id                                                         |  bigint        
+  MasterPatientFspBroaderGoalSkillTag                      |  MasterPatientFspBroaderGoalId                              |  bigint        
+  MasterPatientFspBroaderGoalSkillTag                      |  SkillTag                                                   |  nvarchar      
+  MasterPatientFspBroaderIntervention                      |  Id                                                         |  bigint        
+  MasterPatientFspBroaderIntervention                      |  MasterPatientBroaderProblemStatementId                     |  bigint        
+  MasterPatientFspBroaderIntervention                      |  Intervention                                               |  nvarchar      
+  MasterPatientFspBroaderObjective                         |  Id                                                         |  bigint        
+  MasterPatientFspBroaderObjective                         |  MasterPatientBroaderProblemStatementId                     |  bigint        
+  MasterPatientFspBroaderObjective                         |  Objective                                                  |  nvarchar      
+  MasterPatientFspDevelopmentalGoal                        |  Id                                                         |  bigint        
+  MasterPatientFspDevelopmentalGoal                        |  Domain                                                     |  nvarchar      
+  MasterPatientFspDevelopmentalGoal                        |  Goal                                                       |  nvarchar      
+  MasterPatientFspDevelopmentalGoalSkillTag                |  Id                                                         |  bigint        
+  MasterPatientFspDevelopmentalGoalSkillTag                |  MasterPatientFspDevelopmentalGoalId                        |  bigint        
+  MasterPatientFspDevelopmentalGoalSkillTag                |  SkillTag                                                   |  nvarchar      
+  MasterPatientFspDevelopmentalIntervention                |  Id                                                         |  bigint        
+  MasterPatientFspDevelopmentalIntervention                |  MasterPatientDP3AssessmentDevelopmentalProblemStatementId  |  bigint        
+  MasterPatientFspDevelopmentalIntervention                |  Intervention                                               |  nvarchar      
+  MasterPatientFspDevelopmentalObjective                   |  Id                                                         |  bigint        
+  MasterPatientFspDevelopmentalObjective                   |  MasterPatientDP3AssessmentDevelopmentalProblemStatementId  |  bigint        
+  MasterPatientFspDevelopmentalObjective                   |  Objective                                                  |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  Id                                                         |  bigint        
+  MasterPatientFspToolSkillTag                             |  Type                                                       |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  NameOfResource                                             |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  PrimarySkillIndex                                          |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  PrimarySkillArea                                           |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  PrimaryActivityLevel                                       |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  SecondarySkillIndex                                        |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  SecondarySkillArea                                         |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  SecondaryActivityLevel                                     |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  ThirdSkillIndex                                            |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  ThirdSkillArea                                             |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  ThirdActivityLevel                                         |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FourthSkillIndex                                           |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FourthSkillArea                                            |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FourthActivityLevel                                        |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FifthSkillIndex                                            |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FifthSkillArea                                             |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  FifthActivityLevel                                         |  nvarchar      
+  MasterPatientFspToolSkillTag                             |  CreatedDateTimeUtc                                         |  datetimeoffset
+  MasterPatientFspToolSkillTag                             |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  MasterPatientISAAAssessmentQuestion                      |  Id                                                         |  bigint        
+  MasterPatientISAAAssessmentQuestion                      |  Domain                                                     |  nvarchar      
+  MasterPatientISAAAssessmentQuestion                      |  Question                                                   |  nvarchar      
+  MasterPatientISAAAssessmentQuestion                      |  QuestionNumber                                             |  nvarchar      
+  MasterPatientISAAAssessmentQuestion                      |  RowVersion                                                 |  timestamp     
+  MasterPatientISAAssessmentFnpGoal                        |  Level                                                      |  int           
+  MasterPatientISAAssessmentFnpGoal                        |  Skill                                                      |  nvarchar      
+  MasterPatientISAAssessmentFnpGoal                        |  Goal                                                       |  nvarchar      
+  MasterPatientISAAssessmentFnpGoal                        |  Id                                                         |  bigint        
+  MasterPatientReelsAssessmentAgeRange                     |  Id                                                         |  bigint        
+  MasterPatientReelsAssessmentAgeRange                     |  MinimumAge                                                 |  int           
+  MasterPatientReelsAssessmentAgeRange                     |  MaximumAge                                                 |  int           
+  MasterPatientReelsAssessmentAgeRange                     |  RowVersion                                                 |  timestamp     
+  MasterPatientReelsAssessmentFnpGoal                      |  Id                                                         |  bigint        
+  MasterPatientReelsAssessmentFnpGoal                      |  Goal                                                       |  nvarchar      
+  MasterPatientReelsAssessmentFnpGoal                      |  MinimumMonth                                               |  int           
+  MasterPatientReelsAssessmentFnpGoal                      |  MinimumYear                                                |  int           
+  MasterPatientReelsAssessmentFnpGoal                      |  MaximumMonth                                               |  int           
+  MasterPatientReelsAssessmentFnpGoal                      |  MaximumYear                                                |  int           
+  MasterPatientReelsAssessmentFnpGoal                      |  Domain                                                     |  nvarchar      
+  MasterPatientReelsAssessmentFnpGoal                      |  RowVersion                                                 |  timestamp     
+  MasterPatientReelsAssessmentQuestion                     |  QuestionNumber                                             |  nvarchar      
+  MasterPatientReelsAssessmentQuestion                     |  Question                                                   |  nvarchar      
+  MasterPatientReelsAssessmentQuestion                     |  MinimumAge                                                 |  int           
+  MasterPatientReelsAssessmentQuestion                     |  MaximumAge                                                 |  int           
+  MasterPatientReelsAssessmentQuestion                     |  Domain                                                     |  nvarchar      
+  MasterPatientReelsAssessmentQuestion                     |  Id                                                         |  bigint        
+  MasterPatientReelsAssessmentQuestion                     |  RowVersion                                                 |  timestamp     
+  MasterPatientSPMAssessmentFNPBaseline                    |  Id                                                         |  bigint        
+  MasterPatientSPMAssessmentFNPBaseline                    |  Skill                                                      |  nvarchar      
+  MasterPatientSPMAssessmentFNPBaseline                    |  BaseLine                                                   |  nvarchar      
+  MasterPatientSPMAssessmentQuestion                       |  Id                                                         |  bigint        
+  MasterPatientSPMAssessmentQuestion                       |  QuestionNumber                                             |  int           
+  MasterPatientSPMAssessmentQuestion                       |  Domain                                                     |  nvarchar      
+  MasterPatientSPMAssessmentQuestion                       |  Question                                                   |  nvarchar      
+  MasterPatientSPMAssessmentQuestion                       |  AgeGroup                                                   |  nvarchar      
+  MasterPatientSPMAssessmentQuestion                       |  RowVersion                                                 |  timestamp     
+  MasterPatientSPMAssessmentScore                          |  Id                                                         |  bigint        
+  MasterPatientSPMAssessmentScore                          |  MinimumAge                                                 |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumAge                                                 |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumSocial                                              |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumSocial                                              |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumVision                                              |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumVision                                              |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumHearing                                             |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumHearing                                             |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumTouch                                               |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumTouch                                               |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumBody                                                |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumBody                                                |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumBalance                                             |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumBalance                                             |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumPlanning                                            |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumPlanning                                            |  int           
+  MasterPatientSPMAssessmentScore                          |  MinimumTotal                                               |  int           
+  MasterPatientSPMAssessmentScore                          |  MaximumTotal                                               |  int           
+  MasterPatientSPMAssessmentScore                          |  TScore                                                     |  int           
+  MasterPatientSPMAssessmentScore                          |  RowVersion                                                 |  timestamp     
+  MasterState                                              |  Id                                                         |  bigint        
+  MasterState                                              |  StateName                                                  |  nvarchar      
+  MasterTag                                                |  Id                                                         |  bigint        
+  MasterTag                                                |  Name                                                       |  nvarchar      
+  MasterTag                                                |  Description                                                |  nvarchar      
+  MasterTag                                                |  TagColor                                                   |  nvarchar      
+  MasterTag                                                |  RowVersion                                                 |  timestamp     
+  Patient                                                  |  Id                                                         |  bigint        
+  Patient                                                  |  CentreId                                                   |  bigint        
+  Patient                                                  |  PatientID                                                  |  nvarchar      
+  Patient                                                  |  FirstName                                                  |  nvarchar      
+  Patient                                                  |  MiddleName                                                 |  nvarchar      
+  Patient                                                  |  LastName                                                   |  nvarchar      
+  Patient                                                  |  DateOfBirth                                                |  date          
+  Patient                                                  |  Gender                                                     |  nvarchar      
+  Patient                                                  |  SchoolName                                                 |  nvarchar      
+  Patient                                                  |  GradeName                                                  |  nvarchar      
+  Patient                                                  |  OrderOfBirth                                               |  int           
+  Patient                                                  |  Diagnosis                                                  |  nvarchar      
+  Patient                                                  |  Status                                                     |  nvarchar      
+  Patient                                                  |  ProfilePictureStoragePath                                  |  nvarchar      
+  Patient                                                  |  CreatedBy                                                  |  nvarchar      
+  Patient                                                  |  CreatedDateTimeUtc                                         |  datetimeoffset
+  Patient                                                  |  UpdatedBy                                                  |  nvarchar      
+  Patient                                                  |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  Patient                                                  |  RowVersion                                                 |  timestamp     
+  Patient                                                  |  Age                                                        |  int           
+  PatientAssessmentFile                                    |  Id                                                         |  bigint        
+  PatientAssessmentFile                                    |  AllocatePatientId                                          |  bigint        
+  PatientAssessmentFile                                    |  AdminUserId                                                |  bigint        
+  PatientAssessmentFile                                    |  FileName                                                   |  nvarchar      
+  PatientAssessmentFile                                    |  FileSize                                                   |  bigint        
+  PatientAssessmentFile                                    |  Category                                                   |  nvarchar      
+  PatientAssessmentFile                                    |  DocumentStoragePath                                        |  nvarchar      
+  PatientAssessmentFile                                    |  CreatedBy                                                  |  nvarchar      
+  PatientAssessmentFile                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientAssessmentFile                                    |  UpdatedBy                                                  |  nvarchar      
+  PatientAssessmentFile                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientAssessmentFile                                    |  RowVersion                                                 |  timestamp     
+  PatientAssessmentNote                                    |  Id                                                         |  bigint        
+  PatientAssessmentNote                                    |  AllocatePatientId                                          |  bigint        
+  PatientAssessmentNote                                    |  AdminUserId                                                |  bigint        
+  PatientAssessmentNote                                    |  Title                                                      |  nvarchar      
+  PatientAssessmentNote                                    |  Description                                                |  nvarchar      
+  PatientAssessmentNote                                    |  CreatedBy                                                  |  nvarchar      
+  PatientAssessmentNote                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientAssessmentNote                                    |  UpdatedBy                                                  |  nvarchar      
+  PatientAssessmentNote                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientAssessmentNote                                    |  RowVersion                                                 |  timestamp     
+  PatientAuditLog                                          |  Id                                                         |  bigint        
+  PatientAuditLog                                          |  PatientId                                                  |  bigint        
+  PatientAuditLog                                          |  AllocatePatientId                                          |  bigint        
+  PatientAuditLog                                          |  Type                                                       |  nvarchar      
+  PatientAuditLog                                          |  IpAddress                                                  |  nvarchar      
+  PatientAuditLog                                          |  UserAgent                                                  |  nvarchar      
+  PatientAuditLog                                          |  Description                                                |  nvarchar      
+  PatientAuditLog                                          |  RowVersion                                                 |  timestamp     
+  PatientAuditLog                                          |  CreatedDateTime                                            |  datetimeoffset
+  PatientAuditLog                                          |  AdminUserId                                                |  bigint        
+  PatientBroaderProblemStatement                           |  Id                                                         |  bigint        
+  PatientBroaderProblemStatement                           |  AllocatePatientId                                          |  bigint        
+  PatientBroaderProblemStatement                           |  MasterPatientBroaderProblemStatementId                     |  bigint        
+  PatientBroaderProblemStatement                           |  Domain                                                     |  nvarchar      
+  PatientBroaderProblemStatement                           |  CreatedBy                                                  |  nvarchar      
+  PatientBroaderProblemStatement                           |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientBroaderProblemStatement                           |  UpdatedBy                                                  |  nvarchar      
+  PatientBroaderProblemStatement                           |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientBroaderProblemStatement                           |  RowVersion                                                 |  timestamp     
+  PatientCaseFile                                          |  Id                                                         |  bigint        
+  PatientCaseFile                                          |  PatientId                                                  |  bigint        
+  PatientCaseFile                                          |  AdminUserId                                                |  bigint        
+  PatientCaseFile                                          |  Category                                                   |  nvarchar      
+  PatientCaseFile                                          |  UploadDocumentStoragePath                                  |  nvarchar      
+  PatientCaseFile                                          |  CreatedBy                                                  |  nvarchar      
+  PatientCaseFile                                          |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseFile                                          |  UpdatedBy                                                  |  nvarchar      
+  PatientCaseFile                                          |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseFile                                          |  RowVersion                                                 |  timestamp     
+  PatientCaseHistory                                       |  Id                                                         |  bigint        
+  PatientCaseHistory                                       |  PatientId                                                  |  bigint        
+  PatientCaseHistory                                       |  Section                                                    |  nvarchar      
+  PatientCaseHistory                                       |  Data                                                       |  nvarchar      
+  PatientCaseHistory                                       |  CreatedBy                                                  |  nvarchar      
+  PatientCaseHistory                                       |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseHistory                                       |  UpdatedBy                                                  |  nvarchar      
+  PatientCaseHistory                                       |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseHistory                                       |  RowVersion                                                 |  timestamp     
+  PatientCaseNote                                          |  Id                                                         |  bigint        
+  PatientCaseNote                                          |  PatientId                                                  |  bigint        
+  PatientCaseNote                                          |  AdminUserId                                                |  bigint        
+  PatientCaseNote                                          |  Title                                                      |  nvarchar      
+  PatientCaseNote                                          |  Description                                                |  nvarchar      
+  PatientCaseNote                                          |  CreatedBy                                                  |  nvarchar      
+  PatientCaseNote                                          |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseNote                                          |  UpdatedBy                                                  |  nvarchar      
+  PatientCaseNote                                          |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientCaseNote                                          |  RowVersion                                                 |  timestamp     
+  PatientDP3Assessment                                     |  Id                                                         |  bigint        
+  PatientDP3Assessment                                     |  AllocatePatientId                                          |  bigint        
+  PatientDP3Assessment                                     |  Domain                                                     |  nvarchar      
+  PatientDP3Assessment                                     |  Status                                                     |  nvarchar      
+  PatientDP3Assessment                                     |  CreatedBy                                                  |  nvarchar      
+  PatientDP3Assessment                                     |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3Assessment                                     |  UpdatedBy                                                  |  nvarchar      
+  PatientDP3Assessment                                     |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3Assessment                                     |  RowVersion                                                 |  timestamp     
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  Id                                                         |  bigint        
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  PatientDP3AssessmentItemId                                 |  bigint        
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  MasterPatientDP3AssessmentDevelopmentalProblemStatementId  |  bigint        
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  CreatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  UpdatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentDevelopmentalProblemStatement        |  RowVersion                                                 |  timestamp     
+  PatientDP3AssessmentItem                                 |  Id                                                         |  bigint        
+  PatientDP3AssessmentItem                                 |  PatientDP3AssessmentId                                     |  bigint        
+  PatientDP3AssessmentItem                                 |  MasterPatientDP3AssessmentQuestionId                       |  bigint        
+  PatientDP3AssessmentItem                                 |  Answer                                                     |  bit           
+  PatientDP3AssessmentItem                                 |  CreatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentItem                                 |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentItem                                 |  UpdatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentItem                                 |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentItem                                 |  RowVersion                                                 |  timestamp     
+  PatientDP3AssessmentReport                               |  Id                                                         |  bigint        
+  PatientDP3AssessmentReport                               |  AllocatePatientId                                          |  bigint        
+  PatientDP3AssessmentReport                               |  Data                                                       |  nvarchar      
+  PatientDP3AssessmentReport                               |  CreatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentReport                               |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentReport                               |  UpdatedBy                                                  |  nvarchar      
+  PatientDP3AssessmentReport                               |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientDP3AssessmentReport                               |  RowVersion                                                 |  timestamp     
+  PatientFspBroaderGoal                                    |  Id                                                         |  bigint        
+  PatientFspBroaderGoal                                    |  AllocatePatientId                                          |  bigint        
+  PatientFspBroaderGoal                                    |  MasterPatientFspBroaderGoalId                              |  bigint        
+  PatientFspBroaderGoal                                    |  Goal                                                       |  nvarchar      
+  PatientFspBroaderGoal                                    |  CreatedBy                                                  |  nvarchar      
+  PatientFspBroaderGoal                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderGoal                                    |  UpdatedBy                                                  |  nvarchar      
+  PatientFspBroaderGoal                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderGoal                                    |  RowVersion                                                 |  timestamp     
+  PatientFspBroaderGoal                                    |  Status                                                     |  nvarchar      
+  PatientFspBroaderIntervention                            |  Id                                                         |  bigint        
+  PatientFspBroaderIntervention                            |  PatientBroaderProblemStatementId                           |  bigint        
+  PatientFspBroaderIntervention                            |  MasterPatientFspBroaderInterventionId                      |  bigint        
+  PatientFspBroaderIntervention                            |  Intervention                                               |  nvarchar      
+  PatientFspBroaderIntervention                            |  CreatedBy                                                  |  nvarchar      
+  PatientFspBroaderIntervention                            |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderIntervention                            |  UpdatedBy                                                  |  nvarchar      
+  PatientFspBroaderIntervention                            |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderIntervention                            |  RowVersion                                                 |  timestamp     
+  PatientFspBroaderObjective                               |  Id                                                         |  bigint        
+  PatientFspBroaderObjective                               |  PatientBroaderProblemStatementId                           |  bigint        
+  PatientFspBroaderObjective                               |  MasterPatientFspBroaderObjectiveId                         |  bigint        
+  PatientFspBroaderObjective                               |  Objective                                                  |  nvarchar      
+  PatientFspBroaderObjective                               |  CreatedBy                                                  |  nvarchar      
+  PatientFspBroaderObjective                               |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderObjective                               |  UpdatedBy                                                  |  nvarchar      
+  PatientFspBroaderObjective                               |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderObjective                               |  RowVersion                                                 |  timestamp     
+  PatientFspBroaderTool                                    |  Id                                                         |  bigint        
+  PatientFspBroaderTool                                    |  AllocatePatientId                                          |  bigint        
+  PatientFspBroaderTool                                    |  MasterPatientFspBroaderGoalId                              |  bigint        
+  PatientFspBroaderTool                                    |  MasterPatientFspToolSkillTagId                             |  bigint        
+  PatientFspBroaderTool                                    |  PatientFspBroaderGoalId                                    |  bigint        
+  PatientFspBroaderTool                                    |  CreatedBy                                                  |  nvarchar      
+  PatientFspBroaderTool                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderTool                                    |  UpdatedBy                                                  |  nvarchar      
+  PatientFspBroaderTool                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspBroaderTool                                    |  RowVersion                                                 |  timestamp     
+  PatientFspDevelopmentalGoal                              |  Id                                                         |  bigint        
+  PatientFspDevelopmentalGoal                              |  AllocatePatientId                                          |  bigint        
+  PatientFspDevelopmentalGoal                              |  MasterPatientFspDevelopmentalGoalId                        |  bigint        
+  PatientFspDevelopmentalGoal                              |  Goal                                                       |  nvarchar      
+  PatientFspDevelopmentalGoal                              |  CreatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalGoal                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalGoal                              |  UpdatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalGoal                              |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalGoal                              |  RowVersion                                                 |  timestamp     
+  PatientFspDevelopmentalIntervention                      |  Id                                                         |  bigint        
+  PatientFspDevelopmentalIntervention                      |  PatientDP3AssessmentDevelopmentalProblemStatementId        |  bigint        
+  PatientFspDevelopmentalIntervention                      |  MasterPatientFspDevelopmentalInterventionId                |  bigint        
+  PatientFspDevelopmentalIntervention                      |  Intervention                                               |  nvarchar      
+  PatientFspDevelopmentalIntervention                      |  CreatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalIntervention                      |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalIntervention                      |  UpdatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalIntervention                      |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalIntervention                      |  RowVersion                                                 |  timestamp     
+  PatientFspDevelopmentalObjective                         |  Id                                                         |  bigint        
+  PatientFspDevelopmentalObjective                         |  PatientDP3AssessmentDevelopmentalProblemStatementId        |  bigint        
+  PatientFspDevelopmentalObjective                         |  MasterPatientFspDevelopmentalObjectiveId                   |  bigint        
+  PatientFspDevelopmentalObjective                         |  Objective                                                  |  nvarchar      
+  PatientFspDevelopmentalObjective                         |  CreatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalObjective                         |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalObjective                         |  UpdatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalObjective                         |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalObjective                         |  RowVersion                                                 |  timestamp     
+  PatientFspDevelopmentalTool                              |  Id                                                         |  bigint        
+  PatientFspDevelopmentalTool                              |  AllocatePatientId                                          |  bigint        
+  PatientFspDevelopmentalTool                              |  MasterPatientFspDevelopmentalGoalId                        |  bigint        
+  PatientFspDevelopmentalTool                              |  MasterPatientFspToolSkillTagId                             |  bigint        
+  PatientFspDevelopmentalTool                              |  PatientFspDevelopmentalGoalId                              |  bigint        
+  PatientFspDevelopmentalTool                              |  CreatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalTool                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalTool                              |  UpdatedBy                                                  |  nvarchar      
+  PatientFspDevelopmentalTool                              |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientFspDevelopmentalTool                              |  RowVersion                                                 |  timestamp     
+  PatientGoalApprovalRequest                               |  Id                                                         |  bigint        
+  PatientGoalApprovalRequest                               |  AllocatePatientId                                          |  bigint        
+  PatientGoalApprovalRequest                               |  RowVersion                                                 |  timestamp     
+  PatientGoalApprovalRequest                               |  RequestId                                                  |  nvarchar      
+  PatientGoalApprovalRequest                               |  CreatedBy                                                  |  nvarchar      
+  PatientGoalApprovalRequest                               |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientGoalApprovalRequest                               |  UpdatedBy                                                  |  nvarchar      
+  PatientGoalApprovalRequest                               |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientGoalApprovalRequestGoal                           |  Id                                                         |  bigint        
+  PatientGoalApprovalRequestGoal                           |  PatientGoalApprovalRequestId                               |  bigint        
+  PatientGoalApprovalRequestGoal                           |  PatientISAAssessmentFnpGoalId                              |  bigint        
+  PatientGoalApprovalRequestGoal                           |  PatientSPMAssessmentFNPGoalId                              |  bigint        
+  PatientGoalApprovalRequestGoal                           |  PatientReelsAssessmentFnpGoalId                            |  bigint        
+  PatientGoalApprovalRequestGoal                           |  PatientFspBroaderGoalId                                    |  bigint        
+  PatientGoalApprovalRequestGoal                           |  Status                                                     |  nvarchar      
+  PatientGoalApprovalRequestGoal                           |  CreatedBy                                                  |  nvarchar      
+  PatientGoalApprovalRequestGoal                           |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientGoalApprovalRequestGoal                           |  UpdatedBy                                                  |  nvarchar      
+  PatientGoalApprovalRequestGoal                           |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientGoalApprovalRequestGoal                           |  RowVersion                                                 |  timestamp     
+  PatientGoalApprovalRequestGoal                           |  PatientFspDevelopmentalGoalId                              |  bigint        
+  PatientISAAAssessment                                    |  Id                                                         |  bigint        
+  PatientISAAAssessment                                    |  AllocatePatientId                                          |  bigint        
+  PatientISAAAssessment                                    |  Domain                                                     |  nvarchar      
+  PatientISAAAssessment                                    |  Status                                                     |  nvarchar      
+  PatientISAAAssessment                                    |  CreatedBy                                                  |  nvarchar      
+  PatientISAAAssessment                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAAssessment                                    |  UpdatedBy                                                  |  nvarchar      
+  PatientISAAAssessment                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAAssessment                                    |  RowVersion                                                 |  timestamp     
+  PatientISAAAssessmentItem                                |  Id                                                         |  bigint        
+  PatientISAAAssessmentItem                                |  PatientISAAAssessmentId                                    |  bigint        
+  PatientISAAAssessmentItem                                |  MasterPatientISAAAssessmentQuestionId                      |  bigint        
+  PatientISAAAssessmentItem                                |  Answer                                                     |  int           
+  PatientISAAAssessmentItem                                |  CreatedBy                                                  |  nvarchar      
+  PatientISAAAssessmentItem                                |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAAssessmentItem                                |  UpdatedBy                                                  |  nvarchar      
+  PatientISAAAssessmentItem                                |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAAssessmentItem                                |  RowVersion                                                 |  timestamp     
+  PatientISAAssessmentFnpGoal                              |  Id                                                         |  bigint        
+  PatientISAAssessmentFnpGoal                              |  AllocatePatientId                                          |  bigint        
+  PatientISAAssessmentFnpGoal                              |  MasterPatientISAAssessmentFnpGoalId                        |  bigint        
+  PatientISAAssessmentFnpGoal                              |  CreatedBy                                                  |  nvarchar      
+  PatientISAAssessmentFnpGoal                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAssessmentFnpGoal                              |  UpdatedBy                                                  |  nvarchar      
+  PatientISAAssessmentFnpGoal                              |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAssessmentFnpGoal                              |  RowVersion                                                 |  timestamp     
+  PatientISAAssessmentFnpGoalProgress                      |  Id                                                         |  bigint        
+  PatientISAAssessmentFnpGoalProgress                      |  PatientISAAssessmentFnpGoalId                              |  bigint        
+  PatientISAAssessmentFnpGoalProgress                      |  Progress                                                   |  nvarchar      
+  PatientISAAssessmentFnpGoalProgress                      |  CreatedBy                                                  |  nvarchar      
+  PatientISAAssessmentFnpGoalProgress                      |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAssessmentFnpGoalProgress                      |  UpdatedBy                                                  |  nvarchar      
+  PatientISAAssessmentFnpGoalProgress                      |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientISAAssessmentFnpGoalProgress                      |  RowVersion                                                 |  timestamp     
+  PatientParent                                            |  Id                                                         |  bigint        
+  PatientParent                                            |  PatientId                                                  |  bigint        
+  PatientParent                                            |  Name                                                       |  nvarchar      
+  PatientParent                                            |  DateOfBirth                                                |  date          
+  PatientParent                                            |  Gender                                                     |  nvarchar      
+  PatientParent                                            |  Relation                                                   |  nvarchar      
+  PatientParent                                            |  Profession                                                 |  nvarchar      
+  PatientParent                                            |  PhoneNumber                                                |  nvarchar      
+  PatientParent                                            |  Email                                                      |  nvarchar      
+  PatientParent                                            |  PrimaryLanguage                                            |  nvarchar      
+  PatientParent                                            |  SecondaryLanguage                                          |  nvarchar      
+  PatientParent                                            |  Status                                                     |  nvarchar      
+  PatientParent                                            |  ProfilePictureStoragePath                                  |  nvarchar      
+  PatientParent                                            |  CreatedBy                                                  |  nvarchar      
+  PatientParent                                            |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientParent                                            |  UpdatedBy                                                  |  nvarchar      
+  PatientParent                                            |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientParent                                            |  RowVersion                                                 |  timestamp     
+  PatientParent                                            |  AdminUserId                                                |  bigint        
+  PatientParent                                            |  UserName                                                   |  nvarchar      
+  PatientParent                                            |  NormalizedUserName                                         |  nvarchar      
+  PatientParent                                            |  NormalizedEmail                                            |  nvarchar      
+  PatientParent                                            |  EmailConfirmed                                             |  bit           
+  PatientParent                                            |  PasswordHash                                               |  nvarchar      
+  PatientParent                                            |  SecurityStamp                                              |  nvarchar      
+  PatientParent                                            |  ConcurrencyStamp                                           |  nvarchar      
+  PatientParent                                            |  PhoneNumberConfirmed                                       |  bit           
+  PatientParent                                            |  LockoutEnd                                                 |  datetimeoffset
+  PatientParent                                            |  LockoutEnabled                                             |  bit           
+  PatientParent                                            |  AccessFailedCount                                          |  int           
+  PatientParent                                            |  LastLoginDateTimeUtc                                       |  datetimeoffset
+  PatientParentRole                                        |  Id                                                         |  bigint        
+  PatientParentRole                                        |  Name                                                       |  nvarchar      
+  PatientParentRole                                        |  NormalizedName                                             |  nvarchar      
+  PatientParentRole                                        |  RowVersion                                                 |  timestamp     
+  PatientParentUserAudit                                   |  Id                                                         |  bigint        
+  PatientParentUserAudit                                   |  PatientParentUserId                                        |  bigint        
+  PatientParentUserAudit                                   |  Type                                                       |  nvarchar      
+  PatientParentUserAudit                                   |  IpAddress                                                  |  nvarchar      
+  PatientParentUserAudit                                   |  UserAgent                                                  |  nvarchar      
+  PatientParentUserAudit                                   |  Description                                                |  nvarchar      
+  PatientParentUserAudit                                   |  RowVersion                                                 |  timestamp     
+  PatientParentUserAudit                                   |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientParentUserPasswordHistory                         |  Id                                                         |  bigint        
+  PatientParentUserPasswordHistory                         |  PatientParentUserId                                        |  bigint        
+  PatientParentUserPasswordHistory                         |  PasswordHash                                               |  nvarchar      
+  PatientParentUserPasswordHistory                         |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientParentUserPasswordHistory                         |  RowVersion                                                 |  timestamp     
+  PatientParentUserRole                                    |  UserId                                                     |  bigint        
+  PatientParentUserRole                                    |  RoleId                                                     |  bigint        
+  PatientParentUserRole                                    |  RowVersion                                                 |  timestamp     
+  PatientParentUserTrustedDevice                           |  Id                                                         |  bigint        
+  PatientParentUserTrustedDevice                           |  PatientParentUserId                                        |  bigint        
+  PatientParentUserTrustedDevice                           |  DeviceId                                                   |  nvarchar      
+  PatientParentUserTrustedDevice                           |  DeviceName                                                 |  nvarchar      
+  PatientParentUserTrustedDevice                           |  IpAddress                                                  |  nvarchar      
+  PatientParentUserTrustedDevice                           |  UserAgent                                                  |  nvarchar      
+  PatientParentUserTrustedDevice                           |  IsActive                                                   |  bit           
+  PatientParentUserTrustedDevice                           |  CreatedBy                                                  |  nvarchar      
+  PatientParentUserTrustedDevice                           |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientParentUserTrustedDevice                           |  UpdatedBy                                                  |  nvarchar      
+  PatientParentUserTrustedDevice                           |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientParentUserTrustedDevice                           |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessment                                   |  Id                                                         |  bigint        
+  PatientReelsAssessment                                   |  AllocatePatientId                                          |  bigint        
+  PatientReelsAssessment                                   |  Domain                                                     |  nvarchar      
+  PatientReelsAssessment                                   |  Status                                                     |  nvarchar      
+  PatientReelsAssessment                                   |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessment                                   |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessment                                   |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessment                                   |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessment                                   |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessment                                   |  ActualAttemptQuestionMinimumAge                            |  int           
+  PatientReelsAssessment                                   |  ActualAttemptQuestionMaximumAge                            |  int           
+  PatientReelsAssessmentAgeGroup                           |  Id                                                         |  bigint        
+  PatientReelsAssessmentAgeGroup                           |  PatientReelsAssessmentId                                   |  bigint        
+  PatientReelsAssessmentAgeGroup                           |  MasterPatientReelsAssessmentAgeRangeId                     |  bigint        
+  PatientReelsAssessmentAgeGroup                           |  AgeGroup                                                   |  nvarchar      
+  PatientReelsAssessmentAgeGroup                           |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentAgeGroup                           |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentAgeGroup                           |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentAgeGroup                           |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentAgeGroup                           |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessmentFnpBaseline                        |  Id                                                         |  bigint        
+  PatientReelsAssessmentFnpBaseline                        |  AllocatePatientId                                          |  bigint        
+  PatientReelsAssessmentFnpBaseline                        |  Skill                                                      |  nvarchar      
+  PatientReelsAssessmentFnpBaseline                        |  Baseline                                                   |  nvarchar      
+  PatientReelsAssessmentFnpBaseline                        |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpBaseline                        |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpBaseline                        |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpBaseline                        |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpBaseline                        |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessmentFnpGoal                            |  Id                                                         |  bigint        
+  PatientReelsAssessmentFnpGoal                            |  AllocatePatientId                                          |  bigint        
+  PatientReelsAssessmentFnpGoal                            |  MasterPatientReelsAssessmentFnpGoalId                      |  bigint        
+  PatientReelsAssessmentFnpGoal                            |  Goal                                                       |  nvarchar      
+  PatientReelsAssessmentFnpGoal                            |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpGoal                            |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpGoal                            |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpGoal                            |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpGoal                            |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessmentFnpGoal                            |  Skill                                                      |  nvarchar      
+  PatientReelsAssessmentFnpGoalProgress                    |  Id                                                         |  bigint        
+  PatientReelsAssessmentFnpGoalProgress                    |  PatientReelsAssessmentFnpGoalId                            |  bigint        
+  PatientReelsAssessmentFnpGoalProgress                    |  Progress                                                   |  nvarchar      
+  PatientReelsAssessmentFnpGoalProgress                    |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpGoalProgress                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpGoalProgress                    |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentFnpGoalProgress                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentFnpGoalProgress                    |  RowVersion                                                 |  timestamp     
+  PatientReelsAssessmentItem                               |  Id                                                         |  bigint        
+  PatientReelsAssessmentItem                               |  PatientReelsAssessmentId                                   |  bigint        
+  PatientReelsAssessmentItem                               |  MasterPatientReelsAssessmentQuestionId                     |  bigint        
+  PatientReelsAssessmentItem                               |  Answer                                                     |  nvarchar      
+  PatientReelsAssessmentItem                               |  CreatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentItem                               |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentItem                               |  UpdatedBy                                                  |  nvarchar      
+  PatientReelsAssessmentItem                               |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientReelsAssessmentItem                               |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessment                                     |  Id                                                         |  bigint        
+  PatientSPMAssessment                                     |  AllocatePatientId                                          |  bigint        
+  PatientSPMAssessment                                     |  Domain                                                     |  nvarchar      
+  PatientSPMAssessment                                     |  Status                                                     |  nvarchar      
+  PatientSPMAssessment                                     |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessment                                     |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessment                                     |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessment                                     |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessment                                     |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentAgeGroup                             |  Id                                                         |  bigint        
+  PatientSPMAssessmentAgeGroup                             |  PatientSPMAssessmentId                                     |  bigint        
+  PatientSPMAssessmentAgeGroup                             |  AgeGroup                                                   |  nvarchar      
+  PatientSPMAssessmentAgeGroup                             |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentAgeGroup                             |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentAgeGroup                             |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentAgeGroup                             |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentAgeGroup                             |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentFNPBaseline                          |  Id                                                         |  bigint        
+  PatientSPMAssessmentFNPBaseline                          |  MasterPatientSPMAssessmentFNPBaselineId                    |  bigint        
+  PatientSPMAssessmentFNPBaseline                          |  AllocatePatientId                                          |  bigint        
+  PatientSPMAssessmentFNPBaseline                          |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPBaseline                          |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPBaseline                          |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPBaseline                          |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPBaseline                          |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentFNPGoal                              |  Id                                                         |  bigint        
+  PatientSPMAssessmentFNPGoal                              |  AllocatePatientId                                          |  bigint        
+  PatientSPMAssessmentFNPGoal                              |  Goal                                                       |  nvarchar      
+  PatientSPMAssessmentFNPGoal                              |  Skill                                                      |  nvarchar      
+  PatientSPMAssessmentFNPGoal                              |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoal                              |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoal                              |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoal                              |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoal                              |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  Id                                                         |  bigint        
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  PatientSPMAssessmentFNPGoalId                              |  bigint        
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  Activity                                                   |  nvarchar      
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoalPlanAcitivity                 |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentFNPGoalProgress                      |  Id                                                         |  bigint        
+  PatientSPMAssessmentFNPGoalProgress                      |  PatientSPMAssessmentFNPGoalId                              |  bigint        
+  PatientSPMAssessmentFNPGoalProgress                      |  Progress                                                   |  nvarchar      
+  PatientSPMAssessmentFNPGoalProgress                      |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoalProgress                      |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoalProgress                      |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentFNPGoalProgress                      |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentFNPGoalProgress                      |  RowVersion                                                 |  timestamp     
+  PatientSPMAssessmentItem                                 |  Id                                                         |  bigint        
+  PatientSPMAssessmentItem                                 |  PatientSPMAssessmentId                                     |  bigint        
+  PatientSPMAssessmentItem                                 |  MasterPatientSPMAssessmentQuestionId                       |  bigint        
+  PatientSPMAssessmentItem                                 |  Answer                                                     |  int           
+  PatientSPMAssessmentItem                                 |  CreatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentItem                                 |  CreatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentItem                                 |  UpdatedBy                                                  |  nvarchar      
+  PatientSPMAssessmentItem                                 |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  PatientSPMAssessmentItem                                 |  RowVersion                                                 |  timestamp     
+  Video                                                    |  Id                                                         |  bigint        
+  Video                                                    |  Title                                                      |  nvarchar      
+  Video                                                    |  Description                                                |  nvarchar      
+  Video                                                    |  Source                                                     |  nvarchar      
+  Video                                                    |  FileStorageFileName                                        |  nvarchar      
+  Video                                                    |  FileStoragePath                                            |  nvarchar      
+  Video                                                    |  VideoUrl                                                   |  nvarchar      
+  Video                                                    |  YoutubeUrl                                                 |  nvarchar      
+  Video                                                    |  ThumbNailImageStoragePath                                  |  nvarchar      
+  Video                                                    |  ThumbNailImageFileName                                     |  nvarchar      
+  Video                                                    |  PublishTo                                                  |  nvarchar      
+  Video                                                    |  PublishedBy                                                |  nvarchar      
+  Video                                                    |  Status                                                     |  nvarchar      
+  Video                                                    |  CreatedBy                                                  |  nvarchar      
+  Video                                                    |  CreatedDateTimeUtc                                         |  datetimeoffset
+  Video                                                    |  UpdatedBy                                                  |  nvarchar      
+  Video                                                    |  UpdatedDateTimeUtc                                         |  datetimeoffset
+  Video                                                    |  RowVersion                                                 |  timestamp     
+  VideoMasterTag                                           |  Id                                                         |  bigint        
+  VideoMasterTag                                           |  VideoId                                                    |  bigint        
+  VideoMasterTag                                           |  MasterTagId                                                |  bigint        
+  VideoMasterTag                                           |  RowVersion                                                 |  timestamp     
+
+
+============================================================
+  Query 3 — Sample Rows from "audit" / "log" Tables
+============================================================
+
+
+  --- Table: [AdminUserAudit] ---
+  Id  |  AdminUserId  |  Type    |  IpAddress  |  UserAgent                                                                                                                      |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+---------------+----------+-------------+---------------------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  3            |  Login   |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        X    |  Fri May 09 2025 14:15:31 GMT+0530 (India Standard Time)
+  2   |  3            |  Logout  |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        Y    |  Fri May 09 2025 14:30:46 GMT+0530 (India Standard Time)
+  3   |  3            |  Login   |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        Z    |  Fri May 09 2025 16:33:20 GMT+0530 (India Standard Time)
+
+
+  --- Table: [CMSAdminUserAudit] ---
+  Id  |  CMSAdminUserId  |  Type   |  IpAddress             |  UserAgent                                                                                                                      |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+------------------+---------+------------------------+---------------------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  1               |  Login  |  45.118.156.107:51224  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0  |               |        �    |  Thu Jan 15 2026 21:07:08 GMT+0530 (India Standard Time)
+  2   |  1               |  Login  |  ::1                   |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0  |               |        �    |  Mon Jan 19 2026 16:43:51 GMT+0530 (India Standard Time)
+  3   |  1               |  Login  |  122.160.165.47:52052  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0  |               |        �    |  Mon Jan 19 2026 19:39:52 GMT+0530 (India Standard Time)
+
+
+  --- Table: [PatientAuditLog] ---
+  Id  |  PatientId  |  AllocatePatientId  |  Type                       |  IpAddress       |  UserAgent                                                                                                              |  Description                |  RowVersion  |  CreatedDateTime                                          |  AdminUserId
+  ----+-------------+---------------------+-----------------------------+------------------+-------------------------------------------------------------------------------------------------------------------------+-----------------------------+--------------+-----------------------------------------------------------+-------------
+  9   |  21         |  47                 |  AssessmentResultGenerated  |  122.160.165.47  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36        |  Assessment reset           |        �    |  Tue Sep 09 2025 19:05:37 GMT+0530 (India Standard Time)  |  3          
+  10  |  22         |                     |  CaseRegistered             |  182.69.177.0    |  Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36  |  New child case registered  |        �    |  Wed Sep 10 2025 15:47:14 GMT+0530 (India Standard Time)  |  162        
+  11  |  22         |  49                 |  CaseAssigned               |  182.69.177.0    |  Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36  |  New assessment added       |        �    |  Wed Sep 10 2025 15:49:04 GMT+0530 (India Standard Time)  |  162        
+
+
+  --- Table: [PatientParentUserAudit] ---
+  Id  |  PatientParentUserId  |  Type   |  IpAddress       |  UserAgent                                                                                                        |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+-----------------------+---------+------------------+-------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:00:25 GMT+0530 (India Standard Time)
+  2   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:37:42 GMT+0530 (India Standard Time)
+  3   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:42:25 GMT+0530 (India Standard Time)
+
+
+============================================================
+  Query 4 — Sample Rows from "user" Tables
+============================================================
+
+
+  --- Table: [AdminUser] ---
+  Id   |  FirstName  |  LastName  |  Status  |  CreatedBy                 |  CreatedDateTimeUtc                                       |  UpdatedBy             |  UpdatedDateTimeUtc                                       |  RowVersion  |  ClinicianSpecialization  |  ProfilePictureStoragePath  |  UserID  |  UserName                  |  NormalizedUserName        |  Email                     |  NormalizedEmail           |  EmailConfirmed  |  PasswordHash                                                                          |  SecurityStamp                         |  ConcurrencyStamp                      |  PhoneNumber    |  PhoneNumberConfirmed  |  LockoutEnd  |  LockoutEnabled  |  AccessFailedCount  |  LastLoginDateTimeUtc                                     |  LicenseNumber
+  -----+-------------+------------+----------+----------------------------+-----------------------------------------------------------+------------------------+-----------------------------------------------------------+--------------+---------------------------+-----------------------------+----------+----------------------------+----------------------------+----------------------------+----------------------------+------------------+----------------------------------------------------------------------------------------+----------------------------------------+----------------------------------------+-----------------+------------------------+--------------+------------------+---------------------+-----------------------------------------------------------+---------------
+  3    |  Navneet    |  Singh     |  Active  |  System                    |  Fri May 09 2025 13:22:36 GMT+0530 (India Standard Time)  |  Anonymous             |  Fri May 15 2026 11:05:13 GMT+0530 (India Standard Time)  |       ��    |                           |                             |          |  navneet@webority.com      |  NAVNEET@WEBORITY.COM      |  navneet@webority.com      |  NAVNEET@WEBORITY.COM      |  true            |  AQAAAAEAACcQAAAAEP98sZA+Kl2TNJt8TWOLLeEja5k1KkfKwZtaKTd7j0bHNcExTgexxttemMVHaaJCYw==  |  0a37db70-4a5c-4502-9af3-41077b208858  |  71e460c4-8124-45d2-a992-62467753c733  |  +917897656578  |  true                  |              |  true            |  0                  |  Fri May 15 2026 11:05:13 GMT+0530 (India Standard Time)  |               
+  161  |  Prithvi    |  Singh     |  Active  |  navneet@webority.com      |  Mon Jun 30 2025 19:50:27 GMT+0530 (India Standard Time)  |  Anonymous             |  Tue May 19 2026 16:40:05 GMT+0530 (India Standard Time)  |       ��    |                           |                             |          |  prithviMB@mailinator.com  |  PRITHVIMB@MAILINATOR.COM  |  prithviMB@mailinator.com  |  PRITHVIMB@MAILINATOR.COM  |  false           |  AQAAAAIAAYagAAAAEFMBeTYE2kxI/LCC/j3Awbzn3hiAUgoemaj13drDa0Ooe2j3NsZ2gE7cgtBo9HnR7A==  |  7390ba0f-c05b-4514-8379-09f3d074e960  |  5f344d76-bffe-41fd-8f8b-0c92198d2341  |  +911234567888  |  false                 |              |  true            |  0                  |  Tue May 19 2026 16:40:05 GMT+0530 (India Standard Time)  |               
+  162  |  Manish     |  Sharma    |  Active  |  prithviMB@mailinator.com  |  Mon Jun 30 2025 19:56:04 GMT+0530 (India Standard Time)  |  navneet@webority.com  |  Fri Apr 24 2026 15:23:49 GMT+0530 (India Standard Time)  |        ��    |                           |                             |  CA-01   |  Manish@mailinator.com     |  MANISH@MAILINATOR.COM     |  Manish@mailinator.com     |  MANISH@MAILINATOR.COM     |  false           |  AQAAAAIAAYagAAAAEJ00D4IV2+A8AKJBo9iz3Ozs9QxW92WcmyEZDsyWD9rgECKLC5PouYZc/UR6RyxcGA==  |  0d0df203-5593-4cb9-8823-87af3b82225a  |  5e7ee901-b389-4546-8f63-036e2bc1df16  |  +919876543216  |  false                 |              |  true            |  0                  |  Fri Apr 24 2026 15:20:17 GMT+0530 (India Standard Time)  |               
+
+
+  --- Table: [AdminUserAudit] ---
+  Id  |  AdminUserId  |  Type    |  IpAddress  |  UserAgent                                                                                                                      |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+---------------+----------+-------------+---------------------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  3            |  Login   |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        X    |  Fri May 09 2025 14:15:31 GMT+0530 (India Standard Time)
+  2   |  3            |  Logout  |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        Y    |  Fri May 09 2025 14:30:46 GMT+0530 (India Standard Time)
+  3   |  3            |  Login   |  ::1        |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0  |               |        Z    |  Fri May 09 2025 16:33:20 GMT+0530 (India Standard Time)
+
+
+  --- Table: [AdminUserCentre] ---
+  Id   |  AdminUserId  |  CentreId  |  CreatedBy                 |  CreatedDateTimeUtc                                       |  UpdatedBy                 |  UpdatedDateTimeUtc                                       |  RowVersion
+  -----+---------------+------------+----------------------------+-----------------------------------------------------------+----------------------------+-----------------------------------------------------------+------------
+  366  |  164          |  19        |  prithviMB@mailinator.com  |  Fri Jul 11 2025 09:58:40 GMT+0530 (India Standard Time)  |  prithviMB@mailinator.com  |  Fri Jul 11 2025 09:58:40 GMT+0530 (India Standard Time)  |        7  
+  367  |  162          |  19        |  prithviMB@mailinator.com  |  Fri Jul 11 2025 10:01:31 GMT+0530 (India Standard Time)  |  prithviMB@mailinator.com  |  Fri Jul 11 2025 10:01:31 GMT+0530 (India Standard Time)  |        8  
+  377  |  183          |  19        |  prithviMB@mailinator.com  |  Wed Aug 13 2025 09:36:18 GMT+0530 (India Standard Time)  |  prithviMB@mailinator.com  |  Wed Aug 13 2025 09:36:18 GMT+0530 (India Standard Time)  |        9  
+
+
+  --- Table: [AdminUserPasswordHistory] ---
+  Id  |  AdminUserId  |  PasswordHash                                                                          |  CreatedDateTimeUtc                                       |  RowVersion
+  ----+---------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------+------------
+  2   |  161          |  AQAAAAIAAYagAAAAEFneOpOwPH4ib1FCt/0GW8Zoo3/im2pzYD2dHshe1nYKY0J5MkJbR5ipdc2GMDaRkw==  |  Mon Jun 30 2025 19:50:27 GMT+0530 (India Standard Time)  |        �  
+  3   |  161          |  AQAAAAIAAYagAAAAEFMBeTYE2kxI/LCC/j3Awbzn3hiAUgoemaj13drDa0Ooe2j3NsZ2gE7cgtBo9HnR7A==  |  Mon Jun 30 2025 19:52:37 GMT+0530 (India Standard Time)  |        �  
+  9   |  171          |  AQAAAAIAAYagAAAAEFyRQB1Qg5yKqAcoss/2pN5gKeUjyK1WrETIP7o01PQ0S9V+QdilBR2Dsng02ZKmEA==  |  Fri Jul 11 2025 09:55:51 GMT+0530 (India Standard Time)  |        �  
+
+
+  --- Table: [AdminUserRole] ---
+  UserId  |  RoleId  |  RowVersion
+  --------+----------+------------
+  3       |  1       |          
+  161     |  1       |          
+  162     |  2       |          
+
+
+  --- Table: [AdminUserTrustedDevice] ---
+  (no rows returned)
+
+  --- Table: [CMSAdminUser] ---
+  Id  |  FirstName  |  LastName   |  Status  |  ProfilePictureStoragePath                                     |  UserName                      |  NormalizedUserName            |  Email                         |  NormalizedEmail               |  EmailConfirmed  |  PasswordHash                                                                          |  PasswordSalt  |  SecurityStamp                         |  PhoneNumber     |  PhoneNumberConfirmed  |  ConcurrencyStamp                      |  LockoutEnd  |  LockoutEnabled  |  AccessFailedCount  |  LastLoginDateTimeUtc                                     |  LastPasswordChangeDateTimeUtc  |  CreatedBy             |  CreatedDateTimeUtc                                       |  UpdatedBy  |  UpdatedDateTimeUtc                                       |  RowVersion
+  ----+-------------+-------------+----------+----------------------------------------------------------------+--------------------------------+--------------------------------+--------------------------------+--------------------------------+------------------+----------------------------------------------------------------------------------------+----------------+----------------------------------------+------------------+------------------------+----------------------------------------+--------------+------------------+---------------------+-----------------------------------------------------------+---------------------------------+------------------------+-----------------------------------------------------------+-------------+-----------------------------------------------------------+------------
+  1   |  Navneet    |  Singh      |  Active  |  CMSAdmin/Profile/1/c4fdcb69-e67d-4d18-b4a5-69adbdee6a82.jpeg  |  navneet@webority.com          |  NAVNEET@WEBORITY.COM          |  navneet@webority.com          |  NAVNEET@WEBORITY.COM          |  false           |  AQAAAAEAACcQAAAAEP98sZA+Kl2TNJt8TWOLLeEja5k1KkfKwZtaKTd7j0bHNcExTgexxttemMVHaaJCYw==  |                |  9dbc49ce-1b82-402d-8800-cdc4351455f6  |  +91-9876543210  |  false                 |  ce43e995-5a8c-4744-94d1-4f31c6370b26  |              |  false           |  0                  |  Thu Apr 30 2026 11:44:30 GMT+0530 (India Standard Time)  |                                 |  system                |  Thu Jan 15 2026 20:57:42 GMT+0530 (India Standard Time)  |  Anonymous  |  Thu Apr 30 2026 11:44:30 GMT+0530 (India Standard Time)  |       2r  
+  2   |  Moni       |  Yadav      |  Active  |                                                                |  moni.yadav@webority.com       |  MONI.YADAV@WEBORITY.COM       |  moni.yadav@webority.com       |  MONI.YADAV@WEBORITY.COM       |  true            |  AQAAAAEAACcQAAAAEP98sZA+Kl2TNJt8TWOLLeEja5k1KkfKwZtaKTd7j0bHNcExTgexxttemMVHaaJCYw==  |                |  eeea78ad-9c8e-4220-a03a-506e30857e96  |  +91-9876543210  |  false                 |  1812982e-78fd-4251-8199-84f5c3397941  |              |  false           |  0                  |  Tue Apr 14 2026 12:01:15 GMT+0530 (India Standard Time)  |                                 |  system                |  Tue Jan 20 2026 00:04:02 GMT+0530 (India Standard Time)  |  Anonymous  |  Tue Apr 14 2026 12:01:15 GMT+0530 (India Standard Time)  |        ��  
+  3   |  Sneha      |  Katnauria  |  Active  |                                                                |  sneha.katnauria@webority.com  |  SNEHA.KATNAURIA@WEBORITY.COM  |  sneha.katnauria@webority.com  |  SNEHA.KATNAURIA@WEBORITY.COM  |  true            |  AQAAAAIAAYagAAAAEI0IzhmitvQX/f6AnI6Wjg95ip1vF+OuU939SYhTpp3EQHMLg3KNImTg34FdA1MluQ==  |                |  d2f30d62-ba4a-4689-b8a9-378c00be0e40  |  9876543212      |  false                 |  98c25fae-9910-40be-81f0-b3050e991097  |              |  true            |  3                  |                                                           |                                 |  navneet@webority.com  |  Tue Jan 20 2026 11:14:50 GMT+0530 (India Standard Time)  |  Anonymous  |  Wed Jan 21 2026 17:01:41 GMT+0530 (India Standard Time)  |        �  
+
+
+  --- Table: [CMSAdminUserAudit] ---
+  Id  |  CMSAdminUserId  |  Type   |  IpAddress             |  UserAgent                                                                                                                      |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+------------------+---------+------------------------+---------------------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  1               |  Login  |  45.118.156.107:51224  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0  |               |        �    |  Thu Jan 15 2026 21:07:08 GMT+0530 (India Standard Time)
+  2   |  1               |  Login  |  ::1                   |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0  |               |        �    |  Mon Jan 19 2026 16:43:51 GMT+0530 (India Standard Time)
+  3   |  1               |  Login  |  122.160.165.47:52052  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0  |               |        �    |  Mon Jan 19 2026 19:39:52 GMT+0530 (India Standard Time)
+
+
+  --- Table: [CMSAdminUserPasswordHistory] ---
+  CMSAdminUserId  |  PasswordHash                                                                          |  CreatedDateTimeUtc                                       |  Id
+  ----------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------+----
+  2               |  AQAAAAIAAYagAAAAEDHUTOf3r46R84P2EWLYkr2/9Ia3UhnwH2lZ6x7QH0jgmnJW7vPQHjc8eCZ+KkKRAQ==  |  Tue Jan 20 2026 00:07:53 GMT+0530 (India Standard Time)  |  1 
+  2               |  AQAAAAIAAYagAAAAEPhDHKyYcVDhT789wTdyMVdHwuMUmS4zDC2D/KPQtvSEw8qszyHBG0A9YAIQ5o2zRg==  |  Tue Jan 20 2026 04:29:46 GMT+0530 (India Standard Time)  |  2 
+  1               |  AQAAAAIAAYagAAAAEPrRGGPy1A15dg0dEjFbs81/uj/fgDZ0dSAKFwY8kgyT+MqERrjBa+6LWITDhO6Lyg==  |  Tue Jan 20 2026 16:42:01 GMT+0530 (India Standard Time)  |  3 
+
+
+  --- Table: [CMSAdminUserRole] ---
+  UserId  |  RoleId  |  RowVersion
+  --------+----------+------------
+  1       |  1       |        	  
+  2       |  1       |        
+  
+  3       |  1       |          
+
+
+  --- Table: [CMSAdminUserTrustedDevice] ---
+  (no rows returned)
+
+  --- Table: [PatientParentUserAudit] ---
+  Id  |  PatientParentUserId  |  Type   |  IpAddress       |  UserAgent                                                                                                        |  Description  |  RowVersion  |  CreatedDateTimeUtc                                     
+  ----+-----------------------+---------+------------------+-------------------------------------------------------------------------------------------------------------------+---------------+--------------+---------------------------------------------------------
+  1   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:00:25 GMT+0530 (India Standard Time)
+  2   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:37:42 GMT+0530 (India Standard Time)
+  3   |  71                   |  Login  |  103.175.180.18  |  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36  |               |        A�    |  Wed Feb 25 2026 21:42:25 GMT+0530 (India Standard Time)
+
+
+  --- Table: [PatientParentUserPasswordHistory] ---
+  Id  |  PatientParentUserId  |  PasswordHash                                                                          |  CreatedDateTimeUtc                                       |  RowVersion
+  ----+-----------------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------+------------
+  1   |  71                   |  AQAAAAIAAYagAAAAEEmg3nuNUnr3EwaOi6EXzG68xwuQ4DjykCoOZ4XTJWVfKC/b0ZiqquhVtdmCbhxKSQ==  |  Wed Feb 25 2026 21:37:25 GMT+0530 (India Standard Time)  |        A�  
+  2   |  71                   |  AQAAAAIAAYagAAAAEEMUVIZhEUNTGTUsBr2ROTdmWtGxDXmGYVZv7a3/+ojhXYfIEcbhChJ8LvegY4NJKA==  |  Wed Feb 25 2026 21:41:47 GMT+0530 (India Standard Time)  |        A�  
+
+
+  --- Table: [PatientParentUserRole] ---
+  UserId  |  RoleId  |  RowVersion
+  --------+----------+------------
+  41      |  1       |        %  
+  42      |  1       |        %  
+  43      |  1       |        %  
+
+
+  --- Table: [PatientParentUserTrustedDevice] ---
+  (no rows returned)
+
+Done. Full output saved to: E:\Mom's Belief\Unity Dashboard\schema-dump.txt

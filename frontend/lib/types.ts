@@ -1,0 +1,485 @@
+export interface FilterParams {
+  centreId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface Centre {
+  id: number;
+  name: string;
+}
+
+export interface CentreBreakdown {
+  centreId: number;
+  centreName: string;
+  cases: number;
+  assessments: number;
+  scoringComplete?: number;
+  reportPdfCreated?: number;
+  reportShared?: number;
+  /** Report PDF count — alias for reportPdfCreated */
+  results: number;
+  /** Pipeline snapshot — current open caseload, not date-filtered */
+  snapAssigned?: number;
+  snapScored?: number;
+  snapPdf?: number;
+  snapShared?: number;
+}
+
+export interface ClinicalPipelineCounts {
+  registered: number;
+  assigned: number;
+  scoringComplete: number;
+  reportPdfCreated: number;
+  reportShared: number;
+  goalsAdded: number;
+  goalsApproved: number;
+}
+
+export interface MultipleAssessmentEntry {
+  allocatePatientId: number;
+  type: string | null;
+  status: string | null;
+  isResultGenerate: boolean;
+  assignedDate: string | null;
+  clinicianName: string | null;
+}
+
+export interface MultipleAssessmentCase {
+  patientId: number;
+  patientDisplayId: string | null;
+  firstName: string;
+  lastName: string;
+  centreName: string;
+  assessments: MultipleAssessmentEntry[];
+  totalAssessments: number;
+}
+
+export interface MultipleAssessmentCasesSummary {
+  count: number;
+  percentage: number;
+  cases: MultipleAssessmentCase[];
+}
+
+export interface OverviewData {
+  totalCases: number;
+  totalAssessments: number;
+  totalScoringComplete?: number;
+  totalResults: number;
+  totalTransfers: number;
+  totalStatusChanges: number;
+  pipeline?: ClinicalPipelineCounts;
+  multipleAssessmentCases: MultipleAssessmentCasesSummary;
+  byCentre: CentreBreakdown[];
+  centres: Centre[];
+}
+
+export interface Clinician {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  centreId: number | null;
+  centreName: string | null;
+  resultsGenerated: number;
+  scoringComplete?: number;
+  reportPdfCreated?: number;
+  activeCaseload: number;
+  totalAuditActions: number;
+  lastActivityDate: string | null;
+  lastLoginDate: string | null;
+}
+
+export interface Manager {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string | null;
+  centreId: number | null;
+  centreName: string | null;
+  casesRegistered: number;
+  assessmentsAssigned: number;
+  totalActions: number;
+  lastActivityDate: string | null;
+  lastLoginDate: string | null;
+}
+
+export interface CentreAdmin {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string | null;
+  centreId: number | null;
+  centreName: string | null;
+  casesRegistered: number;
+  casesAssignedToClinical: number;
+  totalActions: number;
+  lastActivityDate: string | null;
+  lastLoginDate: string | null;
+}
+
+export interface MonitoringUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string | null;
+  centreName: string | null;
+  actionCount: number;
+  lastActionTime: string | null;
+  lastActionDescription: string | null;
+  loggedInToday: boolean;
+  active: boolean;
+}
+
+export interface HeatmapEntry {
+  userId: number;
+  days: { date: string; count: number }[];
+}
+
+export interface MonitoringData {
+  date: string;
+  users: MonitoringUser[];
+  heatmap: HeatmapEntry[];
+  availableDates: string[];
+}
+
+export interface BottleneckCentreBreakdown {
+  centreId: number;
+  centreName: string;
+  stuckOnboarding: number;
+  pendingGoals: number;
+  incompleteAssessments: number;
+}
+
+export interface BottleneckFunnel {
+  registered: number;
+  assigned: number;
+  scoringComplete: number;
+  reportPdfCreated: number;
+  reportShared: number;
+  goalsAdded: number;
+  goalsApproved: number;
+  /** @deprecated Use reportPdfCreated — kept for backward compatibility */
+  results?: number;
+}
+
+export interface BottleneckWeeklyTrendPoint {
+  weekStart: string;
+  avgOnboardingHours: number | null;
+  onboardingCount: number;
+  avgGoalApprovalHours: number | null;
+  goalApprovalCount: number;
+}
+
+export interface BottleneckData {
+  avgOnboardingHours: number | null;
+  avgGoalApprovalHours: number | null;
+  casesStuckInOnboarding: number;
+  pendingGoalApprovals: number;
+  pendingAssessments: number;
+  assessmentCompletionRate: number;
+  transferCount: number;
+  statusChangeCount: number;
+  funnel: BottleneckFunnel;
+  byCentre: BottleneckCentreBreakdown[];
+  weeklyTrend: BottleneckWeeklyTrendPoint[];
+}
+
+export interface ApiError {
+  error: string;
+}
+
+export type UserProfileRole = 'clinician' | 'manager' | 'centre-admin';
+
+export interface UserProfileCentre {
+  id: number;
+  name: string;
+}
+
+export interface UserProfileUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string | null;
+  lastLoginDate: string | null;
+  centres: UserProfileCentre[];
+}
+
+export interface ClinicianSummary {
+  resultsGenerated: number;
+  activeCaseload: number;
+  yield: number | null;
+  totalAuditActions: number;
+  activeDays: number;
+  avgTimeToResultHours: number | null;
+  stuckCases: number;
+}
+
+export interface ManagerSummary {
+  casesRegistered: number;
+  assessmentsAssigned: number;
+  handoffRate: number | null;
+  totalActions: number;
+  stuckOnboarding: number;
+  avgOnboardingHours: number | null;
+  transfers: number;
+  statusChanges: number;
+}
+
+export interface CentreAdminSummary {
+  casesRegistered: number;
+  casesAssignedToClinical: number;
+  routingRate: number | null;
+  totalActions: number;
+  avgRoutingHours: number | null;
+  sameDayRoutingPct: number | null;
+}
+
+export interface UserProfileTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface UserProfileActionBreakdown {
+  type: string;
+  count: number;
+}
+
+export interface UserProfileRecentAction {
+  time: string;
+  type: string;
+  description: string | null;
+  patientId: number | null;
+  centreName: string | null;
+}
+
+export interface UserProfileActiveCase {
+  patientId: number;
+  status: string;
+  centreId: number;
+  centreName: string | null;
+  assignedAt: string | null;
+  daysSinceAssigned: number;
+  lastAction: string | null;
+}
+
+export interface UserProfileData {
+  user: UserProfileUser;
+  role: UserProfileRole;
+  summary: ClinicianSummary | ManagerSummary | CentreAdminSummary;
+  trend: UserProfileTrendPoint[];
+  actionBreakdown: UserProfileActionBreakdown[];
+  recentActions: UserProfileRecentAction[];
+  activeCases: UserProfileActiveCase[];
+}
+
+export interface UserProfileParams extends FilterParams {
+  role: UserProfileRole;
+}
+
+// ── User Breakdown (Users tab) ────────────────────────────────────────────────
+
+export interface UserBreakdownRole {
+  roleName: string;
+  count: number;
+  activeCount: number;
+  inactiveCount: number;
+}
+
+export interface UserBreakdownCentre {
+  centreId: number;
+  centreName: string;
+  total: number;
+  clinicians: number;
+  managers: number;
+  activeInPeriod: number;
+}
+
+export interface UserBreakdownAttentionUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string;
+  centreName: string | null;
+  lastActivityDate: string | null;
+  lastLoginDate: string | null;
+  daysSinceActive: number;
+}
+
+export interface UserBreakdownNeverActive {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleName: string;
+  centreName: string | null;
+  createdDate: string | null;
+}
+
+export interface UserBreakdownData {
+  total: number;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  byRole: UserBreakdownRole[];
+  byStatus: { active: number; inactive: number };
+  byCentre: UserBreakdownCentre[];
+  recentlyInactive: UserBreakdownAttentionUser[];
+  neverActive: UserBreakdownNeverActive[];
+}
+
+// ── Assessment Analytics ──────────────────────────────────────────────────────
+
+export type AssessmentType = 'SPM' | 'DP3' | 'REELS' | 'ISAA';
+
+export interface AssessmentTypeSummary {
+  type: AssessmentType;
+  total: number;
+  completed: number;
+  pending: number;
+  completionRate: number;
+  avgDaysToComplete: number | null;
+  goalApprovalPending: number;
+}
+
+export interface AssessmentTypeBlock {
+  total: number;
+  completed: number;
+  completionRate: number;
+}
+
+export interface AssessmentByCentre {
+  centreId: number;
+  centreName: string;
+  SPM: AssessmentTypeBlock;
+  DP3: AssessmentTypeBlock;
+  REELS: AssessmentTypeBlock;
+  ISAA: AssessmentTypeBlock;
+}
+
+export interface AssessmentTypeAssignment {
+  assigned: number;
+  completed: number;
+}
+
+export interface AssessmentByClinician {
+  clinicianId: number;
+  firstName: string;
+  lastName: string;
+  centreName: string | null;
+  SPM: AssessmentTypeAssignment;
+  DP3: AssessmentTypeAssignment;
+  REELS: AssessmentTypeAssignment;
+  ISAA: AssessmentTypeAssignment;
+}
+
+export interface SlowAssessment {
+  allocatePatientId: number;
+  patientId: number;
+  patientName: string;
+  assessmentType: AssessmentType;
+  clinicianName: string;
+  centreName: string;
+  assignedDate: string;
+  daysPending: number;
+}
+
+export interface AssessmentOverviewData {
+  byType: AssessmentTypeSummary[];
+  byCentre: AssessmentByCentre[];
+  byClinician: AssessmentByClinician[];
+  slowAssessments: SlowAssessment[];
+}
+
+// ── Pipeline ──────────────────────────────────────────────────────────────────
+
+export interface PipelineStage {
+  stage: string;
+  count: number;
+  avgDaysInStage: number | null;
+  stuckCount?: number;
+}
+
+export interface PipelineManagerRow {
+  managerId: number;
+  firstName: string;
+  lastName: string;
+  centreName: string;
+  reportApprovalRate: number;
+  reportPending: number;
+  goalApprovalRate: number;
+  goalPending: number;
+  avgApprovalHours: number | null;
+}
+
+export interface PipelineManagerApprovalStats {
+  reportApprovalRate: number;
+  reportAvgApprovalHours: number | null;
+  goalApprovalRate: number;
+  goalAvgApprovalHours: number | null;
+  byManager: PipelineManagerRow[];
+}
+
+export interface PipelineStuckCase {
+  patientId: number;
+  patientDisplayId: string | null;
+  firstName: string;
+  lastName: string;
+  centreName: string;
+  currentStage: string;
+  daysStuck: number;
+  assessmentType: string | null;
+  clinicianName: string | null;
+  managerName: string | null;
+}
+
+export interface PipelineData {
+  stages: PipelineStage[];
+  managerApprovalStats: PipelineManagerApprovalStats;
+  stuckCases: PipelineStuckCase[];
+}
+
+// ── User Summary Profile (drawer) ─────────────────────────────────────────────
+
+export interface UserSummaryActivity {
+  date: string;
+  type: string;
+  description: string | null;
+  patientId: number | null;
+}
+
+export interface UserSummaryAssessmentBreakdown {
+  assessmentType: string;
+  assigned: number;
+  completed: number;
+  completionRate: number;
+  avgDaysToComplete: number | null;
+}
+
+export interface UserSummaryProfile {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  roleName: string | null;
+  centreName: string | null;
+  lastLoginDate: string | null;
+  lastActivityDate: string | null;
+  totalAuditActions: number;
+  recentActivity: UserSummaryActivity[];
+  // Clinician fields
+  activeCaseload?: number;
+  totalCasesAllTime?: number;
+  assessmentBreakdown?: UserSummaryAssessmentBreakdown[];
+  // Manager / Admin fields
+  casesRegistered?: number;
+  assessmentsAssigned?: number;
+  goalApprovalsPending?: number;
+  goalApprovalsCompleted?: number;
+  avgApprovalTurnaroundHours?: number | null;
+}

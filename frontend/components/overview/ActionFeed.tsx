@@ -95,7 +95,7 @@ function topCentres(
 
 function idleCentres(byCentre: CentreBreakdown[]) {
   return byCentre
-    .filter((c) => c.cases + c.assessments + c.results === 0)
+    .filter((c) => c.cases + c.assessments + c.reportsDrafted === 0)
     .map((c) => shortCentreName(c.centreName))
     .sort((a, b) => a.localeCompare(b));
 }

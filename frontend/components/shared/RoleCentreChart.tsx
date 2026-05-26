@@ -86,7 +86,7 @@ export default function RoleCentreChart({
           responsive: true,
           maintainAspectRatio: false,
           animation: false,
-          onClick: (_event: unknown, elements) => {
+          onClick: (_event: unknown, elements: any[]) => {
             if (!elements.length || !onDrillDownRef.current) return;
             const { datasetIndex, index } = elements[0];
             const centre = sorted[index];

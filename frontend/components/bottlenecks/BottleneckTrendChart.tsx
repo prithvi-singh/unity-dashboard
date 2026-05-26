@@ -76,7 +76,7 @@ export default function BottleneckTrendChart({ data, loading, onDrillDown }: Pro
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          onClick: (_event: unknown, elements) => {
+          onClick: (_event: unknown, elements: any[]) => {
             if (!elements.length || !onDrillDownRef.current) return;
             const { datasetIndex, index } = elements[0];
             const week = trendRef.current[index];

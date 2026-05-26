@@ -139,7 +139,7 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-gray-900/40 backdrop-blur-[1px]"
@@ -150,9 +150,13 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
         role="dialog"
         aria-modal="true"
         aria-labelledby="multiple-assessment-title"
-        className="relative w-full max-w-4xl h-full bg-white shadow-2xl flex flex-col"
+        className="relative w-full sm:max-w-4xl h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none"
       >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
             <h2 id="multiple-assessment-title" className="text-base font-semibold text-gray-900">
@@ -169,7 +173,7 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

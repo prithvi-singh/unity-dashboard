@@ -42,7 +42,7 @@ export default function IssuesTab({
       id="tabpanel-3"
       role="tabpanel"
       aria-labelledby="tab-3"
-      className="mt-5 space-y-6"
+      className="mt-3 sm:mt-5 space-y-4 sm:space-y-6"
     >
       {/* ── Overdue assessments — surface at the top when present ─── */}
       {overdueCount > 0 && (
@@ -70,7 +70,7 @@ export default function IssuesTab({
       />
 
       {/* ── Workflow funnel + centre breakdown ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
         <BottleneckFunnel
           data={bottlenecks}
           loading={bottlenecksLoading}

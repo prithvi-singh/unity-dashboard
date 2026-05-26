@@ -277,7 +277,7 @@ function Dashboard() {
         lastUpdated={lastUpdated}
       />
 
-      <main className="mx-auto max-w-screen-2xl px-4 py-5">
+      <main className="mx-auto max-w-screen-2xl px-3 sm:px-4 py-3 sm:py-5">
         <TabNav
           tabs={[...DASHBOARD_TABS]}
           activeTab={activeTab}
@@ -308,7 +308,7 @@ function Dashboard() {
             role="tabpanel"
             aria-labelledby="tab-0"
             tabIndex={-1}
-            className="mt-5 space-y-5"
+            className="mt-3 sm:mt-5 space-y-3 sm:space-y-5"
           >
             <ActionFeed
               bottlenecks={bottlenecks.data}
@@ -340,7 +340,7 @@ function Dashboard() {
             id="tabpanel-1"
             role="tabpanel"
             aria-labelledby="tab-1"
-            className="mt-5 space-y-5"
+            className="mt-3 sm:mt-5 space-y-3 sm:space-y-5"
           >
             <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-xs text-sky-900">
               Live uses the selected day below — not the global date range in the top bar.
@@ -361,7 +361,7 @@ function Dashboard() {
 
             <MonitoringCards data={monitoring.data} loading={monitoring.loading} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
               <MonitoringEngagementFunnel
                 data={monitoring.data}
                 loading={monitoring.loading}

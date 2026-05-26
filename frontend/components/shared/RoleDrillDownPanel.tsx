@@ -31,21 +31,29 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
   const scope = filterScopeLabel(centres, filters.centreId, filters.dateFrom ?? '', filters.dateTo ?? '');
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end" role="presentation">
+      {/* Backdrop */}
       <button
         type="button"
         className="absolute inset-0 bg-gray-900/40 backdrop-blur-[1px]"
         aria-label="Close drill-down panel"
         onClick={onClose}
       />
+
+      {/* Panel — full-screen slide-up on mobile, side panel on desktop */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="role-drilldown-title"
-        className="relative w-full max-w-3xl h-full bg-white shadow-2xl flex flex-col"
+        className="relative w-full sm:max-w-3xl h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none"
       >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
             <h2 id="role-drilldown-title" className="text-base font-semibold text-gray-900">
@@ -69,7 +77,7 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
             <button
               type="button"
               onClick={onClose}
-              className="p-2.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -80,10 +88,9 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
         </div>
 
         {request.type === 'clinician-inactive' && (
-          <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/60 flex-shrink-0 space-y-3">
+          <div className="px-4 sm:px-6 py-3 border-b border-gray-100 bg-gray-50/60 flex-shrink-0 space-y-3">
             {data && data.items.length > 0 && (() => {
               const totalOpen = data.items.length;
-              // Deduplicate by clinician (patientId = userId) to count unique idle clinicians per band
               const clinicianBand = new Map<number, number>();
               data.items.forEach((item) => {
                 const days = item.waitingHours != null ? Math.round(item.waitingHours / 24) : 0;
@@ -97,25 +104,25 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
                 else idleBands.low++;
               });
               return (
-                <div className="flex flex-wrap gap-3">
-                  <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 text-center min-w-[80px]">
+                <div className="flex flex-wrap gap-2 sm:gap-3">
+                  <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 text-center min-w-[72px] sm:min-w-[80px]">
                     <p className="text-[18px] font-bold text-gray-900 tabular-nums leading-tight">{totalOpen}</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">cases at risk</p>
                   </div>
                   {idleBands.high > 0 && (
-                    <div className="bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-center min-w-[64px]">
+                    <div className="bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-center min-w-[60px] sm:min-w-[64px]">
                       <p className="text-[18px] font-bold text-rose-600 tabular-nums leading-tight">{idleBands.high}</p>
                       <p className="text-[10px] text-rose-400 mt-0.5">7+ days idle</p>
                     </div>
                   )}
                   {idleBands.mid > 0 && (
-                    <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 text-center min-w-[64px]">
+                    <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 text-center min-w-[60px] sm:min-w-[64px]">
                       <p className="text-[18px] font-bold text-orange-500 tabular-nums leading-tight">{idleBands.mid}</p>
                       <p className="text-[10px] text-orange-400 mt-0.5">2–6 days idle</p>
                     </div>
                   )}
                   {idleBands.low > 0 && (
-                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-center min-w-[64px]">
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-center min-w-[60px] sm:min-w-[64px]">
                       <p className="text-[18px] font-bold text-amber-500 tabular-nums leading-tight">{idleBands.low}</p>
                       <p className="text-[10px] text-amber-400 mt-0.5">missed today</p>
                     </div>
@@ -152,7 +159,7 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
           )}
 
           {error && (
-            <div className="m-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="m-4 sm:m-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {error}
             </div>
           )}

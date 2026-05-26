@@ -139,7 +139,7 @@ export default function AssessmentCompletionChart({ data, loading }: Props) {
         <h2 className="text-sm font-semibold text-gray-900">Completion Rate Comparison</h2>
         <p className="text-xs text-gray-400 mt-0.5">Assigned vs completed</p>
       </div>
-      <div className="relative flex-1" style={{ minHeight: 260 }}>
+      <div className="relative h-48 sm:h-64 md:h-[260px]">
         {loading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />

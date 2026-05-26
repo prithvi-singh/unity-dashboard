@@ -108,7 +108,7 @@ export default function MonitoringCentreChart({ data, loading }: Props) {
         <h2 className="text-sm font-semibold text-gray-900">Centre Activity Today</h2>
         <p className="text-xs text-gray-400 mt-0.5">Top 8 by actions</p>
       </div>
-      <div className="relative flex-1" style={{ minHeight: 280 }}>
+      <div className="relative h-48 sm:h-64 md:h-[280px]">
         {loading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />

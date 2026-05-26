@@ -178,7 +178,7 @@ export default function BottleneckActionTable({ data, loading, error, onDrillDow
       data-focus-target="bottleneck-action-table"
       className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden"
     >
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Queue by Centre</h2>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -208,7 +208,7 @@ export default function BottleneckActionTable({ data, loading, error, onDrillDow
       )}
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
-        <table className="w-full text-sm" role="table" aria-label="Bottleneck action queue by centre">
+        <table className="w-full text-sm min-w-[560px]" role="table" aria-label="Bottleneck action queue by centre">
           <thead>
             <tr className="border-b border-gray-100">
               <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-6">#</th>

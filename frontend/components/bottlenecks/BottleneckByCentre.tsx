@@ -188,7 +188,7 @@ export default function BottleneckByCentre({ data, loading, onDrillDown }: Props
         <h2 className="text-sm font-semibold text-gray-900">Bottlenecks by Centre</h2>
         <p className="text-xs text-gray-400 mt-0.5">Top 8 · click a bar to drill in</p>
       </div>
-      <div className="relative flex-1" style={{ minHeight: 300 }}>
+      <div className="relative h-48 sm:h-64 md:h-[300px]">
         {loading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />

@@ -160,7 +160,7 @@ export default function UserStatusTable({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">User Status</h2>
           {engagementFilter && engagementFilter.kind !== 'all' && (
@@ -211,7 +211,7 @@ export default function UserStatusTable({
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
-        <table className="w-full text-sm" role="table" aria-label="User activity status table">
+        <table className="w-full text-sm" role="table" aria-label="User activity status table" style={{ minWidth: '480px' }}>
           <thead>
             <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
               <SortTh col="name"          label="User"    sort={sort} onSort={handleSort} isText />
@@ -227,7 +227,7 @@ export default function UserStatusTable({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 6 }).map((__, j) => (
-                    <td key={j} className="px-5 py-3.5">
+                    <td key={j} className="px-3 sm:px-5 py-2 sm:py-3.5">
                       <div className="h-4 bg-gray-100 rounded w-20" />
                     </td>
                   ))}
@@ -248,7 +248,7 @@ export default function UserStatusTable({
 
                 return (
                   <tr key={u.id} className={`hover:bg-gray-50/70 transition-colors ${rowBase}`}>
-                    <td className={`px-5 py-3.5 font-medium whitespace-nowrap ${textMuted || 'text-gray-800'}`}>
+                    <td className={`px-3 sm:px-5 py-2 sm:py-3.5 font-medium whitespace-nowrap ${textMuted || 'text-gray-800'}`}>
                       {profileRole ? (
                         <UserProfileLink
                           userId={u.id}
@@ -261,10 +261,10 @@ export default function UserStatusTable({
                         <span>{u.firstName} {u.lastName}</span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-3 sm:px-5 py-2 sm:py-3.5 hidden sm:table-cell">
                       <RoleBadge role={displayRole} />
                     </td>
-                    <td className={`px-5 py-3.5 ${textMuted || 'text-gray-600'}`}>
+                    <td className={`px-3 sm:px-5 py-2 sm:py-3.5 hidden md:table-cell ${textMuted || 'text-gray-600'}`}>
                       {(() => {
                         const allCentres = centresByUser.get(u.id) ?? [];
                         if (allCentres.length <= 1) {
@@ -296,18 +296,18 @@ export default function UserStatusTable({
                         );
                       })()}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-3 sm:px-5 py-2 sm:py-3.5">
                       <span className="flex items-center gap-1.5">
-                        <span className={['h-2 w-2 rounded-full', u.active ? 'bg-green-500' : 'bg-rose-400'].join(' ')} />
+                        <span className={['h-2 w-2 rounded-full flex-shrink-0', u.active ? 'bg-green-500' : 'bg-rose-400'].join(' ')} />
                         <span className={`text-xs ${u.active ? 'text-green-700' : 'text-rose-500'}`}>
                           {u.active ? 'Active' : 'No activity'}
                         </span>
                       </span>
                     </td>
-                    <td className={`px-5 py-3.5 text-right tabular-nums ${textMuted || 'text-gray-700'}`}>
+                    <td className={`px-3 sm:px-5 py-2 sm:py-3.5 text-right tabular-nums ${textMuted || 'text-gray-700'}`}>
                       {u.actionCount}
                     </td>
-                    <td className={`px-5 py-3.5 whitespace-nowrap ${textMuted || 'text-gray-600'}`}>
+                    <td className={`px-3 sm:px-5 py-2 sm:py-3.5 whitespace-nowrap hidden sm:table-cell ${textMuted || 'text-gray-600'}`}>
                       {formatTime(u.lastActionTime)}
                     </td>
                   </tr>

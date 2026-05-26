@@ -116,7 +116,7 @@ export default function MonitoringTrendChart({ data, loading, selectedDate }: Pr
           </span>
         </div>
       </div>
-      <div className="relative" style={{ height: 200 }}>
+      <div className="relative h-40 sm:h-48 md:h-[200px]">
         {loading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />

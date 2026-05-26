@@ -189,7 +189,7 @@ export default function BottleneckTrendChart({ data, loading, onDrillDown }: Pro
         <h2 className="text-sm font-semibold text-gray-900">Turnaround Trend</h2>
         <p className="text-xs text-gray-400 mt-0.5">Weekly avg hours · dashed = SLA · click to drill in</p>
       </div>
-      <div className="relative flex-1" style={{ minHeight: 260 }}>
+      <div className="relative h-48 sm:h-64 md:h-[260px]">
         {loading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />

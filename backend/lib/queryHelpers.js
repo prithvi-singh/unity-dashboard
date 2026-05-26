@@ -39,11 +39,14 @@ function buildPatientExclusion(alias = 'pt') {
  * Exclude test/dev AdminUser accounts.
  * Wraps in (IS NULL OR ...) so it is safe to use on a LEFT-JOINed user alias —
  * system-generated PAL rows with no AdminUserId are still included.
+ * Excludes: name contains "test", or email is a webority/mailinator dev account.
  */
 function buildUserExclusion(alias = 'au') {
   return `(${alias}.Id IS NULL OR (
       ${alias}.FirstName NOT LIKE '%test%'
-      AND ${alias}.LastName NOT LIKE '%test%'
+      AND ${alias}.LastName  NOT LIKE '%test%'
+      AND ${alias}.Email     NOT LIKE '%@webority.com'
+      AND ${alias}.Email     NOT LIKE '%@mailinator.com'
     ))`;
 }
 

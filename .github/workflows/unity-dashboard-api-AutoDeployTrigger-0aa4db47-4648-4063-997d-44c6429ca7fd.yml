@@ -40,7 +40,7 @@ jobs:
           registryUsername: ${{ secrets.UNITYDASHBOARDAPI_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.UNITYDASHBOARDAPI_REGISTRY_PASSWORD }}
           containerAppName: unity-dashboard-api
-          resourceGroup: dashboard-unity-rg
+          resourceGroup: unity-dashboard-rg
           containerAppEnvironment: unity-dashboard-env
           imageToBuild: parivaremindersacr.azurecr.io/unity-dashboard-api:${{ github.sha }}
 

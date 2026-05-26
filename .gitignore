@@ -38,3 +38,6 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Specstory (Cursor auto-generated session history)
+.specstory/

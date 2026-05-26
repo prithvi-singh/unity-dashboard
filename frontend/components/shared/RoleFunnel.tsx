@@ -1,5 +1,6 @@
 'use client';
 
+import type { OnRoleDrillDown, RoleDrillDownType } from '@/lib/roleDrillDown';
 import { DRILL_DOWN_HINT } from '@/lib/roleDrillDown';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 
@@ -19,7 +20,7 @@ interface Props {
   steps: FunnelStep[];
   loading?: boolean;
   tooltip?: KpiDefinition;
-  onDrillDown?: (request: { type: string; label?: string }) => void;
+  onDrillDown?: OnRoleDrillDown;
 }
 
 function pctOf(part: number, whole: number): string | undefined {
@@ -115,7 +116,7 @@ export default function RoleFunnel({ title, subtitle, steps, loading, tooltip, o
               isFirst={i === 0}
               clickable={clickable}
               onClick={clickable ? () => onDrillDown!({
-                type: step.drillType!,
+                type: step.drillType! as RoleDrillDownType,
                 label: step.drillLabel ?? step.label,
               }) : undefined}
             />

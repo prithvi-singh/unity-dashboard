@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import type { MonitoringData } from '@/lib/types';
-import { computeDayStats } from '@/lib/monitoringStats';
+import { computeDayStats, aggregateByCentre } from '@/lib/monitoringStats';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
 
@@ -102,6 +103,85 @@ const ChartIcon = () => (
   </svg>
 );
 
+// ─── Expandable Centres Active card ────────────────────────────────────────────
+
+interface CentresCardProps {
+  centresActive: number;
+  centreRows: { centreName: string; actions: number; activeUsers: number }[];
+}
+
+function CentresActiveCard({ centresActive, centreRows }: CentresCardProps) {
+  const [open, setOpen] = useState(false);
+  const active = centreRows.filter((c) => c.actions > 0);
+
+  return (
+    <div className="bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col overflow-hidden">
+      {/* KPI header row */}
+      <div className="p-5 flex flex-col justify-between gap-3 flex-1">
+        <div className="flex items-start justify-between">
+          <div className="bg-sky-50 text-sky-600 p-2.5 rounded-xl">
+            <BuildingIcon />
+          </div>
+          <KpiTooltip {...KPI.CENTRES_ACTIVE} />
+        </div>
+        <div>
+          <div className="flex items-center mb-1">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">
+              Centres Active
+            </p>
+          </div>
+          <p className="text-[2rem] font-bold text-gray-900 leading-none tracking-tight tabular-nums">
+            {centresActive}
+          </p>
+          <p className="text-xs text-gray-500 mt-1.5">
+            {centresActive > 0 ? 'At least 1 action today' : 'None yet'}
+          </p>
+        </div>
+      </div>
+
+      {/* Toggle button */}
+      {active.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="w-full px-5 py-2 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50/60 transition-colors border-t border-gray-50 text-left flex items-center justify-between"
+          aria-expanded={open}
+        >
+          <span>{open ? 'Hide details' : `See all ${active.length} active centres`}</span>
+          <span className="text-gray-300 text-[10px]">{open ? '↑' : '↓'}</span>
+        </button>
+      )}
+
+      {/* Drilldown list */}
+      {open && (
+        <div className="border-t border-gray-50 divide-y divide-gray-50 max-h-56 overflow-y-auto">
+          {active.map((c) => (
+            <div
+              key={c.centreName}
+              className="flex items-center justify-between px-5 py-2 hover:bg-gray-50/60"
+            >
+              <span
+                className="text-xs text-gray-700 font-medium truncate max-w-[160px]"
+                title={c.centreName}
+              >
+                {c.centreName}
+              </span>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                <span className="text-[11px] text-gray-400 tabular-nums">
+                  {c.activeUsers} user{c.activeUsers !== 1 ? 's' : ''}
+                </span>
+                <span className="text-[11px] font-bold text-sky-700 tabular-nums bg-sky-50 px-1.5 py-0.5 rounded">
+                  {c.actions}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MonitoringCards({ data, loading }: Props) {
   if (loading || !data) {
     return (
@@ -117,6 +197,8 @@ export default function MonitoringCards({ data, loading }: Props) {
   const avgActions = stats.active > 0
     ? (stats.totalActions / stats.active).toFixed(1)
     : '0';
+
+  const centreRows = aggregateByCentre(stats.users);
 
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4" role="list" aria-label="Monitoring metrics">
@@ -139,14 +221,9 @@ export default function MonitoringCards({ data, loading }: Props) {
         icon={<ChartIcon />}
         tooltip={KPI.ACTIONS_TODAY}
       />
-      <KpiCard
-        label="Centres Active"
-        value={String(stats.centresActive)}
-        sub={stats.centresActive > 0 ? 'At least 1 action today' : 'None yet'}
-        iconBg="bg-sky-50"
-        iconFg="text-sky-600"
-        icon={<BuildingIcon />}
-        tooltip={KPI.CENTRES_ACTIVE}
+      <CentresActiveCard
+        centresActive={stats.centresActive}
+        centreRows={centreRows}
       />
       <KpiCard
         label="Need Follow-up"

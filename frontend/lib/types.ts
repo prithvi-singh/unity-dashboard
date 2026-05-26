@@ -80,6 +80,11 @@ export interface ReportPdfCentre {
   drafts: ReportPdfRecord[];
 }
 
+export interface IdleCentreDetail {
+  name: string;
+  lastActivityDate: string | null;
+}
+
 export interface OverviewData {
   totalCases: number;
   totalAssessments: number;
@@ -87,6 +92,12 @@ export interface OverviewData {
   totalResults: number;
   totalTransfers: number;
   totalStatusChanges: number;
+  /** Single source of truth for active/idle centre counts (Query F in overview.js) */
+  totalCentresCount: number;
+  activeCentreCount: number;
+  idleCentreCount: number;
+  /** Sorted A-Z idle centre names with each centre's last-ever activity date */
+  idleCentreDetails: IdleCentreDetail[];
   pipeline?: ClinicalPipelineCounts;
   multipleAssessmentCases: MultipleAssessmentCasesSummary;
   byCentre: CentreBreakdown[];
@@ -165,6 +176,40 @@ export interface MonitoringData {
   users: MonitoringUser[];
   heatmap: HeatmapEntry[];
   availableDates: string[];
+}
+
+export interface TopPerformerBreakdown {
+  assessmentsScored:   number;
+  reportsDrafted:      number;
+  goalsAdded:          number;
+  reportsApproved:     number;
+  goalsApproved:       number;
+  casesRegistered:     number;
+  assessmentsAssigned: number;
+  reportEdits:         number;
+}
+
+export interface TopPerformerDay {
+  date:      string;
+  total:     number;
+  breakdown: TopPerformerBreakdown;
+}
+
+export interface TopPerformer {
+  userId:     number;
+  firstName:  string;
+  lastName:   string;
+  roleName:   string | null;
+  centreId:   number;
+  centreName: string | null;
+  isOpsAdmin: boolean;
+  totalScore: number;
+  days:       TopPerformerDay[];
+}
+
+export interface TopPerformersResponse {
+  performers: TopPerformer[];
+  daysCount:  number;
 }
 
 export interface BottleneckCentreBreakdown {

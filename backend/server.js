@@ -18,7 +18,8 @@ const bottlenecksRouter = require('./routes/bottlenecks');
 const assessmentsRouter = require('./routes/assessments');
 const usersRouter = require('./routes/users');
 const pipelineRouter = require('./routes/pipeline');
-const workloadRouter = require('./routes/workload');
+const workloadRouter       = require('./routes/workload');
+const topPerformersRouter  = require('./routes/topPerformers');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -70,6 +71,7 @@ app.use('/api/overview', overviewRouter);
 app.use('/api/clinicians', cliniciansRouter);
 app.use('/api/managers', managersRouter);
 app.use('/api/centre-admins', centreAdminsRouter);
+app.use('/api/monitoring/top-performers', topPerformersRouter);
 app.use('/api/monitoring', monitoringRouter);
 app.use('/api/bottlenecks', bottlenecksRouter);
 app.use('/api/assessments', assessmentsRouter);

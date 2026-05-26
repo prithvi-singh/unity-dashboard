@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { BottleneckData, BottleneckCentreBreakdown, Clinician, CentreBreakdown } from '@/lib/types';
+import type { BottleneckData, BottleneckCentreBreakdown, Clinician } from '@/lib/types';
 import { shortCentreName } from '@/lib/centreNames';
 import {
   ACTION_SIGNAL_NAV,
@@ -22,8 +22,6 @@ interface Signal {
   hint: string;
   examples?: string[];
   examplesTotal?: number;
-  /** Full list — rendered in a scrollable panel (idle centres) */
-  allNames?: string[];
   cta?: string;
   navigation?: ActionNavigationTarget;
 }
@@ -93,13 +91,6 @@ function topCentres(
     .map((c) => shortCentreName(c.centreName));
 }
 
-function idleCentres(byCentre: CentreBreakdown[]) {
-  return byCentre
-    .filter((c) => c.cases + c.assessments + c.reportsDrafted === 0)
-    .map((c) => shortCentreName(c.centreName))
-    .sort((a, b) => a.localeCompare(b));
-}
-
 function navFor(id: ActionSignalId): { cta: string; navigation: ActionNavigationTarget } {
   const config = ACTION_SIGNAL_NAV[id];
   return {
@@ -137,24 +128,6 @@ function OwnerBadge({ owner }: { owner: 'Manager' | 'Clinician' }) {
   );
 }
 
-function NameList({ names }: { names: string[] }) {
-  return (
-    <div
-      className="mt-2 max-h-32 overflow-y-auto scrollbar-thin rounded-md bg-gray-50 ring-1 ring-gray-200/80 px-2.5 py-2"
-      tabIndex={0}
-      aria-label={`List of ${names.length} inactive centres`}
-    >
-      <ul className="space-y-1">
-        {names.map((name) => (
-          <li key={name} className="text-sm text-gray-700 truncate leading-snug" title={name}>
-            {name}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function SignalCard({
   signal,
   onNavigate,
@@ -182,10 +155,7 @@ function SignalCard({
           <p className="text-sm text-gray-600 mt-0.5 leading-snug">{signal.hint}</p>
         </div>
       </div>
-      {signal.allNames && signal.allNames.length > 0 && (
-        <NameList names={signal.allNames} />
-      )}
-      {!signal.allNames && examples && (
+      {examples && (
         <p className="text-sm text-gray-500 leading-relaxed mt-1">
           <span className="text-gray-400">Includes </span>
           {examples}
@@ -252,13 +222,12 @@ function SkeletonGrid() {
 interface Props {
   bottlenecks: BottleneckData | null;
   clinicians: Clinician[];
-  overviewCentres: CentreBreakdown[];
   overdueCount?: number;
   loading: boolean;
   onNavigate: (target: ActionNavigationTarget) => void;
 }
 
-export default function ActionFeed({ bottlenecks, clinicians, overviewCentres, overdueCount = 0, loading, onNavigate }: Props) {
+export default function ActionFeed({ bottlenecks, clinicians, overdueCount = 0, loading, onNavigate }: Props) {
   const signals = useMemo<Signal[]>(() => {
     if (!bottlenecks) return [];
 
@@ -336,20 +305,8 @@ export default function ActionFeed({ bottlenecks, clinicians, overviewCentres, o
       });
     }
 
-    const idle = idleCentres(overviewCentres);
-    if (idle.length > 0) {
-      out.push({
-        id: 'idle-centres',
-        severity: 'info',
-        label: 'Centres with no activity',
-        count: idle.length,
-        hint: 'No cases, assessments, or results this period',
-        allNames: idle,
-      });
-    }
-
     return out;
-  }, [bottlenecks, clinicians, overviewCentres, overdueCount]);
+  }, [bottlenecks, clinicians, overdueCount]);
 
   const allClear = !loading && signals.length === 0 && bottlenecks != null;
   const hasData = signals.length > 0;

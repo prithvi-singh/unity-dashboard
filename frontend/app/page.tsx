@@ -13,6 +13,7 @@ import MetricCards from '@/components/overview/MetricCards';
 import CentreTable from '@/components/overview/CentreTable';
 import MultipleAssessmentCasesPanel from '@/components/overview/MultipleAssessmentCasesPanel';
 import ActiveCentresPanel from '@/components/overview/ActiveCentresPanel';
+import IdleCentresDrawer from '@/components/overview/IdleCentresDrawer';
 import ReportPdfsPanel from '@/components/overview/ReportPdfsPanel';
 import ClinicalPipelineCard from '@/components/shared/ClinicalPipelineCard';
 
@@ -21,7 +22,6 @@ import LivePulse from '@/components/monitoring/LivePulse';
 import DayPicker from '@/components/monitoring/DayPicker';
 import MonitoringCards from '@/components/monitoring/MonitoringCards';
 import MonitoringEngagementFunnel from '@/components/monitoring/MonitoringEngagementFunnel';
-import MonitoringCentreChart from '@/components/monitoring/MonitoringCentreChart';
 import MonitoringTrendChart from '@/components/monitoring/MonitoringTrendChart';
 import UserStatusTable from '@/components/monitoring/UserStatusTable';
 import ActivityHeatmap from '@/components/monitoring/ActivityHeatmap';
@@ -48,6 +48,7 @@ import { useClinicalPipeline } from '@/hooks/useClinicalPipeline';
 import { useUserBreakdown } from '@/hooks/useUserBreakdown';
 import { useAssessments } from '@/hooks/useAssessments';
 import { useWorkload } from '@/hooks/useWorkload';
+import { useTopPerformers } from '@/hooks/useTopPerformers';
 import { useActionFocus } from '@/hooks/useActionFocus';
 import { useDashboardUrl, readDashboardStateFromUrl } from '@/hooks/useDashboardUrl';
 import type { ActionNavigationTarget, BottleneckActionSortCol } from '@/lib/actionNavigation';
@@ -142,9 +143,10 @@ function Dashboard() {
   // ── Multiple-assessment drill-down (Overview) ─────────────────────────────
   const [multipleAssessmentsOpen, setMultipleAssessmentsOpen] = useState(false);
 
-  // ── Report PDFs + Active Centres drill-downs (Overview) ───────────────────
+  // ── Report PDFs + Active/Idle Centres drill-downs (Overview) ─────────────
   const [reportPdfsOpen, setReportPdfsOpen] = useState(false);
   const [activeCentresOpen, setActiveCentresOpen] = useState(false);
+  const [idleCentresOpen, setIdleCentresOpen] = useState(false);
 
   // ── Monitoring date ───────────────────────────────────────────────────────
   const [monitoringDate, setMonitoringDate] = useState(todayISO);
@@ -169,6 +171,7 @@ function Dashboard() {
   const userBreakdown    = useUserBreakdown(filters, needUsers);
   const assessments      = useAssessments(filters, needAssessments);
   const workload         = useWorkload(filters, needWorkload);
+  const topPerformers    = useTopPerformers({ ...filters, limit: 0 }, needMonitoring);
 
   // Refs to avoid stale closures in the refresh interval
   const overviewRef      = useRef(overview);
@@ -325,7 +328,6 @@ function Dashboard() {
             <ActionFeed
               bottlenecks={bottlenecks.data}
               clinicians={clinicians.data ?? []}
-              overviewCentres={overview.data?.byCentre ?? []}
               overdueCount={overdueCount}
               loading={bottlenecks.loading || clinicians.loading || (needAssessments && assessments.loading)}
               onNavigate={handleActionNavigate}
@@ -337,7 +339,7 @@ function Dashboard() {
               onOpenMultipleAssessments={() => setMultipleAssessmentsOpen(true)}
               onOperationalDrill={handleOverviewOperationalDrill}
               onOpenReportPdfs={() => setReportPdfsOpen(true)}
-              onOpenActiveCentres={() => setActiveCentresOpen(true)}
+              onOpenIdleCentres={() => setIdleCentresOpen(true)}
             />
             <ClinicalPipelineCard
               pipeline={overview.data?.pipeline}
@@ -375,19 +377,23 @@ function Dashboard() {
 
             <MonitoringCards data={monitoring.data} loading={monitoring.loading} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
-              <MonitoringEngagementFunnel
-                data={monitoring.data}
-                loading={monitoring.loading}
-                selectedDate={monitoringDate}
-                activeFilter={monitoringEngagementFilter}
-                onFilterChange={setMonitoringEngagementFilter}
-                onScrollToTable={() => {
-                  userStatusTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              />
-              <MonitoringCentreChart data={monitoring.data} loading={monitoring.loading} />
-            </div>
+            <MonitoringEngagementFunnel
+              data={monitoring.data}
+              loading={monitoring.loading}
+              selectedDate={monitoringDate}
+              activeFilter={monitoringEngagementFilter}
+              onFilterChange={setMonitoringEngagementFilter}
+              onScrollToTable={() => {
+                userStatusTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
+
+            <ActivityHeatmap
+              performers={topPerformers.data?.performers ?? []}
+              daysCount={topPerformers.data?.daysCount ?? 14}
+              loading={topPerformers.loading}
+              centres={overview.data?.centres ?? []}
+            />
 
             <MonitoringTrendChart
               data={monitoring.data}
@@ -404,11 +410,6 @@ function Dashboard() {
                 onClearEngagementFilter={() => setMonitoringEngagementFilter({ kind: 'all' })}
               />
             </div>
-
-            <ActivityHeatmap
-              users={monitoring.data?.users ?? []}
-              heatmap={monitoring.data?.heatmap ?? []}
-            />
           </div>
         )}
 
@@ -492,6 +493,14 @@ function Dashboard() {
           open={activeTab === 0 && activeCentresOpen}
           byCentre={overview.data?.byCentre ?? []}
           onClose={() => setActiveCentresOpen(false)}
+        />
+
+        <IdleCentresDrawer
+          open={activeTab === 0 && idleCentresOpen}
+          idleCentres={overview.data?.idleCentreDetails ?? []}
+          dateFrom={dateFrom || undefined}
+          dateTo={dateTo || undefined}
+          onClose={() => setIdleCentresOpen(false)}
         />
       </main>
     </div>

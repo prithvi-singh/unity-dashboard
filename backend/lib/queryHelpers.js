@@ -35,4 +35,16 @@ function buildPatientExclusion(alias = 'pt') {
       AND ${alias}.LastName NOT LIKE '%test%'`;
 }
 
-module.exports = { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion };
+/**
+ * Exclude test/dev AdminUser accounts.
+ * Wraps in (IS NULL OR ...) so it is safe to use on a LEFT-JOINed user alias —
+ * system-generated PAL rows with no AdminUserId are still included.
+ */
+function buildUserExclusion(alias = 'au') {
+  return `(${alias}.Id IS NULL OR (
+      ${alias}.FirstName NOT LIKE '%test%'
+      AND ${alias}.LastName NOT LIKE '%test%'
+    ))`;
+}
+
+module.exports = { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion, buildUserExclusion };

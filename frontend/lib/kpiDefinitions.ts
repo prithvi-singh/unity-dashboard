@@ -32,7 +32,7 @@ export const KPI = {
 
   ACTIVE_CENTRES: {
     title: 'Active Centres',
-    description: 'Centres with at least one case, assessment, or result this period.',
+    description: 'Centres with at least one recorded clinical action in PatientAuditLog this period. Click to see idle centres and when they were last active.',
   },
 
   FLAGS_AND_ALERTS: {

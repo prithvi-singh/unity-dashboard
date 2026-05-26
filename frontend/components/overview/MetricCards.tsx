@@ -12,7 +12,8 @@ interface Props {
   onOpenMultipleAssessments?: () => void;
   onOperationalDrill?: (type: 'status-changes' | 'transfers') => void;
   onOpenReportPdfs?: () => void;
-  onOpenActiveCentres?: () => void;
+  /** Opens the Idle Centres drawer — single source of truth count drives the card */
+  onOpenIdleCentres?: () => void;
 }
 
 function ProgressRing({ pct, color, size = 52 }: { pct: number; color: string; size?: number }) {
@@ -149,7 +150,7 @@ function Skeleton() {
   );
 }
 
-export default function MetricCards({ data, loading, error, onOpenMultipleAssessments, onOperationalDrill, onOpenReportPdfs, onOpenActiveCentres }: Props) {
+export default function MetricCards({ data, loading, error, onOpenMultipleAssessments, onOperationalDrill, onOpenReportPdfs, onOpenIdleCentres }: Props) {
   if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -165,8 +166,10 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
     );
   }
 
-  const activeCentres = data.byCentre.filter(c => c.cases + c.assessments + c.reportsApproved > 0).length;
-  const totalCentres  = data.byCentre.length;
+  // Use unified counts from Query F (single source of truth — no more 57 vs 59 divergence)
+  const activeCentres = data.activeCentreCount ?? 0;
+  const idleCentres   = data.idleCentreCount   ?? 0;
+  const totalCentres  = data.totalCentresCount  ?? (activeCentres + idleCentres);
   const alerts        = (data.totalStatusChanges ?? 0) + (data.totalTransfers ?? 0);
   const avgAssessmentsPerCase = data.totalCases > 0
     ? (data.totalAssessments / data.totalCases)
@@ -215,13 +218,13 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
         onClick={onOpenReportPdfs}
         ariaLabel={`Report PDFs Created: ${data.totalResults.toLocaleString()}. ${DRILL_DOWN_HINT}`} />
       <KpiCard label="Active Centres" value={`${activeCentres} / ${totalCentres}`}
-        sub={activeCentres === totalCentres ? 'All centres engaged' : `${totalCentres - activeCentres} idle`}
+        sub={idleCentres === 0 ? 'All centres engaged' : `${idleCentres} idle`}
         pct={centrePct} ringColor="#0284C7"
         iconBg="bg-sky-50" iconFg="text-sky-600" icon={<CentreIcon />}
         tooltip={KPI.ACTIVE_CENTRES}
-        clickable={!!onOpenActiveCentres}
-        onClick={onOpenActiveCentres}
-        ariaLabel={`Active Centres: ${activeCentres} of ${totalCentres}. ${DRILL_DOWN_HINT}`} />
+        clickable={idleCentres > 0 && !!onOpenIdleCentres}
+        onClick={idleCentres > 0 ? onOpenIdleCentres : undefined}
+        ariaLabel={`Active Centres: ${activeCentres} of ${totalCentres}. ${idleCentres} idle. ${DRILL_DOWN_HINT}`} />
       <KpiCard label="Flags & Alerts" value={alerts.toLocaleString()}
         sub={alerts > 0 ? (
           onOperationalDrill ? (

@@ -14,6 +14,7 @@ import type {
   PipelineData,
   WorkloadCentreRow,
   ReportPdfCentre,
+  TopPerformersResponse,
 } from './types';
 import type {
   BottleneckDrillDownParams,
@@ -154,4 +155,20 @@ export function fetchPipeline(params: FilterParams = {}): Promise<PipelineData> 
 
 export function fetchWorkload(params: FilterParams = {}): Promise<WorkloadCentreRow[]> {
   return get<WorkloadCentreRow[]>(`/api/workload${buildQuery(params)}`);
+}
+
+export interface TopPerformersParams extends FilterParams {
+  role?:  string;
+  limit?: number;
+}
+
+export function fetchTopPerformers(params: TopPerformersParams = {}): Promise<TopPerformersResponse> {
+  const q = new URLSearchParams();
+  if (params.centreId != null) q.set('centreId', String(params.centreId));
+  if (params.dateFrom)         q.set('dateFrom', params.dateFrom);
+  if (params.dateTo)           q.set('dateTo',   params.dateTo);
+  if (params.role)             q.set('role',     params.role);
+  if (params.limit != null)    q.set('limit',    String(params.limit));
+  const str = q.toString();
+  return get<TopPerformersResponse>(`/api/monitoring/top-performers${str ? `?${str}` : ''}`);
 }

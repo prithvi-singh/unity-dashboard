@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildPatientExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildPatientExclusion, buildUserExclusion } = require('../lib/queryHelpers');
 const { abbreviateCentre } = require('../lib/formatters');
 const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
 
@@ -33,6 +33,28 @@ router.get('/', async (req, res, next) => {
 
     const pool = await poolPromise;
 
+    /*
+     * DATA-INTEGRITY INVESTIGATION — why idle-centre counts differed (57 vs 59)
+     * ─────────────────────────────────────────────────────────────────────────
+     * OLD QUERY 1 – "Centres with no activity" card (ActionFeed.tsx, idleCentres fn)
+     *   Definition: byCentre row where (cases + assessments + reportsDrafted) === 0
+     *   Active signal: CaseRegistered OR CaseAssigned OR ReportAdded events
+     *   ⟹ reported 57 idle (counted as ACTIVE if they had ReportAdded rows)
+     *
+     * OLD QUERY 2 – "XX idle" sub-label in Active Centres metric card (MetricCards.tsx)
+     *   Definition: byCentre row where (cases + assessments + reportsApproved) === 0
+     *   Active signal: CaseRegistered OR CaseAssigned OR ReportPDFGenerated events
+     *   ⟹ reported 59 idle (counted as IDLE if they had only ReportAdded but no ReportPDFGenerated)
+     *
+     * ROOT CAUSE: MetricCards used reportsApproved (ReportPDFGenerated); ActionFeed used
+     *   reportsDrafted (ReportAdded).  Any centre with drafted-but-not-yet-approved reports
+     *   was idle in one place and active in the other.
+     *
+     * FIX: Query F below is the single source of truth.  A centre is ACTIVE if it has ANY
+     *   row in PatientAuditLog within the date range — not just specific event types — after
+     *   applying all three exclusion filters (test patients, test/dev users, deleted centres).
+     * ─────────────────────────────────────────────────────────────────────────
+     */
     const dateFilter = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
     const centreFilter = '(@centreId IS NULL OR c.Id = @centreId)';
     // Exclude test/demo and deleted centres regardless of letter case
@@ -40,6 +62,7 @@ router.get('/', async (req, res, next) => {
                          AND LOWER(c.CentreName) NOT LIKE '%delete%'`;
     const patientExclusionP  = buildPatientExclusion('p');
     const patientExclusionPt = buildPatientExclusion('pt');
+    const userExclusion      = buildUserExclusion('au');
     const whereClause = `WHERE ${centreFilter} AND ${centreExclusion} AND ${patientExclusionP} AND ${dateFilter}`;
 
     function bindParams(request) {
@@ -70,8 +93,8 @@ router.get('/', async (req, res, next) => {
         HAVING COUNT(*) >= 2
       )`;
 
-    // Run all 4 queries in parallel
-    const [countsResult, byCentreResult, centresResult, multiAssessmentResult, pipelineResult] = await Promise.all([
+    // Run all queries in parallel
+    const [countsResult, byCentreResult, centresResult, multiAssessmentResult, pipelineResult, activityResult] = await Promise.all([
 
       // Query A: total counts grouped by Type
       bindParams(pool.request()).query(`
@@ -222,6 +245,53 @@ router.get('/', async (req, res, next) => {
 
       // Query E: assessment-level clinical pipeline funnel
       bindParams(pool.request()).query(buildClinicalPipelineQuery()),
+
+      // Query F: SINGLE SOURCE OF TRUTH for active/idle centre counts
+      //
+      // A centre is ACTIVE if it has ANY PatientAuditLog row in the date range where:
+      //   - The patient is not a test patient (EXCLUDE_TEST_PATIENTS)
+      //   - The user is not a test/dev user (EXCLUDE_TEST_USERS, NULL-safe)
+      //   - The centre is not deleted (CentreName NOT LIKE '%delete%')
+      //
+      // Also returns each idle centre's last-ever activity date (regardless of period)
+      // so the drawer can show "last active: X days ago".
+      bindParams(pool.request()).query(`
+        WITH centre_list AS (
+          SELECT c.Id AS centreId, c.CentreName
+          FROM Centre c
+          WHERE LOWER(c.CentreName) NOT LIKE '%test%'
+            AND LOWER(c.CentreName) NOT LIKE '%delete%'
+            AND ${centreFilter}
+        ),
+        active_set AS (
+          SELECT DISTINCT p.CentreId
+          FROM PatientAuditLog pal
+          JOIN Patient p  ON p.Id  = pal.PatientId
+          JOIN Centre c   ON c.Id  = p.CentreId
+          LEFT JOIN AdminUser au ON au.Id = pal.AdminUserId
+          WHERE LOWER(c.CentreName) NOT LIKE '%test%'
+            AND LOWER(c.CentreName) NOT LIKE '%delete%'
+            AND ${centreFilter}
+            AND ${patientExclusionP}
+            AND ${userExclusion}
+            AND ${dateFilter}
+        ),
+        last_ever AS (
+          SELECT p.CentreId, MAX(pal.CreatedDateTime) AS lastActivityDate
+          FROM PatientAuditLog pal
+          JOIN Patient p ON p.Id = pal.PatientId
+          GROUP BY p.CentreId
+        )
+        SELECT
+          cl.centreId,
+          cl.CentreName,
+          CASE WHEN ac.CentreId IS NOT NULL THEN 1 ELSE 0 END AS isActive,
+          le.lastActivityDate
+        FROM centre_list cl
+        LEFT JOIN active_set ac ON ac.CentreId = cl.centreId
+        LEFT JOIN last_ever  le ON le.CentreId = cl.centreId
+        ORDER BY cl.CentreName
+      `),
     ]);
 
     // Build type → count lookup
@@ -238,6 +308,20 @@ router.get('/', async (req, res, next) => {
 
     const pipeline = mapPipelineRow(pipelineResult.recordset[0] || {});
 
+    // Derive active/idle counts from Query F (single source of truth)
+    const activityRows = activityResult.recordset;
+    const totalCentresCount  = activityRows.length;
+    const activeCentreCount  = activityRows.filter((r) => r.isActive).length;
+    const idleCentreCount    = totalCentresCount - activeCentreCount;
+    const idleCentreDetails  = activityRows
+      .filter((r) => !r.isActive)
+      .map((r) => ({
+        name: abbreviateCentre(r.CentreName),
+        lastActivityDate: r.lastActivityDate
+          ? new Date(r.lastActivityDate).toISOString()
+          : null,
+      }));
+
     res.json({
       totalCases,
       totalAssessments: pipeline.assigned || typeMap['CaseAssigned'] || 0,
@@ -245,6 +329,11 @@ router.get('/', async (req, res, next) => {
       totalResults: pipeline.reportPdfCreated,
       totalTransfers:   typeMap['CaseTransfer']    || 0,
       totalStatusChanges: typeMap['CaseStatusChanged'] || 0,
+      // Single source of truth for active/idle centre counts
+      totalCentresCount,
+      activeCentreCount,
+      idleCentreCount,
+      idleCentreDetails,
       pipeline,
       multipleAssessmentCases,
       byCentre: byCentreResult.recordset.map((r) => ({

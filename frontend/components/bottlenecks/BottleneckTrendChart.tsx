@@ -139,7 +139,7 @@ export default function BottleneckTrendChart({ data, loading, onDrillDown }: Pro
               ticks: {
                 font: { size: 11 },
                 color: '#9CA3AF',
-                callback: (v) => `${v}h`,
+                callback: (v: unknown) => `${v}h`,
               },
               border: { display: false },
             },

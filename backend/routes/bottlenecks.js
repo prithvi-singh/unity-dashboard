@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
 
 const router = Router();
@@ -39,6 +40,7 @@ router.get('/', async (req, res, next) => {
     `;
     const centreFilter = '(@centreId IS NULL OR c.Id = @centreId)';
     const centreExclusion = buildCentreExclusion('c');
+    const patientExclusion = buildPatientExclusion('pt');
     const dateFilterPal = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
     const goalCentreJoin = `
@@ -81,6 +83,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND (pt.Id IS NULL OR (${patientExclusion}))
             AND ${dateFilterPal}
           GROUP BY pal.PatientId
         ),
@@ -91,6 +94,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseAssigned'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND (pt.Id IS NULL OR (${patientExclusion}))
             AND ${dateFilterPal}
           GROUP BY pal.PatientId
         )
@@ -109,6 +113,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND (pt.Id IS NULL OR (${patientExclusion}))
             AND ${dateFilterPal}
           GROUP BY pal.PatientId
         )
@@ -131,6 +136,7 @@ router.get('/', async (req, res, next) => {
         WHERE pgarg.Status NOT IN ('Approved', 'Rejected')
           AND ${goalCentreFilter}
           AND ${goalCentreExclusion}
+          AND ${patientExclusion}
       `),
 
       // Q4: avg goal approval turnaround in hours (approved goals only)
@@ -144,6 +150,7 @@ router.get('/', async (req, res, next) => {
           AND pgarg.UpdatedDateTimeUtc > pgar.CreatedDateTimeUtc
           AND ${goalCentreFilter}
           AND ${goalCentreExclusion}
+          AND ${patientExclusion}
           AND ${goalDateFilter}
       `),
 
@@ -160,6 +167,7 @@ router.get('/', async (req, res, next) => {
             LOWER(c.CentreName) NOT LIKE '%test%'
             AND LOWER(c.CentreName) NOT LIKE '%delete%'
           ))
+          AND (pt.Id IS NULL OR (${patientExclusion}))
           AND (
             @dateFrom IS NULL OR ap.CreatedDateTimeUtc >= @dateFrom
           )
@@ -176,6 +184,7 @@ router.get('/', async (req, res, next) => {
         WHERE pal.Type IN ('CaseTransfer', 'CaseStatusChanged')
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND (pt.Id IS NULL OR (${patientExclusion}))
           AND ${dateFilterPal}
         GROUP BY pal.Type
       `),
@@ -192,6 +201,7 @@ router.get('/', async (req, res, next) => {
             LOWER(c.CentreName) NOT LIKE '%test%'
             AND LOWER(c.CentreName) NOT LIKE '%delete%'
           ))
+          AND ${patientExclusion}
       `),
 
       // Q8: assessment-level clinical pipeline funnel
@@ -215,6 +225,7 @@ router.get('/', async (req, res, next) => {
             WHERE pal.Type = 'CaseRegistered'
               AND ${centreFilter}
               AND ${centreExclusion}
+              AND (pt.Id IS NULL OR (${patientExclusion}))
               AND ${dateFilterPal}
             GROUP BY pal.PatientId, c.Id
           ) reg
@@ -232,6 +243,7 @@ router.get('/', async (req, res, next) => {
           WHERE pgarg.Status NOT IN ('Approved', 'Rejected')
             AND ${goalCentreFilter}
             AND ${goalCentreExclusion}
+            AND ${patientExclusion}
           GROUP BY c.Id
         ),
         incomplete AS (
@@ -241,6 +253,7 @@ router.get('/', async (req, res, next) => {
           JOIN Centre c ON c.Id = pt.CentreId
           WHERE ap.IsResultGenerate = 0
             AND (@centreId IS NULL OR c.Id = @centreId)
+            AND ${patientExclusion}
           GROUP BY c.Id
         )
         SELECT
@@ -267,6 +280,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND (pt.Id IS NULL OR (${patientExclusion}))
             AND ${dateFilterPal}
           GROUP BY pal.PatientId
         ),
@@ -277,6 +291,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseAssigned'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND (pt.Id IS NULL OR (${patientExclusion}))
           GROUP BY pal.PatientId
         ),
         pairs AS (
@@ -310,6 +325,7 @@ router.get('/', async (req, res, next) => {
           AND pgarg.UpdatedDateTimeUtc > pgar.CreatedDateTimeUtc
           AND ${goalCentreFilter}
           AND ${goalCentreExclusion}
+          AND ${patientExclusion}
           AND ${goalDateFilter}
         GROUP BY DATEPART(year, pgarg.UpdatedDateTimeUtc), DATEPART(week, pgarg.UpdatedDateTimeUtc)
         ORDER BY MIN(CAST(pgarg.UpdatedDateTimeUtc AS date)) DESC
@@ -392,7 +408,7 @@ router.get('/', async (req, res, next) => {
       },
       byCentre: byCentreResult.recordset.map((r) => ({
         centreId: r.centreId,
-        centreName: r.centreName,
+        centreName: abbreviateCentre(r.centreName),
         stuckOnboarding: r.stuckOnboarding,
         pendingGoals: r.pendingGoals,
         incompleteAssessments: r.incompleteAssessments,

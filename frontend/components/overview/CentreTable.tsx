@@ -12,26 +12,24 @@ interface Props {
 
 type SortDir = 'asc' | 'desc';
 interface SortState { col: ColKey; dir: SortDir }
-type ColKey = 'centreName' | 'cases' | 'assessments' | 'completion';
+type ColKey = 'centreName' | 'cases' | 'assessments' | 'reportsDrafted' | 'reportsApproved';
 
 const COLS: { col: ColKey; label: string; tip: string; align: 'left' | 'right'; defaultDir: SortDir; isText?: boolean }[] = [
-  { col: 'centreName',  label: 'Centre',      tip: '',                                        align: 'left',  defaultDir: 'asc',  isText: true },
-  { col: 'cases',       label: 'Cases',       tip: 'New children registered in the period',   align: 'right', defaultDir: 'desc' },
-  { col: 'assessments', label: 'Assessments', tip: 'Assessments assigned in the period',      align: 'right', defaultDir: 'desc' },
-  { col: 'completion',  label: 'PDF rate',    tip: 'Report PDFs generated ÷ assessments assigned. Can exceed 100% when backlog from prior periods is cleared.', align: 'right', defaultDir: 'desc' },
+  { col: 'centreName',     label: 'Centre',            tip: '',                                                              align: 'left',  defaultDir: 'asc',  isText: true },
+  { col: 'cases',          label: 'Cases',             tip: 'New children registered in the period',                        align: 'right', defaultDir: 'desc' },
+  { col: 'assessments',    label: 'Assessments',       tip: 'Assessments assigned in the period',                           align: 'right', defaultDir: 'desc' },
+  { col: 'reportsDrafted', label: 'Reports Drafted',   tip: 'ReportAdded events logged for this centre in the period',      align: 'right', defaultDir: 'desc' },
+  { col: 'reportsApproved',label: 'Reports Approved',  tip: 'ReportPDFGenerated events logged for this centre in the period', align: 'right', defaultDir: 'desc' },
 ];
-
-function reportPdf(row: CentreBreakdown): number {
-  return row.reportPdfCreated ?? row.results ?? 0;
-}
 
 function getVal(row: CentreBreakdown, col: ColKey): number | string {
   switch (col) {
-    case 'centreName':  return row.centreName ?? '';
-    case 'cases':       return row.cases;
-    case 'assessments': return row.assessments;
-    case 'completion':  return row.assessments > 0 ? reportPdf(row) / row.assessments : -1;
-    default:            return 0;
+    case 'centreName':      return row.centreName ?? '';
+    case 'cases':           return row.cases;
+    case 'assessments':     return row.assessments;
+    case 'reportsDrafted':  return row.reportsDrafted;
+    case 'reportsApproved': return row.reportsApproved;
+    default:                return 0;
   }
 }
 
@@ -46,51 +44,10 @@ function applySort(rows: CentreBreakdown[], { col, dir }: SortState): CentreBrea
   });
 }
 
-function pdfRate(row: CentreBreakdown): number {
-  return row.assessments === 0 ? 0 : (reportPdf(row) / row.assessments) * 100;
-}
-
-function pdfLabel(row: CentreBreakdown): string {
-  if (row.assessments === 0) return '—';
-  const r = pdfRate(row);
-  return r > 100 ? '>100%' : `${r.toFixed(0)}%`;
-}
-
-function StatusPill({ row }: { row: CentreBreakdown }) {
-  const active = row.cases + row.assessments + reportPdf(row) > 0;
-  if (!active)
-    return <span className="text-[10px] font-semibold text-gray-300 bg-gray-50 px-2 py-0.5 rounded-full">Idle</span>;
-
-  const rate = pdfRate(row);
-  if (rate >= 75)
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Healthy
-      </span>
-    );
-  if (rate >= 40)
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />In progress
-      </span>
-    );
-  if (rate > 0)
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />Low
-      </span>
-    );
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-      <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />No PDFs yet
-    </span>
-  );
-}
-
-const COL_COUNT = COLS.length + 1; // + Status
+const COL_COUNT = COLS.length + 1; // + row number column
 
 export default function CentreTable({ data, loading }: Props) {
-  const [sort, setSort] = useState<SortState>({ col: 'assessments', dir: 'desc' });
+  const [sort, setSort] = useState<SortState>({ col: 'reportsDrafted', dir: 'desc' });
 
   const handleSort = (col: ColKey, def: SortDir) =>
     setSort((prev) => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: def });
@@ -132,7 +89,6 @@ export default function CentreTable({ data, loading }: Props) {
                   </span>
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -151,47 +107,31 @@ export default function CentreTable({ data, loading }: Props) {
                 <td colSpan={COL_COUNT} className="px-6 py-10 text-center text-gray-400 text-sm">No centre data</td>
               </tr>
             ) : (
-              rows.map((row, idx) => {
-                const rate = pdfRate(row);
-                const isActive = row.cases + row.assessments + reportPdf(row) > 0;
-                return (
-                  <tr
-                    key={row.centreId}
-                    className={`border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors ${!isActive ? 'opacity-40' : ''}`}
-                  >
-                    <td className="px-6 py-3.5">
-                      <span className="text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</span>
-                    </td>
-                    <td className="px-4 py-3.5 font-medium text-gray-800 max-w-[200px] truncate" title={row.centreName}>
-                      {shortCentreName(row.centreName)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
-                      {row.cases > 0 ? row.cases : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
-                      {row.assessments > 0 ? row.assessments : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`tabular-nums text-sm font-semibold ${rate > 100 ? 'text-teal-600' : rate >= 75 ? 'text-emerald-600' : rate >= 40 ? 'text-amber-600' : rate > 0 ? 'text-rose-500' : 'text-gray-300'}`}>
-                          {pdfLabel(row)}
-                        </span>
-                        {row.assessments > 0 && (
-                          <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${rate > 100 ? 'bg-teal-400' : rate >= 75 ? 'bg-emerald-400' : rate >= 40 ? 'bg-amber-400' : rate > 0 ? 'bg-rose-400' : 'bg-gray-200'}`}
-                              style={{ width: `${Math.min(rate, 100)}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <StatusPill row={row} />
-                    </td>
-                  </tr>
-                );
-              })
+              rows.map((row, idx) => (
+                <tr
+                  key={row.centreId}
+                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
+                >
+                  <td className="px-6 py-3.5">
+                    <span className="text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</span>
+                  </td>
+                  <td className="px-4 py-3.5 font-medium text-gray-800 max-w-[200px] truncate" title={row.centreName}>
+                    {shortCentreName(row.centreName)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
+                    {row.cases > 0 ? row.cases : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
+                    {row.assessments > 0 ? row.assessments : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
+                    {row.reportsDrafted > 0 ? row.reportsDrafted : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-gray-700 font-medium">
+                    {row.reportsApproved > 0 ? row.reportsApproved : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>

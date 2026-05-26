@@ -12,6 +12,8 @@ import type {
   UserSummaryProfile,
   AssessmentOverviewData,
   PipelineData,
+  WorkloadCentreRow,
+  ReportPdfCentre,
 } from './types';
 import type {
   BottleneckDrillDownParams,
@@ -47,6 +49,10 @@ async function get<T>(path: string): Promise<T> {
 
 export function fetchOverview(params: FilterParams = {}): Promise<OverviewData> {
   return get<OverviewData>(`/api/overview${buildQuery(params)}`);
+}
+
+export function fetchReportPdfs(params: FilterParams = {}): Promise<ReportPdfCentre[]> {
+  return get<ReportPdfCentre[]>(`/api/overview/report-pdfs${buildQuery(params)}`);
 }
 
 export function fetchClinicians(params: FilterParams = {}): Promise<Clinician[]> {
@@ -144,4 +150,8 @@ export function fetchClinicalPipeline(params: FilterParams = {}): Promise<Clinic
 
 export function fetchPipeline(params: FilterParams = {}): Promise<PipelineData> {
   return get<PipelineData>(`/api/pipeline${buildQuery(params)}`);
+}
+
+export function fetchWorkload(params: FilterParams = {}): Promise<WorkloadCentreRow[]> {
+  return get<WorkloadCentreRow[]>(`/api/workload${buildQuery(params)}`);
 }

@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.get('/overview', async (req, res, next) => {
     // Shared filter fragments
     const centreFilter    = '(@centreId IS NULL OR c.Id = @centreId)';
     const centreExclusion = buildCentreExclusion('c');
+    const patientExclusion = buildPatientExclusion('pt');
     const dateFilter = buildDateFilter('ap.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
 
     function bindAll(req) {
@@ -79,6 +81,7 @@ router.get('/overview', async (req, res, next) => {
         WHERE ap.Assessment IN ('SPM','DP3','REELS','ISAA')
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND (pt.Id IS NULL OR (${patientExclusion}))
           AND ${dateFilter}
         GROUP BY ap.Assessment
       `),
@@ -102,6 +105,7 @@ router.get('/overview', async (req, res, next) => {
         WHERE ap.Assessment IN ('SPM','DP3','REELS','ISAA')
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND ${patientExclusion}
           AND ${dateFilter}
         GROUP BY c.Id, c.CentreName
         ORDER BY c.CentreName
@@ -129,6 +133,7 @@ router.get('/overview', async (req, res, next) => {
         WHERE ap.Assessment IN ('SPM','DP3','REELS','ISAA')
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND ${patientExclusion}
           AND ${dateFilter}
           AND LOWER(au.FirstName) NOT LIKE '%test%'
           AND LOWER(au.LastName)  NOT LIKE '%test%'
@@ -157,6 +162,7 @@ router.get('/overview', async (req, res, next) => {
           AND DATEDIFF(day, ap.CreatedDateTimeUtc, SYSDATETIMEOFFSET()) > 14
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND ${patientExclusion}
         ORDER BY daysPending DESC
       `),
     ]);
@@ -206,7 +212,7 @@ router.get('/overview', async (req, res, next) => {
       }
       return {
         centreId:   r.centreId,
-        centreName: r.centreName,
+        centreName: abbreviateCentre(r.centreName),
         SPM:   typeBlock('SPM'),
         DP3:   typeBlock('DP3'),
         REELS: typeBlock('REELS'),
@@ -219,7 +225,7 @@ router.get('/overview', async (req, res, next) => {
       clinicianId: r.clinicianId,
       firstName:   r.firstName,
       lastName:    r.lastName,
-      centreName:  r.centreName || null,
+      centreName:  abbreviateCentre(r.centreName) || null,
       SPM:   { assigned: r.SPM_assigned   ?? 0, completed: r.SPM_completed   ?? 0 },
       DP3:   { assigned: r.DP3_assigned   ?? 0, completed: r.DP3_completed   ?? 0 },
       REELS: { assigned: r.REELS_assigned ?? 0, completed: r.REELS_completed ?? 0 },
@@ -233,7 +239,7 @@ router.get('/overview', async (req, res, next) => {
       patientName:       (r.patientName ?? '').trim() || 'Unknown',
       assessmentType:    r.assessmentType,
       clinicianName:     r.clinicianName,
-      centreName:        r.centreName,
+      centreName:        abbreviateCentre(r.centreName),
       assignedDate:      r.assignedDate,
       daysPending:       r.daysPending ?? 0,
     }));

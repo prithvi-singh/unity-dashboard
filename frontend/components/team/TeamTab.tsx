@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Clinician, Manager, CentreAdmin, UserBreakdownData } from '@/lib/types';
+import type { Clinician, Manager, CentreAdmin, UserBreakdownData, WorkloadCentreRow } from '@/lib/types';
 import type { OnRoleDrillDown, RoleSummary, ClinicalPipelineData } from '@/lib/roleDrillDown';
 import ClinicianChart from '@/components/clinicians/ClinicianChart';
 import ClinicianTable from '@/components/clinicians/ClinicianTable';
@@ -37,6 +37,8 @@ export interface TeamTabProps {
   clinicianSummaryLoading: boolean;
   clinicalPipeline: ClinicalPipelineData | null;
   clinicalPipelineLoading: boolean;
+  workload: WorkloadCentreRow[] | null;
+  workloadLoading: boolean;
 
   managers: Manager[];
   managersLoading: boolean;
@@ -109,6 +111,8 @@ export default function TeamTab({
   clinicianSummaryLoading,
   clinicalPipeline,
   clinicalPipelineLoading,
+  workload,
+  workloadLoading,
   managers,
   managersLoading,
   managersError,
@@ -169,6 +173,8 @@ export default function TeamTab({
             pipeline={clinicalPipeline}
             loading={cliniciansLoading}
             summaryLoading={clinicianSummaryLoading}
+            workload={workload}
+            workloadLoading={workloadLoading}
             onDrillDown={onDrillDown}
           />
           <SearchBar

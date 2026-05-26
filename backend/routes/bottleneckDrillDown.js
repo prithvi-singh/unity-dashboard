@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 const { labelAuditEvent } = require('../lib/auditEventLabels');
 const {
   pipelineAuditDetailExpr,
@@ -67,7 +68,7 @@ function mapPatientRow(row) {
     patientCode: row.patientCode ?? null,
     patientName: (row.patientName ?? '').trim() || 'Unknown',
     centreId: row.centreId,
-    centreName: row.centreName ?? '',
+    centreName: abbreviateCentre(row.centreName ?? '') ?? '',
     eventAt: row.eventAt ? new Date(row.eventAt).toISOString() : null,
     waitingHours: row.waitingHours != null ? parseFloat(Number(row.waitingHours).toFixed(1)) : null,
     status: row.status ?? null,
@@ -169,6 +170,8 @@ function buildFilterContext(req) {
 
   const patientNameExpr = `LTRIM(RTRIM(CONCAT(ISNULL(pt.FirstName, ''), ' ', ISNULL(pt.LastName, ''))))`;
 
+  const patientExclusion = buildPatientExclusion('pt');
+
   return {
     effectiveCentreId,
     severity,
@@ -177,6 +180,7 @@ function buildFilterContext(req) {
     centreJoin,
     centreFilter,
     centreExclusion,
+    patientExclusion,
     dateFilterPal,
     goalCentreJoin,
     goalCentreFilter,
@@ -188,7 +192,7 @@ function buildFilterContext(req) {
 }
 
 async function queryStuckOnboarding(ctx) {
-  const { bindAll, centreJoin, centreFilter, centreExclusion, dateFilterPal, patientNameExpr } = ctx;
+  const { bindAll, centreJoin, centreFilter, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     WITH reg AS (
@@ -198,6 +202,7 @@ async function queryStuckOnboarding(ctx) {
       WHERE pal.Type = 'CaseRegistered'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
         AND ${dateFilterPal}
       GROUP BY pal.PatientId
     )
@@ -226,7 +231,7 @@ async function queryStuckOnboarding(ctx) {
 }
 
 async function queryPendingGoals(ctx) {
-  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientNameExpr } = ctx;
+  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientExclusion, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -245,13 +250,14 @@ async function queryPendingGoals(ctx) {
     WHERE pgarg.Status NOT IN ('Approved', 'Rejected')
       AND ${goalCentreFilter}
       AND ${goalCentreExclusion}
+      AND ${patientExclusion}
     ORDER BY pgar.CreatedDateTimeUtc ASC
   `);
   return result.recordset.map(mapPatientRow);
 }
 
 async function queryIncompleteAssessments(ctx) {
-  const { bindAll, patientNameExpr } = ctx;
+  const { bindAll, patientExclusion, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -282,13 +288,14 @@ async function queryIncompleteAssessments(ctx) {
         LOWER(c.CentreName) NOT LIKE '%test%'
         AND LOWER(c.CentreName) NOT LIKE '%delete%'
       ))
+      AND ${patientExclusion}
     ORDER BY ap.CreatedDateTimeUtc ASC
   `);
   return result.recordset.map(mapPatientRow);
 }
 
 async function querySlowOnboarding(ctx) {
-  const { bindAll, centreJoin, centreFilter, centreExclusion, dateFilterPal, patientNameExpr } = ctx;
+  const { bindAll, centreJoin, centreFilter, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     WITH reg AS (
@@ -298,6 +305,7 @@ async function querySlowOnboarding(ctx) {
       WHERE pal.Type = 'CaseRegistered'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
         AND ${dateFilterPal}
       GROUP BY pal.PatientId
     ),
@@ -308,6 +316,7 @@ async function querySlowOnboarding(ctx) {
       WHERE pal.Type = 'CaseAssigned'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
       GROUP BY pal.PatientId
     )
     SELECT TOP (${MAX_ITEMS})
@@ -333,7 +342,7 @@ async function querySlowOnboarding(ctx) {
 }
 
 async function querySlowGoalApproval(ctx) {
-  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, goalDateFilter, patientNameExpr } = ctx;
+  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientExclusion, goalDateFilter, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -358,6 +367,7 @@ async function querySlowGoalApproval(ctx) {
     ${goalCentreJoin}
     WHERE ${goalCentreFilter}
       AND ${goalCentreExclusion}
+      AND ${patientExclusion}
       AND (
         (
           pgarg.Status = 'Approved'
@@ -376,7 +386,7 @@ async function querySlowGoalApproval(ctx) {
 }
 
 async function queryAuditEvents(ctx, auditType, categoryLabel) {
-  const { bindAll, centreJoin, centreFilter, centreExclusion, dateFilterPal, patientNameExpr } = ctx;
+  const { bindAll, centreJoin, centreFilter, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -395,6 +405,7 @@ async function queryAuditEvents(ctx, auditType, categoryLabel) {
     WHERE pal.Type = '${auditType}'
       AND ${centreFilter}
       AND ${centreExclusion}
+      AND (pt.Id IS NULL OR (${patientExclusion}))
       AND ${dateFilterPal}
     ORDER BY pal.CreatedDateTime DESC
   `);
@@ -405,7 +416,7 @@ async function queryAuditEvents(ctx, auditType, categoryLabel) {
 }
 
 async function queryFunnelStage(ctx, auditType, categoryLabel, statusLabel) {
-  const { bindAll, centreJoin, centreFilter, centreExclusion, dateFilterPal, patientNameExpr } = ctx;
+  const { bindAll, centreJoin, centreFilter, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr } = ctx;
   const pool = await poolPromise;
 
   if (auditType === 'CaseRegistered') {
@@ -426,6 +437,7 @@ async function queryFunnelStage(ctx, auditType, categoryLabel, statusLabel) {
       WHERE pal.Type = '${auditType}'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
         AND ${dateFilterPal}
       GROUP BY pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName
       ORDER BY eventAt DESC
@@ -461,6 +473,7 @@ async function queryFunnelStage(ctx, auditType, categoryLabel, statusLabel) {
       AND pal.AllocatePatientId IS NOT NULL
       AND ${centreFilter}
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${dateFilterPal}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName
@@ -470,7 +483,7 @@ async function queryFunnelStage(ctx, auditType, categoryLabel, statusLabel) {
 }
 
 async function queryFunnelReportShared(ctx) {
-  const { bindAll, centreExclusion, patientNameExpr } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr } = ctx;
   const dateFilterApr = buildDateFilter('apr.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
   const detailExpr = pipelineReportSharedDetailExpr();
   const pool = await poolPromise;
@@ -494,6 +507,7 @@ async function queryFunnelReportShared(ctx) {
     WHERE ${dateFilterApr}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, apr.CreatedBy
     ORDER BY eventAt DESC
@@ -502,7 +516,7 @@ async function queryFunnelReportShared(ctx) {
 }
 
 async function queryFunnelGoalsAdded(ctx) {
-  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientNameExpr } = ctx;
+  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientExclusion, patientNameExpr } = ctx;
   const dateFilterCreated = buildDateFilter('pgarg.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
   const detailExpr = pipelineGoalsAddedDetailExpr();
   const pool = await poolPromise;
@@ -523,6 +537,7 @@ async function queryFunnelGoalsAdded(ctx) {
     LEFT JOIN AdminUser clin ON clin.Id = ap.ClinicianUserId
     WHERE ${goalCentreFilter}
       AND ${goalCentreExclusion}
+      AND ${patientExclusion}
       AND ${dateFilterCreated}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, pgarg.CreatedBy
@@ -532,7 +547,7 @@ async function queryFunnelGoalsAdded(ctx) {
 }
 
 async function queryFunnelGoalsApproved(ctx) {
-  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, goalDateFilter, patientNameExpr } = ctx;
+  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientExclusion, goalDateFilter, patientNameExpr } = ctx;
   const detailExpr = pipelineGoalsApprovedDetailExpr();
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
@@ -553,6 +568,7 @@ async function queryFunnelGoalsApproved(ctx) {
     WHERE pgarg.Status = 'Approved'
       AND ${goalCentreFilter}
       AND ${goalCentreExclusion}
+      AND ${patientExclusion}
       AND ${goalDateFilter}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, pgarg.UpdatedBy,
@@ -587,7 +603,7 @@ async function queryCentreSeverity(ctx) {
 }
 
 async function queryWeeklyOnboarding(ctx) {
-  const { bindAll, centreJoin, centreFilter, centreExclusion, dateFilterPal, patientNameExpr, weekStart, weekEnd } = ctx;
+  const { bindAll, centreJoin, centreFilter, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, weekStart, weekEnd } = ctx;
   if (!weekStart || !weekEnd) {
     const err = new Error('weekStart and weekEnd are required for weekly-onboarding');
     err.status = 400;
@@ -602,6 +618,7 @@ async function queryWeeklyOnboarding(ctx) {
       WHERE pal.Type = 'CaseRegistered'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
         AND ${dateFilterPal}
       GROUP BY pal.PatientId
     ),
@@ -612,6 +629,7 @@ async function queryWeeklyOnboarding(ctx) {
       WHERE pal.Type = 'CaseAssigned'
         AND ${centreFilter}
         AND ${centreExclusion}
+        AND (pt.Id IS NULL OR (${patientExclusion}))
       GROUP BY pal.PatientId
     )
     SELECT TOP (${MAX_ITEMS})
@@ -638,7 +656,7 @@ async function queryWeeklyOnboarding(ctx) {
 }
 
 async function queryWeeklyGoalApproval(ctx) {
-  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientNameExpr, weekStart, weekEnd } = ctx;
+  const { bindAll, goalCentreJoin, goalCentreFilter, goalCentreExclusion, patientExclusion, patientNameExpr, weekStart, weekEnd } = ctx;
   if (!weekStart || !weekEnd) {
     const err = new Error('weekStart and weekEnd are required for weekly-goal-approval');
     err.status = 400;
@@ -663,6 +681,7 @@ async function queryWeeklyGoalApproval(ctx) {
       AND pgarg.UpdatedDateTimeUtc > pgar.CreatedDateTimeUtc
       AND ${goalCentreFilter}
       AND ${goalCentreExclusion}
+      AND ${patientExclusion}
       AND pgarg.UpdatedDateTimeUtc >= @weekStart
       AND pgarg.UpdatedDateTimeUtc < @weekEnd
     ORDER BY pgarg.UpdatedDateTimeUtc DESC

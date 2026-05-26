@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -34,8 +35,9 @@ router.get('/', async (req, res, next) => {
     console.log('[pipeline] GET /api/pipeline centreId=%s dateFrom=%s dateTo=%s',
       centreId, req.query.dateFrom || 'none', req.query.dateTo || 'none');
 
-    const centreExclusion = buildCentreExclusion('c');
-    const centreFilter    = '(@centreId IS NULL OR c.Id = @centreId)';
+    const centreExclusion  = buildCentreExclusion('c');
+    const patientExclusion = buildPatientExclusion('p');
+    const centreFilter     = '(@centreId IS NULL OR c.Id = @centreId)';
     const palDateFilter   = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
     const apDateFilter    = buildDateFilter('ap.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
 
@@ -70,6 +72,7 @@ router.get('/', async (req, res, next) => {
           JOIN Centre c  ON c.Id = p.CentreId
           WHERE (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
         ),
         result_time AS (
           SELECT AllocatePatientId, MIN(CreatedDateTime) AS resultAt
@@ -110,6 +113,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
             AND ${palDateFilter}
         ),
         assigned AS (
@@ -128,6 +132,7 @@ router.get('/', async (req, res, next) => {
             AND pal.AllocatePatientId IS NOT NULL
             AND (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
             AND ${palDateFilter}
         ),
         in_progress AS (
@@ -236,6 +241,7 @@ router.get('/', async (req, res, next) => {
             AND pal.AllocatePatientId IS NOT NULL
             AND (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
             AND ${palDateFilter}
           GROUP BY pal.AllocatePatientId
         ),
@@ -260,6 +266,7 @@ router.get('/', async (req, res, next) => {
           JOIN Centre c  ON c.Id = p.CentreId
           WHERE (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
             AND ${apDateFilter}
         )
         SELECT
@@ -345,6 +352,7 @@ router.get('/', async (req, res, next) => {
           WHERE (@centreId IS NULL OR c.Id = @centreId)
             AND LOWER(c.CentreName) NOT LIKE '%test%'
             AND LOWER(c.CentreName) NOT LIKE '%delete%'
+            AND ${patientExclusion}
             AND ${apDateFilter}
         ),
         report_pdf_by_centre AS (
@@ -424,6 +432,7 @@ router.get('/', async (req, res, next) => {
           WHERE ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
             AND (${centreFilter})
             AND ${centreExclusion}
+            AND ${patientExclusion}
         ),
         last_action AS (
           SELECT pal.AllocatePatientId,
@@ -583,7 +592,7 @@ router.get('/', async (req, res, next) => {
           managerId:          r.managerId,
           firstName:          r.FirstName,
           lastName:           r.LastName,
-          centreName:         r.CentreName,
+          centreName:         abbreviateCentre(r.CentreName),
           reportApprovalRate: rPdf > 0 ? parseFloat(((rShare / rPdf) * 100).toFixed(1)) : 0,
           reportPending:      rPdf - rShare > 0 ? rPdf - rShare : 0,
           goalApprovalRate:   gTotal > 0 ? parseFloat(((gApprv / gTotal) * 100).toFixed(1)) : 0,
@@ -598,7 +607,7 @@ router.get('/', async (req, res, next) => {
       patientDisplayId: r.patientDisplayId ?? null,
       firstName:       r.firstName ?? '',
       lastName:        r.lastName ?? '',
-      centreName:      r.centreName ?? '',
+      centreName:      abbreviateCentre(r.centreName) ?? '',
       currentStage:    r.currentStage,
       daysStuck:       r.daysStuck ?? 0,
       assessmentType:  r.assessmentType ?? null,

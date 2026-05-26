@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -79,7 +80,7 @@ router.get('/', async (req, res, next) => {
       email:                   r.Email,
       roleName:                r.roleName || null,
       centreId:                r.centreId,
-      centreName:              r.CentreName || null,
+      centreName:              abbreviateCentre(r.CentreName) || null,
       casesRegistered:         r.casesRegistered ?? 0,
       casesAssignedToClinical: r.casesAssignedToClinical ?? 0,
       totalActions:            r.totalActions ?? 0,

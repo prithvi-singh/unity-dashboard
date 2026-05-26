@@ -12,6 +12,8 @@ import ActionFeed from '@/components/overview/ActionFeed';
 import MetricCards from '@/components/overview/MetricCards';
 import CentreTable from '@/components/overview/CentreTable';
 import MultipleAssessmentCasesPanel from '@/components/overview/MultipleAssessmentCasesPanel';
+import ActiveCentresPanel from '@/components/overview/ActiveCentresPanel';
+import ReportPdfsPanel from '@/components/overview/ReportPdfsPanel';
 import ClinicalPipelineCard from '@/components/shared/ClinicalPipelineCard';
 
 // Live (daily monitoring)
@@ -45,6 +47,7 @@ import { useRoleSummary } from '@/hooks/useRoleSummary';
 import { useClinicalPipeline } from '@/hooks/useClinicalPipeline';
 import { useUserBreakdown } from '@/hooks/useUserBreakdown';
 import { useAssessments } from '@/hooks/useAssessments';
+import { useWorkload } from '@/hooks/useWorkload';
 import { useActionFocus } from '@/hooks/useActionFocus';
 import { useDashboardUrl, readDashboardStateFromUrl } from '@/hooks/useDashboardUrl';
 import type { ActionNavigationTarget, BottleneckActionSortCol } from '@/lib/actionNavigation';
@@ -110,6 +113,7 @@ function Dashboard() {
   const needClinicianExtras = activeTab === 2 && teamRole === 'clinicians';
   const needManagerExtras   = activeTab === 2 && teamRole === 'managers';
   const needAdminExtras     = activeTab === 2 && teamRole === 'admins';
+  const needWorkload        = (activeTab === 2 && teamRole === 'clinicians') || activeTab === 3;
 
   // ── Action feed navigation ────────────────────────────────────────────────
   const [pendingActionFocus, setPendingActionFocus] = useState<ActionNavigationTarget | null>(null);
@@ -138,6 +142,10 @@ function Dashboard() {
   // ── Multiple-assessment drill-down (Overview) ─────────────────────────────
   const [multipleAssessmentsOpen, setMultipleAssessmentsOpen] = useState(false);
 
+  // ── Report PDFs + Active Centres drill-downs (Overview) ───────────────────
+  const [reportPdfsOpen, setReportPdfsOpen] = useState(false);
+  const [activeCentresOpen, setActiveCentresOpen] = useState(false);
+
   // ── Monitoring date ───────────────────────────────────────────────────────
   const [monitoringDate, setMonitoringDate] = useState(todayISO);
   const [monitoringEngagementFilter, setMonitoringEngagementFilter] = useState<MonitoringEngagementFilter>({ kind: 'all' });
@@ -160,6 +168,7 @@ function Dashboard() {
   const adminSummary     = useRoleSummary('admin', filters, needAdminExtras);
   const userBreakdown    = useUserBreakdown(filters, needUsers);
   const assessments      = useAssessments(filters, needAssessments);
+  const workload         = useWorkload(filters, needWorkload);
 
   // Refs to avoid stale closures in the refresh interval
   const overviewRef      = useRef(overview);
@@ -170,19 +179,21 @@ function Dashboard() {
   const bottlenecksRef   = useRef(bottlenecks);
   const userBreakdownRef = useRef(userBreakdown);
   const assessmentsRef   = useRef(assessments);
+  const workloadRef      = useRef(workload);
   const activeTabRef     = useRef(activeTab);
   const teamRoleRef      = useRef(teamRole);
 
-  overviewRef.current     = overview;
-  cliniciansRef.current   = clinicians;
-  managersRef.current     = managers;
-  centreAdminsRef.current = centreAdmins;
-  monitoringRef.current   = monitoring;
-  bottlenecksRef.current  = bottlenecks;
+  overviewRef.current      = overview;
+  cliniciansRef.current    = clinicians;
+  managersRef.current      = managers;
+  centreAdminsRef.current  = centreAdmins;
+  monitoringRef.current    = monitoring;
+  bottlenecksRef.current   = bottlenecks;
   userBreakdownRef.current = userBreakdown;
-  assessmentsRef.current  = assessments;
-  activeTabRef.current    = activeTab;
-  teamRoleRef.current     = teamRole;
+  assessmentsRef.current   = assessments;
+  workloadRef.current      = workload;
+  activeTabRef.current     = activeTab;
+  teamRoleRef.current      = teamRole;
 
   useEffect(() => {
     setLastUpdated(new Date());
@@ -210,7 +221,7 @@ function Dashboard() {
         assessmentsRef.current.refetch();
       }
       if (tab === 2) {
-        if (role === 'clinicians') cliniciansRef.current.refetch();
+        if (role === 'clinicians') { cliniciansRef.current.refetch(); workloadRef.current.refetch(); }
         if (role === 'managers')   managersRef.current.refetch();
         if (role === 'admins')     centreAdminsRef.current.refetch();
         if (role === 'roster')     userBreakdownRef.current.refetch();
@@ -241,6 +252,7 @@ function Dashboard() {
     if (needManagers)     managers.refetch();
     if (needCentreAdmins) centreAdmins.refetch();
     if (needUsers)        userBreakdown.refetch();
+    if (needWorkload)     workload.refetch();
     setLastUpdated(new Date());
     setCountdown(REFRESH_INTERVAL_MS / 1000);
   };
@@ -324,6 +336,8 @@ function Dashboard() {
               error={overview.error}
               onOpenMultipleAssessments={() => setMultipleAssessmentsOpen(true)}
               onOperationalDrill={handleOverviewOperationalDrill}
+              onOpenReportPdfs={() => setReportPdfsOpen(true)}
+              onOpenActiveCentres={() => setActiveCentresOpen(true)}
             />
             <ClinicalPipelineCard
               pipeline={overview.data?.pipeline}
@@ -410,6 +424,8 @@ function Dashboard() {
             clinicianSummaryLoading={clinicianSummary.loading}
             clinicalPipeline={clinicalPipeline.data}
             clinicalPipelineLoading={clinicalPipeline.loading}
+            workload={workload.data}
+            workloadLoading={workload.loading}
             managers={managers.data ?? []}
             managersLoading={managers.loading}
             managersError={managers.error}
@@ -437,6 +453,8 @@ function Dashboard() {
             assessments={assessments.data}
             assessmentsLoading={assessments.loading}
             assessmentsError={assessments.error}
+            workload={workload.data}
+            workloadLoading={workload.loading}
             onDrillDown={setBottleneckDrillDown}
             sortFocus={bottleneckTableSortFocus}
           />
@@ -461,6 +479,19 @@ function Dashboard() {
           open={activeTab === 0 && multipleAssessmentsOpen}
           cases={overview.data?.multipleAssessmentCases?.cases ?? []}
           onClose={() => setMultipleAssessmentsOpen(false)}
+        />
+
+        <ReportPdfsPanel
+          open={activeTab === 0 && reportPdfsOpen}
+          filters={filters}
+          totalReports={overview.data?.totalResults ?? 0}
+          onClose={() => setReportPdfsOpen(false)}
+        />
+
+        <ActiveCentresPanel
+          open={activeTab === 0 && activeCentresOpen}
+          byCentre={overview.data?.byCentre ?? []}
+          onClose={() => setActiveCentresOpen(false)}
         />
       </main>
     </div>

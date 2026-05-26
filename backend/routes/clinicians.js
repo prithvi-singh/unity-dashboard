@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.get('/', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
     const dateFilterPal = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
     const dateFilterRes = buildDateFilter('pal2.CreatedDateTime', '@dateFrom', '@dateTo');
+    const dateFilterRep = buildDateFilter('pal3.CreatedDateTime', '@dateFrom', '@dateTo');
 
     const result = await pool.request()
       .input('centreId', sql.BigInt, centreId)
@@ -46,10 +48,12 @@ router.get('/', async (req, res, next) => {
           c.Id         AS centreId,
           c.CentreName,
           SUM(CASE WHEN p.Id IS NOT NULL THEN 1 ELSE 0 END) AS totalAuditActions,
-          ISNULL(rs.scoringComplete, 0) AS scoringComplete,
-          ISNULL(rs.reportPdfCreated, 0) AS reportPdfCreated,
-          ISNULL(rs.reportPdfCreated, 0) AS resultsGenerated,
-          ISNULL(cs.activeCaseload, 0)   AS activeCaseload,
+          ISNULL(rs.scoringComplete, 0)   AS scoringComplete,
+          ISNULL(rs.reportPdfCreated, 0)  AS reportPdfCreated,
+          ISNULL(rs.reportPdfCreated, 0)  AS resultsGenerated,
+          ISNULL(cs.activeCaseload, 0)    AS activeCaseload,
+          ISNULL(rep.reportsDrafted, 0)   AS reportsDrafted,
+          ISNULL(rep.reportEdits, 0)      AS reportEdits,
           MAX(CASE WHEN p.Id IS NOT NULL THEN pal.CreatedDateTime END) AS lastActivityDate
         FROM AdminUser au
         JOIN AdminUserRole aur ON aur.UserId = au.Id
@@ -72,6 +76,7 @@ router.get('/', async (req, res, next) => {
             AND pal2.AllocatePatientId IS NOT NULL
             AND ${dateFilterRes}
             AND ${buildCentreExclusion('rc')}
+            AND ${buildPatientExclusion('pt')}
           GROUP BY ap.ClinicianUserId
         ) rs ON rs.ClinicianUserId = au.Id
         LEFT JOIN (
@@ -83,8 +88,25 @@ router.get('/', async (req, res, next) => {
           JOIN Centre cc ON cc.Id = pt.CentreId
           WHERE ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
             AND ${buildCentreExclusion('cc')}
+            AND ${buildPatientExclusion('pt')}
           GROUP BY ap.ClinicianUserId
         ) cs ON cs.ClinicianUserId = au.Id
+        LEFT JOIN (
+          -- Reports Drafted: ReportAdded events per clinician (UpdateReport excluded)
+          -- Reports Edits: UpdateReport events per clinician (informational)
+          SELECT
+            pal3.AdminUserId,
+            COUNT(CASE WHEN pal3.Type = 'ReportAdded'   THEN 1 END) AS reportsDrafted,
+            COUNT(CASE WHEN pal3.Type = 'UpdateReport'  THEN 1 END) AS reportEdits
+          FROM PatientAuditLog pal3
+          JOIN Patient pt3 ON pt3.Id = pal3.PatientId
+          JOIN Centre  rc3 ON rc3.Id = pt3.CentreId
+          WHERE pal3.Type IN ('ReportAdded', 'UpdateReport')
+            AND ${dateFilterRep}
+            AND ${buildCentreExclusion('rc3')}
+            AND ${buildPatientExclusion('pt3')}
+          GROUP BY pal3.AdminUserId
+        ) rep ON rep.AdminUserId = au.Id
         WHERE (@centreId IS NULL OR c.Id = @centreId)
           AND ${centreExclusion}
           AND LOWER(au.FirstName) NOT LIKE '%test%'
@@ -93,7 +115,8 @@ router.get('/', async (req, res, next) => {
         GROUP BY
           au.Id, au.FirstName, au.LastName, au.Email,
           au.LastLoginDateTimeUtc, c.Id, c.CentreName,
-          rs.scoringComplete, rs.reportPdfCreated, cs.activeCaseload
+          rs.scoringComplete, rs.reportPdfCreated, cs.activeCaseload,
+          rep.reportsDrafted, rep.reportEdits
         ORDER BY au.LastName, au.FirstName, c.CentreName
       `);
 
@@ -103,12 +126,14 @@ router.get('/', async (req, res, next) => {
       lastName:          r.LastName,
       email:             r.Email,
       centreId:          r.centreId,
-      centreName:        r.CentreName || null,
+      centreName:        abbreviateCentre(r.CentreName) || null,
       scoringComplete:   r.scoringComplete ?? 0,
       reportPdfCreated:  r.reportPdfCreated ?? 0,
       resultsGenerated:  r.reportPdfCreated ?? 0,
       activeCaseload:    r.activeCaseload ?? 0,
       totalAuditActions: r.totalAuditActions ?? 0,
+      reportsDrafted:    r.reportsDrafted ?? 0,
+      reportEdits:       r.reportEdits ?? 0,
       lastActivityDate:  r.lastActivityDate || null,
       lastLoginDate:     r.LastLoginDateTimeUtc || null,
     }));

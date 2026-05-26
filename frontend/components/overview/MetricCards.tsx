@@ -11,6 +11,8 @@ interface Props {
   error: string | null;
   onOpenMultipleAssessments?: () => void;
   onOperationalDrill?: (type: 'status-changes' | 'transfers') => void;
+  onOpenReportPdfs?: () => void;
+  onOpenActiveCentres?: () => void;
 }
 
 function ProgressRing({ pct, color, size = 52 }: { pct: number; color: string; size?: number }) {
@@ -147,7 +149,7 @@ function Skeleton() {
   );
 }
 
-export default function MetricCards({ data, loading, error, onOpenMultipleAssessments, onOperationalDrill }: Props) {
+export default function MetricCards({ data, loading, error, onOpenMultipleAssessments, onOperationalDrill, onOpenReportPdfs, onOpenActiveCentres }: Props) {
   if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -163,7 +165,7 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
     );
   }
 
-  const activeCentres = data.byCentre.filter(c => c.cases + c.assessments + c.results > 0).length;
+  const activeCentres = data.byCentre.filter(c => c.cases + c.assessments + c.reportsApproved > 0).length;
   const totalCentres  = data.byCentre.length;
   const alerts        = (data.totalStatusChanges ?? 0) + (data.totalTransfers ?? 0);
   const avgAssessmentsPerCase = data.totalCases > 0
@@ -208,12 +210,18 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
         sub={`${scoringComplete.toLocaleString()} scored · ${completionPct.toFixed(1)}% of assigned assessments`}
         pct={completionPct} ringColor="#059669"
         iconBg="bg-emerald-50" iconFg="text-emerald-600" icon={<ResultsIcon />}
-        tooltip={KPI.RESULTS_GENERATED} />
+        tooltip={KPI.RESULTS_GENERATED}
+        clickable={!!onOpenReportPdfs}
+        onClick={onOpenReportPdfs}
+        ariaLabel={`Report PDFs Created: ${data.totalResults.toLocaleString()}. ${DRILL_DOWN_HINT}`} />
       <KpiCard label="Active Centres" value={`${activeCentres} / ${totalCentres}`}
         sub={activeCentres === totalCentres ? 'All centres engaged' : `${totalCentres - activeCentres} idle`}
         pct={centrePct} ringColor="#0284C7"
         iconBg="bg-sky-50" iconFg="text-sky-600" icon={<CentreIcon />}
-        tooltip={KPI.ACTIVE_CENTRES} />
+        tooltip={KPI.ACTIVE_CENTRES}
+        clickable={!!onOpenActiveCentres}
+        onClick={onOpenActiveCentres}
+        ariaLabel={`Active Centres: ${activeCentres} of ${totalCentres}. ${DRILL_DOWN_HINT}`} />
       <KpiCard label="Flags & Alerts" value={alerts.toLocaleString()}
         sub={alerts > 0 ? (
           onOperationalDrill ? (

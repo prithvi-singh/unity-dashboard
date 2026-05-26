@@ -29,4 +29,10 @@ function buildCentreExclusion(alias = 'c') {
       AND LOWER(${alias}.CentreName) NOT LIKE '%delete%'`;
 }
 
-module.exports = { parseDateParam, buildDateFilter, buildCentreExclusion };
+/** Exclude patients whose first or last name contains "test" (case-insensitive). */
+function buildPatientExclusion(alias = 'pt') {
+  return `${alias}.FirstName NOT LIKE '%test%'
+      AND ${alias}.LastName NOT LIKE '%test%'`;
+}
+
+module.exports = { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion };

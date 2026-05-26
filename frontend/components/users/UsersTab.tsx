@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type {
   UserBreakdownData,
   UserBreakdownRole,
   UserBreakdownCentre,
+  RosterListUser,
 } from '@/lib/types';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
@@ -48,6 +49,12 @@ function pctOf(part: number, total: number): string {
     : `${pct.toFixed(1)}%`;
 }
 
+/** Convert CamelCase role names to plain English: "CentreManager" → "Centre Manager" */
+function formatRoleName(roleName: string): string {
+  if (!roleName) return roleName;
+  return roleName.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+}
+
 // ── Role badge colours ────────────────────────────────────────────────────────
 
 const ROLE_BADGE: Record<string, string> = {
@@ -68,20 +75,24 @@ function getRoleBadge(roleName: string): string {
 function RoleBadge({ roleName }: { roleName: string }) {
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${getRoleBadge(roleName)}`}>
-      {roleName}
+      {formatRoleName(roleName)}
     </span>
   );
 }
 
-function StatusDot({ active }: { active: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${active ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-      <span className={`text-xs font-medium ${active ? 'text-emerald-700' : 'text-gray-500'}`}>
-        {active ? 'Active' : 'Inactive'}
-      </span>
-    </span>
-  );
+// ── Role accent colours ───────────────────────────────────────────────────────
+
+const ROLE_ACCENT: Array<{ match: string; dot: string; bg: string; text: string }> = [
+  { match: 'clinician',    dot: 'bg-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700'   },
+  { match: 'manager',      dot: 'bg-violet-500', bg: 'bg-violet-50', text: 'text-violet-700' },
+  { match: 'centre admin', dot: 'bg-teal-500',   bg: 'bg-teal-50',   text: 'text-teal-700'   },
+  { match: 'admin',        dot: 'bg-teal-500',   bg: 'bg-teal-50',   text: 'text-teal-700'   },
+];
+const ROLE_ACCENT_DEFAULT = { dot: 'bg-gray-400', bg: 'bg-gray-50', text: 'text-gray-600' };
+
+function getRoleAccent(roleName: string) {
+  const lower = roleName.toLowerCase();
+  return ROLE_ACCENT.find((a) => lower.includes(a.match)) ?? ROLE_ACCENT_DEFAULT;
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
@@ -117,108 +128,107 @@ function SummaryCard({
   );
 }
 
-// ── Role breakdown card ───────────────────────────────────────────────────────
+// ── Tooltip icon ──────────────────────────────────────────────────────────────
 
-const ROLE_ACCENT: Array<{
-  match: string;
-  dot: string;
-  bg: string;
-  text: string;
-  bar: string;
-  barFaint: string;
-}> = [
-  { match: 'clinician',    dot: 'bg-blue-500',    bg: 'bg-blue-50',    text: 'text-blue-700',    bar: 'bg-blue-500',    barFaint: 'bg-blue-100' },
-  { match: 'manager',      dot: 'bg-violet-500',  bg: 'bg-violet-50',  text: 'text-violet-700',  bar: 'bg-violet-500',  barFaint: 'bg-violet-100' },
-  { match: 'centre admin', dot: 'bg-teal-500',    bg: 'bg-teal-50',    text: 'text-teal-700',    bar: 'bg-teal-500',    barFaint: 'bg-teal-100' },
-  { match: 'admin',        dot: 'bg-teal-500',    bg: 'bg-teal-50',    text: 'text-teal-700',    bar: 'bg-teal-500',    barFaint: 'bg-teal-100' },
-];
-
-const ROLE_ACCENT_DEFAULT = {
-  dot: 'bg-gray-400', bg: 'bg-gray-50', text: 'text-gray-600',
-  bar: 'bg-gray-400', barFaint: 'bg-gray-100',
-};
-
-function getRoleAccent(roleName: string) {
-  const lower = roleName.toLowerCase();
-  return ROLE_ACCENT.find((a) => lower.includes(a.match)) ?? ROLE_ACCENT_DEFAULT;
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 text-gray-400
+                 hover:bg-gray-200 hover:text-gray-600 cursor-help transition-colors ml-1 flex-shrink-0"
+      title={text}
+      aria-label={text}
+    >
+      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </span>
+  );
 }
 
-function RoleBreakdownCard({ roles, periodLabel }: { roles: UserBreakdownRole[]; periodLabel: string }) {
-  const sorted = [...roles].sort((a, b) => b.count - a.count);
-  const maxCount = sorted[0]?.count ?? 1;
+// ── Role breakdown table ──────────────────────────────────────────────────────
+
+function RoleBreakdownTable({
+  roles,
+  periodLabel,
+  onActiveClick,
+  onQuietClick,
+}: {
+  roles: UserBreakdownRole[];
+  periodLabel: string;
+  onActiveClick: (role: UserBreakdownRole) => void;
+  onQuietClick: (role: UserBreakdownRole) => void;
+}) {
+  const sorted = [...roles].sort((a, b) => b.total - a.total);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
-      <div className="mb-5">
+      <div className="mb-4">
         <div className="flex items-center gap-1">
           <h3 className="text-sm font-semibold text-gray-900">Role Breakdown</h3>
-          <KpiTooltip {...KPI.USER_ROLE_BREAKDOWN} />
+          <InfoTooltip text="Active = performed at least one clinical action in Unity during the selected period. Quiet = no recorded activity." />
         </div>
-        <p className="text-xs text-gray-400 mt-0.5">
-          By role · active vs quiet · {periodLabel}
-        </p>
+        <p className="text-xs text-gray-400 mt-0.5">By role · active vs quiet · {periodLabel}</p>
       </div>
 
-      <div className="flex flex-col divide-y divide-gray-50">
-        {sorted.map((role) => {
-          const ac = getRoleAccent(role.roleName);
-          const activePct = role.count > 0 ? (role.activeCount / role.count) * 100 : 0;
-          const widthPct  = maxCount > 0 ? (role.count / maxCount) * 100 : 0;
-
-          return (
-            <div key={role.roleName} className="py-3.5 first:pt-0 last:pb-0 flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ac.dot}`} />
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ac.bg} ${ac.text}`}>
-                    {role.roleName}
-                  </span>
-                </div>
-                <span
-                  className="text-xl font-bold tabular-nums text-gray-900 leading-none flex-shrink-0"
-                  title={`${role.count.toLocaleString()} in roster`}
-                >
-                  {role.count.toLocaleString()}
-                </span>
-              </div>
-
-              <div
-                className={`h-2 rounded-full ${ac.barFaint} overflow-hidden`}
-                style={{ width: `${widthPct}%`, minWidth: role.count > 0 ? '2.5rem' : undefined }}
-                title={`${role.activeCount} active · ${role.inactiveCount} quiet`}
-              >
-                <div className="h-full flex">
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-500"
-                    style={{ width: `${activePct}%` }}
-                  />
-                  <div
-                    className="h-full bg-gray-300/70 transition-all duration-500"
-                    style={{ width: `${100 - activePct}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
-                <span className="flex items-center gap-1" title="Audit activity in selected period">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span className="font-medium text-emerald-700">{role.activeCount}</span>
-                  <span>active</span>
-                </span>
-                <span className="text-gray-200">·</span>
-                <span className="flex items-center gap-1" title="No audit activity in selected period">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                  <span className="font-medium text-gray-500">{role.inactiveCount}</span>
-                  <span>quiet</span>
-                </span>
-                <span className="text-gray-200">·</span>
-                <span className={`font-semibold ${activePct >= 70 ? 'text-emerald-600' : activePct >= 40 ? 'text-amber-600' : 'text-rose-500'}`}>
-                  {pctOf(role.activeCount, role.count)} active
-                </span>
-              </div>
-            </div>
-          );
-        })}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" role="table">
+          <thead>
+            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-100">
+              <th className="py-2.5 text-left">Role</th>
+              <th className="py-2.5 px-3 text-right">Total</th>
+              <th className="py-2.5 px-3 text-right">Active</th>
+              <th className="py-2.5 px-3 text-right">Quiet</th>
+              <th className="py-2.5 pl-3 text-right">Active %</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map((role) => {
+              const ac = getRoleAccent(role.roleName);
+              return (
+                <tr key={role.roleName} className="hover:bg-gray-50/60 transition-colors">
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ac.dot}`} />
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ac.bg} ${ac.text}`}>
+                        {formatRoleName(role.roleName)}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-right font-semibold tabular-nums text-gray-800">
+                    {role.total.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onActiveClick(role)}
+                      className="font-semibold tabular-nums text-emerald-700 hover:text-emerald-900
+                                 hover:underline underline-offset-2 transition-colors cursor-pointer"
+                      title={`View ${role.active} active ${formatRoleName(role.roleName)} users`}
+                    >
+                      {role.active.toLocaleString()}
+                    </button>
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onQuietClick(role)}
+                      className="font-semibold tabular-nums text-gray-500 hover:text-gray-800
+                                 hover:underline underline-offset-2 transition-colors cursor-pointer"
+                      title={`View ${role.quiet} quiet ${formatRoleName(role.roleName)} users`}
+                    >
+                      {role.quiet.toLocaleString()}
+                    </button>
+                  </td>
+                  <td className="py-3 pl-3 text-right">
+                    <span className="text-xs text-gray-400 tabular-nums">
+                      {role.activePercent}% active
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -229,13 +239,14 @@ function RoleBreakdownCard({ roles, periodLabel }: { roles: UserBreakdownRole[];
 function CentreBreakdownTable({
   centres,
   periodLabel,
-  onUserClick,
+  onActiveClick,
+  onQuietClick,
 }: {
   centres: UserBreakdownCentre[];
   periodLabel: string;
-  onUserClick?: (id: number) => void;
+  onActiveClick: (centre: UserBreakdownCentre) => void;
+  onQuietClick: (centre: UserBreakdownCentre) => void;
 }) {
-  void onUserClick;
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
       <div className="mb-4">
@@ -252,34 +263,53 @@ function CentreBreakdownTable({
               <th className="py-2.5 text-left">Centre</th>
               <th className="py-2.5 px-3 text-right">Total</th>
               <th className="py-2.5 px-3 text-right">Active</th>
-              <th className="py-2.5 px-3 text-right">Clinicians</th>
-              <th className="py-2.5 px-3 text-right">Others</th>
-              <th className="py-2.5 pl-3 text-right">Engaged</th>
+              <th className="py-2.5 px-3 text-right">Quiet</th>
+              <th className="py-2.5 pl-3 text-right flex items-center justify-end gap-0.5">
+                Active %
+                <InfoTooltip text="Percentage of users at this centre who performed at least one action during the selected period." />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {centres.map((c) => {
-              const activePct = c.total > 0 ? (c.activeInPeriod / c.total) * 100 : 0;
-              return (
-                <tr key={c.centreId} className="hover:bg-gray-50/70 transition-colors">
-                  <td className="py-3 font-medium text-gray-900 max-w-[200px] truncate" title={c.centreName}>
-                    {c.centreName}
-                  </td>
-                  <td className="py-3 px-3 text-right font-semibold tabular-nums text-gray-800">{c.total}</td>
-                  <td className="py-3 px-3 text-right tabular-nums text-emerald-700 font-medium">{c.activeInPeriod}</td>
-                  <td className="py-3 px-3 text-right tabular-nums text-blue-600">{c.clinicians}</td>
-                  <td className="py-3 px-3 text-right tabular-nums text-violet-600">{c.managers}</td>
-                  <td className="py-3 pl-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden" title={`${pctOf(c.activeInPeriod, c.total)} active in period`}>
-                        <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${activePct}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-500 tabular-nums w-10 text-right">{pctOf(c.activeInPeriod, c.total)}</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {centres.map((c) => (
+              <tr key={c.centreId} className="hover:bg-gray-50/70 transition-colors">
+                <td className="py-3 font-medium text-gray-900 max-w-[200px] truncate" title={c.centreName}>
+                  {c.centreName}
+                </td>
+                <td className="py-3 px-3 text-right font-semibold tabular-nums text-gray-800">
+                  {c.total}
+                </td>
+                <td className="py-3 px-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onActiveClick(c)}
+                    className={`font-semibold tabular-nums hover:underline underline-offset-2
+                                transition-colors cursor-pointer ${
+                                  c.active === 0 ? 'text-rose-500 hover:text-rose-700' : 'text-emerald-700 hover:text-emerald-900'
+                                }`}
+                    title={`View ${c.active} active users at ${c.centreName}`}
+                  >
+                    {c.active}
+                  </button>
+                </td>
+                <td className="py-3 px-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onQuietClick(c)}
+                    className="font-semibold tabular-nums text-gray-500 hover:text-gray-800
+                               hover:underline underline-offset-2 transition-colors cursor-pointer"
+                    title={`View ${c.quiet} quiet users at ${c.centreName}`}
+                  >
+                    {c.quiet}
+                  </button>
+                </td>
+                <td className="py-3 pl-3 text-right">
+                  <span className="text-xs text-gray-400 tabular-nums">
+                    {c.activePercent}%
+                  </span>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -287,7 +317,250 @@ function CentreBreakdownTable({
   );
 }
 
-// ── Attention table (shared for inactive + never active) ──────────────────────
+// ── Roster user drawer ────────────────────────────────────────────────────────
+
+interface RosterDrawerProps {
+  title: string;
+  subtitle: string;
+  users: RosterListUser[];
+  isOpen: boolean;
+  onClose: () => void;
+  onUserClick: (id: number) => void;
+  isQuiet?: boolean;
+}
+
+function RosterUserDrawer({ title, subtitle, users, isOpen, onClose, onUserClick, isQuiet }: RosterDrawerProps) {
+  const [search, setSearch] = useState('');
+  const [copied, setCopied] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Reset search when drawer opens/closes
+  useEffect(() => {
+    if (!isOpen) setSearch('');
+  }, [isOpen]);
+
+  // Keyboard close
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return users;
+    return users.filter((u) =>
+      `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.centreName ?? '').toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  const handleCopyEmails = useCallback(() => {
+    const emails = filtered.map((u) => u.email).join(', ');
+    navigator.clipboard.writeText(emails).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [filtered]);
+
+  const handleExportCsv = useCallback(() => {
+    const header = 'Name,Email,Centre,Role,Actions,Last Active,Last Login';
+    const rows = filtered.map((u) =>
+      [
+        `"${u.firstName} ${u.lastName}"`,
+        `"${u.email}"`,
+        `"${u.centreName ?? ''}"`,
+        `"${formatRoleName(u.roleName ?? '')}"`,
+        u.actionsInPeriod,
+        u.lastActivityDate ? new Date(u.lastActivityDate).toLocaleDateString('en-GB') : '',
+        u.lastLoginDate ? new Date(u.lastLoginDate).toLocaleDateString('en-GB') : '',
+      ].join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered, title]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end" role="presentation">
+      {/* Backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 bg-gray-900/30 backdrop-blur-[1px]"
+        aria-label="Close"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="roster-drawer-title"
+        className="relative w-full max-w-2xl h-full bg-white shadow-2xl flex flex-col
+                   animate-[slideInRight_220ms_cubic-bezier(0.22,1,0.36,1)]"
+        style={{ willChange: 'transform' }}
+      >
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="min-w-0">
+              <h2 id="roster-drawer-title" className="text-base font-bold text-gray-900 leading-tight">
+                {title}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Controls row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium flex-shrink-0">
+              Showing {filtered.length.toLocaleString()} user{filtered.length !== 1 ? 's' : ''}
+            </span>
+
+            {/* Search */}
+            <div className="relative flex-1 min-w-[160px]">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search by name, email or centre…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50
+                           focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Copy emails */}
+            <button
+              type="button"
+              onClick={handleCopyEmails}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600
+                         bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              {copied ? 'Copied!' : 'Copy emails'}
+            </button>
+
+            {/* Export CSV */}
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600
+                         bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center py-16 gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-200" />
+              <p className="text-sm text-gray-400">No users match your search.</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm" role="table">
+              <thead className="sticky top-0 bg-white border-b border-gray-100 z-10">
+                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                  <th className="py-2.5 pl-6 pr-3 text-left">Name</th>
+                  <th className="py-2.5 px-3 text-left hidden sm:table-cell">Centre</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
+                  <th className="py-2.5 px-3 text-right hidden md:table-cell">Last Active</th>
+                  <th className="py-2.5 pl-3 pr-6 text-right hidden md:table-cell">Last Login</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((u) => {
+                  const isNeverActive = u.neverActive === true;
+                  const isQuietUser = u.actionsInPeriod === 0;
+                  const rowClass = isNeverActive
+                    ? 'bg-rose-50/40 hover:bg-rose-50/70'
+                    : isQuiet
+                    ? 'opacity-70 hover:opacity-100 hover:bg-gray-50/70'
+                    : 'hover:bg-gray-50/70';
+
+                  return (
+                    <tr
+                      key={u.id}
+                      className={`transition-colors cursor-pointer ${rowClass}`}
+                      onClick={() => onUserClick(u.id)}
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onUserClick(u.id); }}
+                      role="button"
+                      aria-label={`Open profile for ${u.firstName} ${u.lastName}`}
+                    >
+                      <td className="py-3 pl-6 pr-3">
+                        <p className={`font-medium ${isNeverActive ? 'text-rose-700' : 'text-gray-900'}`}>
+                          {u.firstName} {u.lastName}
+                          {isNeverActive && (
+                            <span className="ml-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-wide">Never active</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{u.email}</p>
+                        {u.roleName && (
+                          <span className="mt-0.5 inline-block">
+                            <RoleBadge roleName={u.roleName} />
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-xs text-gray-600 hidden sm:table-cell">
+                        {u.centreName ?? '—'}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums">
+                        {isQuietUser ? (
+                          <span className="text-gray-300 font-medium">0</span>
+                        ) : (
+                          <span className="text-gray-800 font-semibold">{u.actionsInPeriod.toLocaleString()}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right text-xs text-gray-500 tabular-nums hidden md:table-cell">
+                        {fmtDaysAgo(u.lastActivityDate)}
+                      </td>
+                      <td className="py-3 pl-3 pr-6 text-right text-xs text-gray-400 tabular-nums hidden md:table-cell">
+                        {fmtDate(u.lastLoginDate)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Attention row ─────────────────────────────────────────────────────────────
 
 function AttentionRow({
   id, firstName, lastName, email, roleName, centreName, badge, meta, onOpen,
@@ -327,13 +600,7 @@ function AttentionRow({
   );
 }
 
-// ── Main UsersTab ─────────────────────────────────────────────────────────────
-
-interface Props {
-  data: UserBreakdownData | null;
-  loading: boolean;
-  error: string | null;
-}
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
@@ -345,10 +612,30 @@ function SkeletonCard() {
   );
 }
 
+// ── Drawer state types ────────────────────────────────────────────────────────
+
+interface RosterDrawerState {
+  title: string;
+  subtitle: string;
+  users: RosterListUser[];
+  isQuiet: boolean;
+}
+
+// ── Main UsersTab ─────────────────────────────────────────────────────────────
+
+interface Props {
+  data: UserBreakdownData | null;
+  loading: boolean;
+  error: string | null;
+}
+
 export default function UsersTab({ data, loading, error }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [rosterDrawer, setRosterDrawer] = useState<RosterDrawerState | null>(null);
   const [inactiveSearch, setInactiveSearch] = useState('');
   const [neverSearch, setNeverSearch] = useState('');
+
+  const periodLabel = formatPeriodLabel(data?.dateFrom, data?.dateTo);
 
   const filteredInactive = useMemo(() => {
     if (!data) return [];
@@ -371,7 +658,48 @@ export default function UsersTab({ data, loading, error }: Props) {
   }, [data, neverSearch]);
 
   const neverActiveCount = data?.neverActive.length ?? 0;
-  const periodLabel = formatPeriodLabel(data?.dateFrom, data?.dateTo);
+
+  // Role drawer handlers
+  const openRoleActive = useCallback((role: UserBreakdownRole) => {
+    setRosterDrawer({
+      title: `Active ${formatRoleName(role.roleName)} — ${periodLabel}`,
+      subtitle: 'These users performed at least one action in Unity during this period.',
+      users: role.activeUsers,
+      isQuiet: false,
+    });
+  }, [periodLabel]);
+
+  const openRoleQuiet = useCallback((role: UserBreakdownRole) => {
+    setRosterDrawer({
+      title: `Quiet ${formatRoleName(role.roleName)} — ${periodLabel}`,
+      subtitle: 'These users had no recorded activity in Unity during this period. Ops can use this list to follow up.',
+      users: role.quietUsers,
+      isQuiet: true,
+    });
+  }, [periodLabel]);
+
+  // Centre drawer handlers
+  const openCentreActive = useCallback((centre: UserBreakdownCentre) => {
+    setRosterDrawer({
+      title: `Active users — ${centre.centreName}`,
+      subtitle: `${centre.active} user${centre.active !== 1 ? 's' : ''} performed at least one action during this period. Sorted by activity.`,
+      users: centre.activeUsers,
+      isQuiet: false,
+    });
+  }, []);
+
+  const openCentreQuiet = useCallback((centre: UserBreakdownCentre) => {
+    setRosterDrawer({
+      title: `Quiet users — ${centre.centreName}`,
+      subtitle: 'These users had no recorded activity in Unity during this period. Ops can use this list to follow up.',
+      users: centre.quietUsers,
+      isQuiet: true,
+    });
+  }, []);
+
+  const handleRosterUserClick = useCallback((id: number) => {
+    setSelectedUserId(id);
+  }, []);
 
   if (error) {
     return (
@@ -445,7 +773,7 @@ export default function UsersTab({ data, loading, error }: Props) {
         )}
       </div>
 
-      {/* ── Charts row ── */}
+      {/* ── Role + Centre breakdown ── */}
       {loading || !data ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 h-56 animate-pulse" />
@@ -453,8 +781,18 @@ export default function UsersTab({ data, loading, error }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <RoleBreakdownCard roles={data.byRole} periodLabel={periodLabel} />
-          <CentreBreakdownTable centres={data.byCentre} periodLabel={periodLabel} onUserClick={setSelectedUserId} />
+          <RoleBreakdownTable
+            roles={data.byRole}
+            periodLabel={periodLabel}
+            onActiveClick={openRoleActive}
+            onQuietClick={openRoleQuiet}
+          />
+          <CentreBreakdownTable
+            centres={data.byCentre}
+            periodLabel={periodLabel}
+            onActiveClick={openCentreActive}
+            onQuietClick={openCentreQuiet}
+          />
         </div>
       )}
 
@@ -604,7 +942,20 @@ export default function UsersTab({ data, loading, error }: Props) {
         </section>
       )}
 
-      {/* Profile drawer */}
+      {/* Roster user drawer (role/centre drill-down) */}
+      {rosterDrawer && (
+        <RosterUserDrawer
+          title={rosterDrawer.title}
+          subtitle={rosterDrawer.subtitle}
+          users={rosterDrawer.users}
+          isOpen
+          onClose={() => setRosterDrawer(null)}
+          onUserClick={handleRosterUserClick}
+          isQuiet={rosterDrawer.isQuiet}
+        />
+      )}
+
+      {/* Individual user profile drawer (z-50, stacks above roster drawer) */}
       <UserProfileDrawer
         userId={selectedUserId}
         onClose={() => setSelectedUserId(null)}

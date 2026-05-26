@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
 const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
 
 const router = Router();
@@ -80,6 +80,7 @@ router.get('/summary', async (req, res, next) => {
                 )
                 AND (@centreId IS NULL OR c.Id = @centreId)
                 AND ${centreExclusion}
+                AND ${buildPatientExclusion('pt')}
             ) AS stuckCases,
             (
               SELECT COUNT(*) FROM (
@@ -130,6 +131,7 @@ router.get('/summary', async (req, res, next) => {
             WHERE pal.Type = 'CaseRegistered'
               AND (@centreId IS NULL OR c.Id = @centreId)
               AND ${centreExclusion}
+              AND ${buildPatientExclusion('pt')}
               AND au.FirstName NOT LIKE '%(Ops)%'
               AND au.LastName NOT LIKE '%(Ops)%'
               AND au.Email NOT LIKE '%(Ops)%'
@@ -161,6 +163,7 @@ router.get('/summary', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND (@centreId IS NULL OR c.Id = @centreId)
             AND ${centreExclusion}
+            AND ${buildPatientExclusion('pt')}
             AND (au.FirstName LIKE '%(Ops)%' OR au.LastName LIKE '%(Ops)%' OR au.Email LIKE '%(Ops)%')
           GROUP BY pal.PatientId
         ) reg

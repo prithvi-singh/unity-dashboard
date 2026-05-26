@@ -1,11 +1,11 @@
 'use client';
 
-import type { BottleneckData, AssessmentOverviewData } from '@/lib/types';
+import type { BottleneckData, AssessmentOverviewData, WorkloadCentreRow } from '@/lib/types';
 import type { BottleneckDrillDownRequest } from '@/lib/bottleneckDrillDown';
 import type { BottleneckActionSortCol } from '@/lib/actionNavigation';
 import BottleneckCards from '@/components/bottlenecks/BottleneckCards';
 import BottleneckFunnel from '@/components/bottlenecks/BottleneckFunnel';
-import BottleneckByCentre from '@/components/bottlenecks/BottleneckByCentre';
+import CentreActivitySummary from '@/components/bottlenecks/BottleneckByCentre';
 import BottleneckTrendChart from '@/components/bottlenecks/BottleneckTrendChart';
 import BottleneckActionTable from '@/components/bottlenecks/BottleneckActionTable';
 import OverdueAssessmentsTable from '@/components/assessments/OverdueAssessmentsTable';
@@ -21,6 +21,8 @@ interface Props {
   assessments: AssessmentOverviewData | null;
   assessmentsLoading: boolean;
   assessmentsError: string | null;
+  workload: WorkloadCentreRow[] | null;
+  workloadLoading: boolean;
   onDrillDown: (req: BottleneckDrillDownRequest) => void;
   sortFocus: BottleneckActionSortCol | null;
 }
@@ -32,6 +34,8 @@ export default function IssuesTab({
   assessments,
   assessmentsLoading,
   assessmentsError,
+  workload,
+  workloadLoading,
   onDrillDown,
   sortFocus,
 }: Props) {
@@ -69,19 +73,18 @@ export default function IssuesTab({
         onDrillDown={onDrillDown}
       />
 
-      {/* ── Workflow funnel + centre breakdown ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
-        <BottleneckFunnel
-          data={bottlenecks}
-          loading={bottlenecksLoading}
-          onDrillDown={onDrillDown}
-        />
-        <BottleneckByCentre
-          data={bottlenecks}
-          loading={bottlenecksLoading}
-          onDrillDown={onDrillDown}
-        />
-      </div>
+      {/* ── Workflow funnel ───────────────────────────────────────── */}
+      <BottleneckFunnel
+        data={bottlenecks}
+        loading={bottlenecksLoading}
+        onDrillDown={onDrillDown}
+      />
+
+      {/* ── Centre Activity Summary table (full width) ────────────── */}
+      <CentreActivitySummary
+        rows={workload}
+        loading={workloadLoading}
+      />
 
       {/* ── Weekly SLA trend ──────────────────────────────────────── */}
       <BottleneckTrendChart

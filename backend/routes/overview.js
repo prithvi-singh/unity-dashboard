@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
 
 const router = Router();
@@ -37,7 +38,9 @@ router.get('/', async (req, res, next) => {
     // Exclude test/demo and deleted centres regardless of letter case
     const centreExclusion = `LOWER(c.CentreName) NOT LIKE '%test%'
                          AND LOWER(c.CentreName) NOT LIKE '%delete%'`;
-    const whereClause = `WHERE ${centreFilter} AND ${centreExclusion} AND ${dateFilter}`;
+    const patientExclusionP  = buildPatientExclusion('p');
+    const patientExclusionPt = buildPatientExclusion('pt');
+    const whereClause = `WHERE ${centreFilter} AND ${centreExclusion} AND ${patientExclusionP} AND ${dateFilter}`;
 
     function bindParams(request) {
       request
@@ -56,6 +59,7 @@ router.get('/', async (req, res, next) => {
         WHERE pal.Type = 'CaseRegistered'
           AND ${centreFilter}
           AND ${centreExclusion}
+          AND ${patientExclusionP}
           AND ${dateFilter}
       ),
       multi_patients AS (
@@ -95,6 +99,7 @@ router.get('/', async (req, res, next) => {
           WHERE pal.Type = 'CaseRegistered'
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND ${patientExclusionP}
             AND ${dateFilter}
           GROUP BY p.CentreId
         ),
@@ -107,23 +112,12 @@ router.get('/', async (req, res, next) => {
             AND pal.AllocatePatientId IS NOT NULL
             AND ${centreFilter}
             AND ${centreExclusion}
-            AND ${dateFilter}
-          GROUP BY p.CentreId
-        ),
-        scored AS (
-          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS scoringComplete
-          FROM PatientAuditLog pal
-          JOIN Patient p ON p.Id = pal.PatientId
-          JOIN Centre c ON c.Id = p.CentreId
-          WHERE pal.Type = 'AssessmentResultGenerated'
-            AND pal.AllocatePatientId IS NOT NULL
-            AND ${centreFilter}
-            AND ${centreExclusion}
+            AND ${patientExclusionP}
             AND ${dateFilter}
           GROUP BY p.CentreId
         ),
         pdf AS (
-          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS reportPdfCreated
+          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS reportsApproved
           FROM PatientAuditLog pal
           JOIN Patient p ON p.Id = pal.PatientId
           JOIN Centre c ON c.Id = p.CentreId
@@ -131,19 +125,21 @@ router.get('/', async (req, res, next) => {
             AND pal.AllocatePatientId IS NOT NULL
             AND ${centreFilter}
             AND ${centreExclusion}
+            AND ${patientExclusionP}
             AND ${dateFilter}
           GROUP BY p.CentreId
         ),
-        shared AS (
-          SELECT pt.CentreId, COUNT(DISTINCT apr.AllocatePatientId) AS reportShared
-          FROM AllocatePatientReport apr
-          JOIN AllocatePatient ap ON ap.Id = apr.AllocatePatientId
-          JOIN Patient pt ON pt.Id = ap.PatientId
-          JOIN Centre c ON c.Id = pt.CentreId
-          WHERE ${centreFilter}
+        drafted AS (
+          SELECT p.CentreId, COUNT(*) AS reportsDrafted
+          FROM PatientAuditLog pal
+          JOIN Patient p ON p.Id = pal.PatientId
+          JOIN Centre c ON c.Id = p.CentreId
+          WHERE pal.Type = 'ReportAdded'
+            AND ${centreFilter}
             AND ${centreExclusion}
-            AND (${dateFilter.replace(/pal\.CreatedDateTime/g, 'apr.CreatedDateTimeUtc')})
-          GROUP BY pt.CentreId
+            AND ${patientExclusionP}
+            AND ${dateFilter}
+          GROUP BY p.CentreId
         ),
         -- Pipeline snapshot: current open caseload per centre (not date-filtered)
         -- Shows where active assessments are right now regardless of when they were assigned
@@ -168,6 +164,7 @@ router.get('/', async (req, res, next) => {
           ) sharedEvt ON sharedEvt.AllocatePatientId = ap.Id
           WHERE ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
             AND ${centreExclusion}
+            AND ${patientExclusionPt}
             AND ${centreFilter}
           GROUP BY c.Id
         )
@@ -176,20 +173,18 @@ router.get('/', async (req, res, next) => {
           cb.CentreName,
           ISNULL(reg.cases, 0)              AS cases,
           ISNULL(asgn.assessments, 0)       AS assessments,
-          ISNULL(scored.scoringComplete, 0) AS scoringComplete,
-          ISNULL(pdf.reportPdfCreated, 0)   AS reportPdfCreated,
-          ISNULL(shared.reportShared, 0)    AS reportShared,
+          ISNULL(drafted.reportsDrafted, 0) AS reportsDrafted,
+          ISNULL(pdf.reportsApproved, 0)    AS reportsApproved,
           ISNULL(snap.snapAssigned, 0)      AS snapAssigned,
           ISNULL(snap.snapScored, 0)        AS snapScored,
           ISNULL(snap.snapPdf, 0)           AS snapPdf,
           ISNULL(snap.snapShared, 0)        AS snapShared
         FROM centre_base cb
-        LEFT JOIN reg    ON reg.CentreId    = cb.centreId
-        LEFT JOIN asgn   ON asgn.CentreId   = cb.centreId
-        LEFT JOIN scored ON scored.CentreId = cb.centreId
-        LEFT JOIN pdf    ON pdf.CentreId    = cb.centreId
-        LEFT JOIN shared ON shared.CentreId = cb.centreId
-        LEFT JOIN snap   ON snap.centreId   = cb.centreId
+        LEFT JOIN reg     ON reg.CentreId     = cb.centreId
+        LEFT JOIN asgn    ON asgn.CentreId    = cb.centreId
+        LEFT JOIN drafted ON drafted.CentreId = cb.centreId
+        LEFT JOIN pdf     ON pdf.CentreId     = cb.centreId
+        LEFT JOIN snap    ON snap.centreId    = cb.centreId
         ORDER BY cb.CentreName
       `),
 
@@ -253,15 +248,12 @@ router.get('/', async (req, res, next) => {
       pipeline,
       multipleAssessmentCases,
       byCentre: byCentreResult.recordset.map((r) => ({
-        centreId:    r.centreId,
-        centreName:  r.CentreName,
-        cases:       r.cases,
-        assessments: r.assessments,
-        scoringComplete: r.scoringComplete ?? 0,
-        reportPdfCreated: r.reportPdfCreated ?? 0,
-        reportShared: r.reportShared ?? 0,
-        /** @deprecated use reportPdfCreated */
-        results:     r.reportPdfCreated ?? 0,
+        centreId:        r.centreId,
+        centreName:      abbreviateCentre(r.CentreName),
+        cases:           r.cases,
+        assessments:     r.assessments,
+        reportsDrafted:  r.reportsDrafted  ?? 0,
+        reportsApproved: r.reportsApproved ?? 0,
         // Pipeline snapshot — current open caseload (not date-filtered)
         snapAssigned: r.snapAssigned ?? 0,
         snapScored:   r.snapScored   ?? 0,
@@ -270,7 +262,7 @@ router.get('/', async (req, res, next) => {
       })),
       centres: centresResult.recordset.map((r) => ({
         id:   r.Id,
-        name: r.name,
+        name: abbreviateCentre(r.name),
       })),
     });
   } catch (err) {
@@ -314,5 +306,113 @@ function buildMultipleAssessmentCases(rows, totalCases) {
 
   return { count, percentage, cases };
 }
+
+/**
+ * GET /api/overview/report-pdfs
+ * Query params: centreId (optional), dateFrom, dateTo (optional)
+ *
+ * Returns every ReportPDFGenerated event in the period, grouped by centre.
+ * Each record includes: assessment type, clinician who performed it,
+ * and the user who generated/approved the PDF.
+ */
+router.get('/report-pdfs', async (req, res, next) => {
+  try {
+    const centreId = req.query.centreId ? parseInt(req.query.centreId, 10) : null;
+    const dateFrom = parseDateParam(req.query.dateFrom);
+    const dateTo   = parseDateParam(req.query.dateTo);
+
+    if (req.query.centreId && isNaN(centreId)) {
+      return res.status(400).json({ error: 'centreId must be a number' });
+    }
+
+    const pool     = await poolPromise;
+    const dateFilter     = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
+    const centreFilter   = '(@centreId IS NULL OR c.Id = @centreId)';
+    const centreExclusion = `LOWER(c.CentreName) NOT LIKE '%test%'
+                         AND LOWER(c.CentreName) NOT LIKE '%delete%'`;
+    const patientExclusion = buildPatientExclusion('pt');
+
+    const result = await pool.request()
+      .input('centreId', sql.BigInt, centreId)
+      .input('dateFrom', sql.DateTimeOffset, dateFrom)
+      .input('dateTo',   sql.DateTimeOffset, dateTo)
+      .query(`
+        SELECT
+          c.Id   AS centreId,
+          c.CentreName,
+          pal.AllocatePatientId AS allocatePatientId,
+          ISNULL(ap.Assessment, 'Unknown') AS assessmentType,
+          ap.PatientId AS patientId,
+          LTRIM(RTRIM(CONCAT(
+            ISNULL(pt.FirstName, ''), ' ', ISNULL(pt.LastName, '')
+          ))) AS patientName,
+          LTRIM(RTRIM(CONCAT(
+            ISNULL(au_clin.FirstName, ''), ' ', ISNULL(au_clin.LastName, '')
+          ))) AS clinicianName,
+          LTRIM(RTRIM(CONCAT(
+            ISNULL(au_actor.FirstName, ''), ' ', ISNULL(au_actor.LastName, '')
+          ))) AS actorName,
+          pal.Type          AS eventType,
+          pal.CreatedDateTime AS eventAt
+        FROM PatientAuditLog pal
+        JOIN AllocatePatient ap ON ap.Id = pal.AllocatePatientId
+        JOIN Patient pt         ON pt.Id = ap.PatientId
+        JOIN Centre c           ON c.Id  = pt.CentreId
+        LEFT JOIN AdminUser au_clin  ON au_clin.Id  = ap.ClinicianUserId
+        LEFT JOIN AdminUser au_actor ON au_actor.Id = pal.AdminUserId
+        WHERE pal.Type IN ('ReportPDFGenerated', 'ReportAdded')
+          AND pal.AllocatePatientId IS NOT NULL
+          AND ${centreFilter}
+          AND ${centreExclusion}
+          AND ${patientExclusion}
+          AND ${dateFilter}
+        ORDER BY c.CentreName, pal.Type, pt.LastName, pt.FirstName, pal.CreatedDateTime DESC
+      `);
+
+    // Group records by centre, splitting into pdfs and drafts
+    const centreMap = new Map();
+    for (const row of result.recordset) {
+      const key = row.centreId;
+      if (!centreMap.has(key)) {
+        centreMap.set(key, {
+          centreId:   row.centreId,
+          centreName: abbreviateCentre(row.CentreName),
+          pdfs:   [],
+          drafts: [],
+        });
+      }
+      const entry = centreMap.get(key);
+      const record = {
+        allocatePatientId: row.allocatePatientId,
+        assessmentType:    row.assessmentType || 'Unknown',
+        patientId:         row.patientId,
+        patientName:       row.patientName || null,
+        clinicianName:     row.clinicianName || null,
+        actorName:         row.actorName || null,
+        eventAt:           row.eventAt ? new Date(row.eventAt).toISOString() : null,
+      };
+      if (row.eventType === 'ReportPDFGenerated') {
+        entry.pdfs.push(record);
+      } else {
+        entry.drafts.push(record);
+      }
+    }
+
+    // Sort records within each centre by patient name so multiple assessments per case appear together
+    const byName = (a, b) => (a.patientName || '').localeCompare(b.patientName || '');
+    for (const entry of centreMap.values()) {
+      entry.pdfs.sort(byName);
+      entry.drafts.sort(byName);
+    }
+
+    // Sort centres: most PDFs first, then by draft count
+    const centres = Array.from(centreMap.values())
+      .sort((a, b) => b.pdfs.length - a.pdfs.length || b.drafts.length - a.drafts.length);
+
+    res.json(centres);
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;

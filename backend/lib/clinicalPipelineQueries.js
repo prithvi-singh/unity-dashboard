@@ -1,10 +1,11 @@
 'use strict';
 
-const { buildDateFilter, buildCentreExclusion } = require('./queryHelpers');
+const { buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('./queryHelpers');
 
 /** Count distinct assessments (AllocatePatient rows) for audit events in a period. */
 function auditAssessmentCount(auditType) {
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilter = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
   return `
     (
@@ -16,12 +17,14 @@ function auditAssessmentCount(auditType) {
         AND pal.AllocatePatientId IS NOT NULL
         AND (@centreId IS NULL OR c.Id = @centreId)
         AND ${centreExclusion}
+        AND ${patientExclusion}
         AND ${dateFilter}
     )`;
 }
 
 function casesRegisteredCount() {
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilter = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
   return `
     (
@@ -32,12 +35,14 @@ function casesRegisteredCount() {
       WHERE pal.Type = 'CaseRegistered'
         AND (@centreId IS NULL OR c.Id = @centreId)
         AND ${centreExclusion}
+        AND ${patientExclusion}
         AND ${dateFilter}
     )`;
 }
 
 function reportSharedCount() {
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilter = buildDateFilter('apr.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
   return `
     (
@@ -48,12 +53,14 @@ function reportSharedCount() {
       JOIN Centre c ON c.Id = pt.CentreId
       WHERE (@centreId IS NULL OR c.Id = @centreId)
         AND ${centreExclusion}
+        AND ${patientExclusion}
         AND ${dateFilter}
     )`;
 }
 
 function goalsAddedCount() {
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilter = buildDateFilter('pgarg.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
   return `
     (
@@ -65,12 +72,14 @@ function goalsAddedCount() {
       JOIN Centre c ON c.Id = pt.CentreId
       WHERE (@centreId IS NULL OR c.Id = @centreId)
         AND ${centreExclusion}
+        AND ${patientExclusion}
         AND ${dateFilter}
     )`;
 }
 
 function goalsApprovedCount() {
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilter = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
   return `
     (
@@ -83,6 +92,7 @@ function goalsApprovedCount() {
       WHERE pgarg.Status = 'Approved'
         AND (@centreId IS NULL OR c.Id = @centreId)
         AND ${centreExclusion}
+        AND ${patientExclusion}
         AND ${dateFilter}
     )`;
 }

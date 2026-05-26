@@ -1,7 +1,8 @@
-'use strict'; // updated
+'use strict';
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -136,7 +137,7 @@ router.get('/', async (req, res, next) => {
         lastName:              u.LastName,
         email:                 u.Email,
         roleName:              u.roleName || null,
-        centreName:            u.CentreName || null,
+        centreName:            abbreviateCentre(u.CentreName) || null,
         actionCount:           activity.actionCount           || 0,
         lastActionTime:        activity.lastActionTime        || null,
         lastActionDescription: activity.lastActionDescription || null,

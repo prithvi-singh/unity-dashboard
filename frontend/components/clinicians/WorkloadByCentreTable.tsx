@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { WorkloadCentreRow } from '@/lib/types';
+import { shortCentreName } from '@/lib/centreNames';
 
 const DEFAULT_VISIBLE = 10;
 
@@ -13,9 +14,7 @@ type ColKey =
   | 'reportEdits'
   | 'reportsApproved'
   | 'goalsAdded'
-  | 'goalsApproved'
-  | 'managerReportsApproved'
-  | 'managerGoalsApproved';
+  | 'goalsApproved';
 
 interface ColConfig {
   key: ColKey;
@@ -26,80 +25,21 @@ interface ColConfig {
 }
 
 const COLS: ColConfig[] = [
-  {
-    key: 'centreName',
-    label: 'Centre',
-    tip: '',
-    isText: true,
-  },
-  {
-    key: 'caseload',
-    label: 'Active Cases',
-    tip: 'Active non-closed caseload at this centre (live snapshot, not date-filtered)',
-  },
-  {
-    key: 'reportsDrafted',
-    label: 'Reports Drafted',
-    tip: 'ReportAdded events in the selected period (UpdateReport excluded)',
-  },
-  {
-    key: 'reportEdits',
-    label: 'Report Edits',
-    tip: 'UpdateReport events — informational only, not a performance metric. High count vs Drafted may indicate padding.',
-    secondary: true,
-  },
-  {
-    key: 'reportsApproved',
-    label: 'Reports Approved',
-    tip: 'ReportPDFGenerated events in the selected period (distinct per assessment, clinician side)',
-  },
-  {
-    key: 'goalsAdded',
-    label: 'Goals Added',
-    tip: 'GoalAdded events in the selected period',
-  },
-  {
-    key: 'goalsApproved',
-    label: 'Goals Approved',
-    tip: 'PatientGoalApprovalRequestGoal rows approved in the selected period',
-  },
-  {
-    key: 'managerReportsApproved',
-    label: 'Mgr Reports Approved',
-    tip: 'ReportPDFGenerated events actioned by manager-role users (not Clinician / Super Admin)',
-  },
-  {
-    key: 'managerGoalsApproved',
-    label: 'Mgr Goals Approved',
-    tip: 'Goal approvals actioned by manager-role users in the selected period',
-  },
+  { key: 'centreName',      label: 'Centre',           tip: '',                                                                                      isText: true },
+  { key: 'caseload',        label: 'Caseload',         tip: 'Active non-closed cases currently assigned at this centre (live snapshot)' },
+  { key: 'reportsDrafted',  label: 'Reports Drafted',  tip: 'ReportAdded events in the selected period (UpdateReport excluded)' },
+  { key: 'reportEdits',     label: 'Report Edits',     tip: 'UpdateReport events — informational only, not a performance metric. High count vs Drafted may indicate padding.', secondary: true },
+  { key: 'reportsApproved', label: 'Reports Approved', tip: 'ReportPDFGenerated events in the selected period (distinct per assessment)' },
+  { key: 'goalsAdded',      label: 'Goals Added',      tip: 'GoalAdded events in the selected period' },
+  { key: 'goalsApproved',   label: 'Goals Approved',   tip: 'PatientGoalApprovalRequestGoal rows approved in the selected period' },
 ];
-
-const COL_SKELETON_COUNT = COLS.length + 1;
 
 function getVal(row: WorkloadCentreRow, col: ColKey): number | string {
   if (col === 'centreName') return row.centreName;
   return row[col];
 }
 
-function isZeroRow(row: WorkloadCentreRow): boolean {
-  return (
-    row.caseload === 0 &&
-    row.reportsDrafted === 0 &&
-    row.reportEdits === 0 &&
-    row.reportsApproved === 0 &&
-    row.goalsAdded === 0 &&
-    row.goalsApproved === 0 &&
-    row.managerReportsApproved === 0 &&
-    row.managerGoalsApproved === 0
-  );
-}
-
-function sortRows(
-  rows: WorkloadCentreRow[],
-  col: ColKey,
-  dir: SortDir,
-): WorkloadCentreRow[] {
+function sortRows(rows: WorkloadCentreRow[], col: ColKey, dir: SortDir): WorkloadCentreRow[] {
   return [...rows].sort((a, b) => {
     const av = getVal(a, col);
     const bv = getVal(b, col);
@@ -107,22 +47,19 @@ function sortRows(
     if (typeof av === 'string' && typeof bv === 'string') {
       return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     }
-    return dir === 'asc'
-      ? (av as number) - (bv as number)
-      : (bv as number) - (av as number);
+    return dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
   });
 }
+
+const COL_SKELETON_COUNT = COLS.length + 1; // +1 for the # column
 
 interface Props {
   rows: WorkloadCentreRow[] | null;
   loading: boolean;
 }
 
-export default function BottleneckByCentre({ rows, loading }: Props) {
-  const [sort, setSort] = useState<{ col: ColKey; dir: SortDir }>({
-    col: 'caseload',
-    dir: 'desc',
-  });
+export default function WorkloadByCentreTable({ rows, loading }: Props) {
+  const [sort, setSort] = useState<{ col: ColKey; dir: SortDir }>({ col: 'caseload', dir: 'desc' });
   const [expanded, setExpanded] = useState(false);
   const [scrollCaptured, setScrollCaptured] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,7 +68,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { col, dir: isText ? 'asc' : 'desc' },
+        : { col, dir: isText ? 'asc' : 'desc' }
     );
   }, []);
 
@@ -154,17 +91,9 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
   }, [expanded, scrollCaptured]);
 
   const safeRows = rows ?? [];
-
-  // Split active vs zero rows; sort each group separately then concat
-  const activeRows = safeRows.filter((r) => !isZeroRow(r));
-  const zeroRows   = safeRows.filter((r) => isZeroRow(r));
-
-  const sortedActive = sortRows(activeRows, sort.col, sort.dir);
-  const sortedZero   = sortRows(zeroRows,   sort.col, sort.dir);
-  const allSorted    = [...sortedActive, ...sortedZero];
-
-  const visible    = expanded ? allSorted : allSorted.slice(0, DEFAULT_VISIBLE);
-  const totalCount = allSorted.length;
+  const sorted = sortRows(safeRows, sort.col, sort.dir);
+  const visible = expanded ? sorted : sorted.slice(0, DEFAULT_VISIBLE);
+  const totalCount = sorted.length;
   const hiddenCount = totalCount - DEFAULT_VISIBLE;
 
   const cardClass =
@@ -174,11 +103,9 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
     <div className={cardClass}>
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-900">
-          Centre Activity Summary
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-900">Workload by Centre</h2>
         <p className="text-xs text-gray-400 mt-0.5">
-          Cases, reports and goals per centre — click any column to sort
+          Sorted by caseload · Report Edits is informational only — not a performance metric
         </p>
       </div>
 
@@ -193,15 +120,16 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
         ].join(' ')}
         style={expanded && !scrollCaptured ? { cursor: 'pointer' } : undefined}
         onClick={handleTableClick}
-        aria-label="Centre Activity Summary table region"
+        aria-label="Workload by Centre table region"
       >
         <table
-          className="w-full text-sm min-w-[960px]"
+          className="w-full text-sm min-w-[700px]"
           role="table"
-          aria-label="Centre Activity Summary"
+          aria-label="Workload by Centre"
         >
           <thead>
             <tr className="border-b border-gray-100">
+              {/* Row number */}
               <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-8">
                 #
               </th>
@@ -209,10 +137,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
                 <th
                   key={key}
                   title={tip || undefined}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSort(key, isText);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); toggleSort(key, isText); }}
                   aria-sort={
                     sort.col === key
                       ? sort.dir === 'asc'
@@ -239,11 +164,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
                         sort.col === key ? 'text-gray-600' : 'text-gray-300'
                       }`}
                     >
-                      {sort.col === key
-                        ? sort.dir === 'asc'
-                          ? '↑'
-                          : '↓'
-                        : '⇅'}
+                      {sort.col === key ? (sort.dir === 'asc' ? '↑' : '↓') : '⇅'}
                     </span>
                   </span>
                 </th>
@@ -275,64 +196,50 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
                 </td>
               </tr>
             ) : (
-              visible.map((row, idx) => {
-                const zero = isZeroRow(row);
-                return (
-                  <tr
-                    key={row.centreId}
-                    className={[
-                      'border-b border-gray-50 last:border-0 transition-colors',
-                      zero
-                        ? 'opacity-40'
-                        : idx % 2 === 0
-                        ? 'bg-white hover:bg-gray-50/60'
-                        : 'bg-gray-50/40 hover:bg-gray-100/40',
-                    ].join(' ')}
+              visible.map((row, idx) => (
+                <tr
+                  key={row.centreId}
+                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
+                >
+                  <td className="px-5 py-3.5">
+                    <span className="text-[11px] font-bold text-gray-300 tabular-nums">
+                      {idx + 1}
+                    </span>
+                  </td>
+                  {/* Centre name */}
+                  <td
+                    className="px-4 py-3.5 font-semibold text-gray-800 max-w-[180px] truncate"
+                    title={row.centreName}
                   >
-                    <td className="px-5 py-3.5">
-                      <span className="text-[11px] font-bold text-gray-300 tabular-nums">
-                        {idx + 1}
-                      </span>
-                    </td>
-                    {/* Centre name */}
-                    <td
-                      className="px-4 py-3.5 font-semibold text-gray-800 max-w-[180px] truncate"
-                      title={row.centreName}
-                    >
-                      {row.centreName}
-                    </td>
-                    {/* Active Cases */}
-                    <Num value={row.caseload} />
-                    {/* Reports Drafted */}
-                    <Num value={row.reportsDrafted} />
-                    {/* Report Edits — secondary, grey */}
-                    <td className="px-4 py-3.5 text-right tabular-nums text-gray-400">
-                      {row.reportEdits > 0 ? (
-                        row.reportEdits
-                      ) : (
-                        <span className="text-gray-200">—</span>
-                      )}
-                    </td>
-                    {/* Reports Approved */}
-                    <Num value={row.reportsApproved} />
-                    {/* Goals Added */}
-                    <Num value={row.goalsAdded} />
-                    {/* Goals Approved */}
-                    <Num value={row.goalsApproved} />
-                    {/* Manager Reports Approved */}
-                    <Num value={row.managerReportsApproved} />
-                    {/* Manager Goals Approved */}
-                    <Num value={row.managerGoalsApproved} />
-                  </tr>
-                );
-              })
+                    {shortCentreName(row.centreName)}
+                  </td>
+                  {/* Caseload */}
+                  <Num value={row.caseload} />
+                  {/* Reports Drafted */}
+                  <Num value={row.reportsDrafted} />
+                  {/* Report Edits — secondary, grey */}
+                  <td className="px-4 py-3.5 text-right tabular-nums text-gray-400">
+                    {row.reportEdits > 0 ? (
+                      row.reportEdits
+                    ) : (
+                      <span className="text-gray-200">—</span>
+                    )}
+                  </td>
+                  {/* Reports Approved */}
+                  <Num value={row.reportsApproved} />
+                  {/* Goals Added */}
+                  <Num value={row.goalsAdded} />
+                  {/* Goals Approved */}
+                  <Num value={row.goalsApproved} />
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </div>
 
       {/* Expand / Collapse footer */}
-      {hiddenCount > 0 && (
+      {totalCount > DEFAULT_VISIBLE && (
         <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between gap-4">
           <button
             type="button"
@@ -343,7 +250,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
             className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
           >
             {expanded
-              ? 'Show fewer ↑'
+              ? `Show fewer ↑`
               : `Show all ${totalCount} centres ↓`}
           </button>
           {expanded && (
@@ -359,6 +266,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
   );
 }
 
+/** Plain bold number cell — right-aligned, em-dash when zero */
 function Num({ value }: { value: number }) {
   return (
     <td className="px-4 py-3.5 text-right tabular-nums font-bold text-gray-900">

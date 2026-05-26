@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -62,6 +63,7 @@ router.get('/', async (req, res, next) => {
           AND au.Email     NOT LIKE '%(Ops)%'
           AND (@centreId IS NULL OR c.Id = @centreId)
           AND ${centreExclusion}
+          AND (p.Id IS NULL OR (${buildPatientExclusion('p')}))
           AND LOWER(au.FirstName) NOT LIKE '%test%'
           AND LOWER(au.LastName)  NOT LIKE '%test%'
           AND LOWER(au.Email)     NOT LIKE '%@webority.com'
@@ -78,7 +80,7 @@ router.get('/', async (req, res, next) => {
       email:               r.Email,
       roleName:            r.roleName || null,
       centreId:            r.centreId,
-      centreName:          r.CentreName || null,
+      centreName:          abbreviateCentre(r.CentreName) || null,
       casesRegistered:     r.casesRegistered ?? 0,
       assessmentsAssigned: r.assessmentsAssigned ?? 0,
       totalActions:        r.totalActions ?? 0,

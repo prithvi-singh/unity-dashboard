@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
-const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 const {
   pipelineAuditDetailExpr,
   caseRegisteredDetailExpr,
@@ -60,7 +61,7 @@ function mapPatientRow(row) {
     patientCode: row.patientCode ?? null,
     patientName: (row.patientName ?? '').trim() || 'Unknown',
     centreId: row.centreId,
-    centreName: row.centreName ?? '',
+    centreName: abbreviateCentre(row.centreName ?? '') ?? '',
     eventAt: row.eventAt ? new Date(row.eventAt).toISOString() : null,
     waitingHours: row.waitingHours != null ? parseFloat(Number(row.waitingHours).toFixed(1)) : null,
     status: row.status ?? null,
@@ -126,6 +127,7 @@ function buildFilterContext(req) {
 
   const effectiveCentreId = drillCentreId ?? centreId;
   const centreExclusion = buildCentreExclusion('c');
+  const patientExclusion = buildPatientExclusion('pt');
   const dateFilterPal = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
   const patientNameExpr = `LTRIM(RTRIM(CONCAT(ISNULL(pt.FirstName, ''), ' ', ISNULL(pt.LastName, ''))))`;
 
@@ -147,6 +149,7 @@ function buildFilterContext(req) {
   return {
     effectiveCentreId,
     centreExclusion,
+    patientExclusion,
     dateFilterPal,
     patientNameExpr,
     bindAll,
@@ -161,7 +164,7 @@ function buildFilterContext(req) {
 
 async function queryPipelineAuditStage(ctx, auditType, categoryLabel, statusLabel, actionLabel = 'By') {
   const {
-    bindAll, centreExclusion, dateFilterPal, patientNameExpr, clinicianFilter,
+    bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, clinicianFilter,
   } = ctx;
   const detailExpr = pipelineAuditDetailExpr(auditType, actionLabel);
   const pool = await poolPromise;
@@ -187,6 +190,7 @@ async function queryPipelineAuditStage(ctx, auditType, categoryLabel, statusLabe
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName
@@ -197,7 +201,7 @@ async function queryPipelineAuditStage(ctx, auditType, categoryLabel, statusLabe
 
 async function queryPipelineReportShared(ctx) {
   const {
-    bindAll, centreExclusion, dateFilterApr, patientNameExpr, clinicianFilter,
+    bindAll, centreExclusion, patientExclusion, dateFilterApr, patientNameExpr, clinicianFilter,
   } = ctx;
   const detailExpr = pipelineReportSharedDetailExpr();
   const pool = await poolPromise;
@@ -221,6 +225,7 @@ async function queryPipelineReportShared(ctx) {
     WHERE ${dateFilterApr}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, apr.CreatedBy
@@ -231,7 +236,7 @@ async function queryPipelineReportShared(ctx) {
 
 async function queryPipelineGoalsAdded(ctx) {
   const {
-    bindAll, centreExclusion, dateFilterPgargCreated, patientNameExpr, clinicianFilter,
+    bindAll, centreExclusion, patientExclusion, dateFilterPgargCreated, patientNameExpr, clinicianFilter,
   } = ctx;
   const detailExpr = pipelineGoalsAddedDetailExpr();
   const pool = await poolPromise;
@@ -256,6 +261,7 @@ async function queryPipelineGoalsAdded(ctx) {
     WHERE ${dateFilterPgargCreated}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, pgarg.CreatedBy
@@ -266,7 +272,7 @@ async function queryPipelineGoalsAdded(ctx) {
 
 async function queryPipelineGoalsApproved(ctx) {
   const {
-    bindAll, centreExclusion, dateFilterPgargUpdated, patientNameExpr, clinicianFilter,
+    bindAll, centreExclusion, patientExclusion, dateFilterPgargUpdated, patientNameExpr, clinicianFilter,
   } = ctx;
   const detailExpr = pipelineGoalsApprovedDetailExpr();
   const pool = await poolPromise;
@@ -292,6 +298,7 @@ async function queryPipelineGoalsApproved(ctx) {
       AND ${dateFilterPgargUpdated}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     GROUP BY ap.Id, pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName,
       ap.Assessment, clin.FirstName, clin.LastName, pgarg.UpdatedBy
@@ -301,7 +308,7 @@ async function queryPipelineGoalsApproved(ctx) {
 }
 
 async function queryClinicianCaseload(ctx) {
-  const { bindAll, centreExclusion, patientNameExpr, clinicianFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, clinicianFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -322,6 +329,7 @@ async function queryClinicianCaseload(ctx) {
     WHERE ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     ORDER BY ap.CreatedDateTimeUtc ASC
   `);
@@ -329,7 +337,7 @@ async function queryClinicianCaseload(ctx) {
 }
 
 async function queryClinicianStuck(ctx) {
-  const { bindAll, centreExclusion, patientNameExpr, clinicianFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, clinicianFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -355,6 +363,7 @@ async function queryClinicianStuck(ctx) {
       )
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${clinicianFilter}
     ORDER BY ap.CreatedDateTimeUtc ASC
   `);
@@ -455,13 +464,15 @@ async function queryClinicianInactive(ctx) {
       AND ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
     JOIN Patient pt ON pt.Id = ap.PatientId
       AND (@centreId IS NULL OR pt.CentreId = @centreId)
+      AND pt.FirstName NOT LIKE '%test%'
+      AND pt.LastName NOT LIKE '%test%'
     ORDER BY ic.daysSinceActivity DESC, ic.userId, pt.LastName, pt.FirstName
   `);
   return result.recordset.map(mapInactiveClinicianRow);
 }
 
 async function queryManagerRegistered(ctx) {
-  const { bindAll, centreExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -485,6 +496,7 @@ async function queryManagerRegistered(ctx) {
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${adminFilter}
       AND au.FirstName NOT LIKE '%(Ops)%'
       AND au.LastName NOT LIKE '%(Ops)%'
@@ -496,7 +508,7 @@ async function queryManagerRegistered(ctx) {
 }
 
 async function queryManagerAssigned(ctx) {
-  const { bindAll, centreExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -520,6 +532,7 @@ async function queryManagerAssigned(ctx) {
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${adminFilter}
       AND au.FirstName NOT LIKE '%(Ops)%'
       AND au.LastName NOT LIKE '%(Ops)%'
@@ -531,7 +544,7 @@ async function queryManagerAssigned(ctx) {
 }
 
 async function queryManagerStuckOnboarding(ctx) {
-  const { bindAll, centreExclusion, patientNameExpr } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -556,6 +569,8 @@ async function queryManagerStuckOnboarding(ctx) {
       WHERE pal.Type = 'CaseRegistered'
         AND (@centreId IS NULL OR c2.Id = @centreId)
         AND ${centreExclusion.replace(/\bc\b/g, 'c2')}
+        AND pt2.FirstName NOT LIKE '%test%'
+        AND pt2.LastName NOT LIKE '%test%'
         AND (@drillUserId IS NULL OR au2.Id = @drillUserId)
         AND au2.FirstName NOT LIKE '%(Ops)%'
         AND au2.LastName NOT LIKE '%(Ops)%'
@@ -576,7 +591,7 @@ async function queryManagerStuckOnboarding(ctx) {
 }
 
 async function queryAdminRegistered(ctx) {
-  const { bindAll, centreExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -598,6 +613,7 @@ async function queryAdminRegistered(ctx) {
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${adminFilter}
       AND (au.FirstName LIKE '%(Ops)%' OR au.LastName LIKE '%(Ops)%' OR au.Email LIKE '%(Ops)%')
     GROUP BY pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName, au.FirstName, au.LastName
@@ -607,7 +623,7 @@ async function queryAdminRegistered(ctx) {
 }
 
 async function queryAdminAssigned(ctx) {
-  const { bindAll, centreExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -629,6 +645,7 @@ async function queryAdminAssigned(ctx) {
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
+      AND ${patientExclusion}
       AND ${adminFilter}
       AND (au.FirstName LIKE '%(Ops)%' OR au.LastName LIKE '%(Ops)%' OR au.Email LIKE '%(Ops)%')
     GROUP BY pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName, au.FirstName, au.LastName
@@ -638,7 +655,7 @@ async function queryAdminAssigned(ctx) {
 }
 
 async function queryAdminUnassigned(ctx) {
-  const { bindAll, centreExclusion, patientNameExpr, adminFilter } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -661,6 +678,8 @@ async function queryAdminUnassigned(ctx) {
       WHERE pal.Type = 'CaseRegistered'
         AND (@centreId IS NULL OR c2.Id = @centreId)
         AND ${centreExclusion.replace(/\bc\b/g, 'c2')}
+        AND pt2.FirstName NOT LIKE '%test%'
+        AND pt2.LastName NOT LIKE '%test%'
         AND (@drillUserId IS NULL OR au2.Id = @drillUserId)
         AND (au2.FirstName LIKE '%(Ops)%' OR au2.LastName LIKE '%(Ops)%' OR au2.Email LIKE '%(Ops)%')
       GROUP BY pal.PatientId

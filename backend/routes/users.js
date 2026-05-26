@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildDateFilter, buildCentreExclusion } = require('../lib/queryHelpers');
+const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
@@ -52,6 +53,7 @@ function parseBreakdownFilters(req) {
  *
  * Returns roster counts scoped to centre, with active/inactive measured by
  * audit-log activity in the selected date range (not AdminUser.Status).
+ * SuperAdmin role is excluded from all counts and user lists.
  */
 router.get('/breakdown', async (req, res, next) => {
   try {
@@ -60,6 +62,9 @@ router.get('/breakdown', async (req, res, next) => {
     const pool = await poolPromise;
     const centreExclusion = buildCentreExclusion('c');
     const dateFilterPal = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
+
+    // SuperAdmin exclusion applied to all roster queries
+    const superAdminExclusion = `(ar.Name IS NULL OR ar.Name NOT IN ('SuperAdmin', 'Super Admin'))`;
 
     const rosterCte = `
       WITH roster AS (
@@ -74,6 +79,7 @@ router.get('/breakdown', async (req, res, next) => {
         WHERE ${USER_EXCLUSION}
           AND (@centreId IS NULL OR c.Id = @centreId)
           AND (c.Id IS NULL OR ${centreExclusion})
+          AND ${superAdminExclusion}
       ),
       period_active AS (
         SELECT DISTINCT pal.AdminUserId AS userId
@@ -91,14 +97,31 @@ router.get('/breakdown', async (req, res, next) => {
           AND ${buildCentreExclusion('c_f')}
       ))`;
 
+    // Shared CTEs for user-level queries (period action counts + all-time last seen)
+    const userStatsCtes = `
+      WITH period_counts AS (
+        SELECT pal.AdminUserId AS userId, COUNT(*) AS actionsInPeriod
+        FROM PatientAuditLog pal
+        WHERE ${dateFilterPal}
+        GROUP BY pal.AdminUserId
+      ),
+      last_seen AS (
+        SELECT pal.AdminUserId AS userId, MAX(pal.CreatedDateTime) AS lastActivityDate
+        FROM PatientAuditLog pal
+        GROUP BY pal.AdminUserId
+      )`;
+
     const [
       totalsResult,
       byRoleResult,
       byCentreResult,
       recentlyInactiveResult,
       neverActiveResult,
+      usersForRolesResult,
+      usersForCentresResult,
     ] = await Promise.all([
 
+      // Overall totals
       bindBreakdownParams(pool.request(), filters).query(`
         ${rosterCte}
         SELECT
@@ -109,19 +132,22 @@ router.get('/breakdown', async (req, res, next) => {
         LEFT JOIN period_active pa ON pa.userId = r.userId
       `),
 
+      // By-role counts (SuperAdmin filtered via roster CTE)
       bindBreakdownParams(pool.request(), filters).query(`
         ${rosterCte}
         SELECT
           r.roleName,
-          COUNT(DISTINCT r.userId) AS count,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN r.userId END) AS activeCount,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NULL THEN r.userId END) AS inactiveCount
+          COUNT(DISTINCT r.userId) AS total,
+          COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN r.userId END) AS active,
+          COUNT(DISTINCT CASE WHEN pa.userId IS NULL THEN r.userId END) AS quiet
         FROM roster r
         LEFT JOIN period_active pa ON pa.userId = r.userId
+        WHERE r.roleName NOT IN ('SuperAdmin', 'Super Admin')
         GROUP BY r.roleName
-        ORDER BY count DESC
+        ORDER BY total DESC
       `),
 
+      // By-centre counts (SuperAdmin excluded)
       bindBreakdownParams(pool.request(), filters).query(`
         WITH period_active AS (
           SELECT DISTINCT pal.AdminUserId AS userId
@@ -133,7 +159,9 @@ router.get('/breakdown', async (req, res, next) => {
           c.CentreName,
           COUNT(DISTINCT au.Id) AS total,
           COUNT(DISTINCT CASE WHEN LOWER(ar.Name) LIKE '%clinician%' THEN au.Id END) AS clinicians,
-          COUNT(DISTINCT CASE WHEN LOWER(ar.Name) NOT LIKE '%clinician%' AND ar.Name IS NOT NULL THEN au.Id END) AS managers,
+          COUNT(DISTINCT CASE WHEN LOWER(ar.Name) NOT LIKE '%clinician%'
+                               AND ar.Name IS NOT NULL
+                               AND ar.Name NOT IN ('SuperAdmin', 'Super Admin') THEN au.Id END) AS managers,
           COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN au.Id END) AS activeInPeriod
         FROM AdminUser au
         JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
@@ -144,10 +172,12 @@ router.get('/breakdown', async (req, res, next) => {
         WHERE ${USER_EXCLUSION}
           AND ${centreExclusion}
           AND (@centreId IS NULL OR c.Id = @centreId)
+          AND ${superAdminExclusion}
         GROUP BY c.Id, c.CentreName
         ORDER BY total DESC
       `),
 
+      // Recently inactive (>30 days, SuperAdmin excluded)
       bindBreakdownParams(pool.request(), filters).query(`
         SELECT TOP 200
           au.Id AS id,
@@ -166,12 +196,14 @@ router.get('/breakdown', async (req, res, next) => {
         LEFT JOIN Centre c ON c.Id = auc.CentreId AND ${centreExclusion}
         INNER JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id
         WHERE ${USER_EXCLUSION}
+          AND ${superAdminExclusion}
           ${centreScope}
         GROUP BY au.Id, au.FirstName, au.LastName, au.Email, ar.Name, au.LastLoginDateTimeUtc
         HAVING MAX(pal.CreatedDateTime) < DATEADD(day, -30, SYSDATETIMEOFFSET())
         ORDER BY daysSinceActive DESC
       `),
 
+      // Never active (zero audit history, SuperAdmin excluded)
       bindBreakdownParams(pool.request(), filters).query(`
         SELECT TOP 100
           au.Id AS id,
@@ -187,6 +219,7 @@ router.get('/breakdown', async (req, res, next) => {
         LEFT JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
         LEFT JOIN Centre c ON c.Id = auc.CentreId AND ${centreExclusion}
         WHERE ${USER_EXCLUSION}
+          AND ${superAdminExclusion}
           ${centreScope}
           AND NOT EXISTS (
             SELECT 1 FROM PatientAuditLog pal WHERE pal.AdminUserId = au.Id
@@ -194,36 +227,170 @@ router.get('/breakdown', async (req, res, next) => {
         GROUP BY au.Id, au.FirstName, au.LastName, au.Email, ar.Name
         ORDER BY MAX(au.CreatedDateTimeUtc) DESC
       `),
+
+      // Full user list for role drawers — one row per (user × role), primary centre
+      bindBreakdownParams(pool.request(), filters).query(`
+        ${userStatsCtes}
+        SELECT
+          au.Id              AS id,
+          au.FirstName       AS firstName,
+          au.LastName        AS lastName,
+          au.Email           AS email,
+          ISNULL(ar.Name, 'Unassigned') AS roleName,
+          MAX(c.CentreName)  AS centreName,
+          ISNULL(pc.actionsInPeriod, 0) AS actionsInPeriod,
+          ls.lastActivityDate,
+          au.LastLoginDateTimeUtc AS lastLoginDate
+        FROM AdminUser au
+        LEFT JOIN AdminUserRole aur ON aur.UserId = au.Id
+        LEFT JOIN AdminRole ar ON ar.Id = aur.RoleId
+        LEFT JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
+        LEFT JOIN Centre c ON c.Id = auc.CentreId
+        LEFT JOIN period_counts pc ON pc.userId = au.Id
+        LEFT JOIN last_seen ls ON ls.userId = au.Id
+        WHERE ${USER_EXCLUSION}
+          AND ${superAdminExclusion}
+          ${centreScope}
+          AND (c.Id IS NULL OR ${centreExclusion})
+        GROUP BY au.Id, au.FirstName, au.LastName, au.Email, ar.Name,
+                 au.LastLoginDateTimeUtc, pc.actionsInPeriod, ls.lastActivityDate
+        ORDER BY ISNULL(ar.Name, 'Unassigned'), au.LastName, au.FirstName
+      `),
+
+      // Full user list for centre drawers — one row per (user × centre), primary role
+      bindBreakdownParams(pool.request(), filters).query(`
+        ${userStatsCtes}
+        SELECT
+          au.Id              AS id,
+          au.FirstName       AS firstName,
+          au.LastName        AS lastName,
+          au.Email           AS email,
+          ISNULL(MAX(ar.Name), 'Unassigned') AS roleName,
+          c.Id               AS centreId,
+          c.CentreName       AS centreName,
+          ISNULL(MAX(pc.actionsInPeriod), 0) AS actionsInPeriod,
+          MAX(ls.lastActivityDate) AS lastActivityDate,
+          au.LastLoginDateTimeUtc AS lastLoginDate,
+          CASE WHEN MAX(ls.lastActivityDate) IS NULL THEN 1 ELSE 0 END AS neverActive
+        FROM AdminUser au
+        LEFT JOIN AdminUserRole aur ON aur.UserId = au.Id
+        LEFT JOIN AdminRole ar ON ar.Id = aur.RoleId
+        JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
+        JOIN Centre c ON c.Id = auc.CentreId
+        LEFT JOIN period_counts pc ON pc.userId = au.Id
+        LEFT JOIN last_seen ls ON ls.userId = au.Id
+        WHERE ${USER_EXCLUSION}
+          AND ${superAdminExclusion}
+          AND ${centreExclusion}
+          AND (@centreId IS NULL OR c.Id = @centreId)
+        GROUP BY au.Id, au.FirstName, au.LastName, au.Email, c.Id, c.CentreName,
+                 au.LastLoginDateTimeUtc
+        ORDER BY c.CentreName, ISNULL(MAX(pc.actionsInPeriod), 0) DESC
+      `),
     ]);
 
     const t = totalsResult.recordset[0] || {};
+
+    // Build role → user lists map
+    const roleUsersMap = new Map();
+    for (const u of usersForRolesResult.recordset) {
+      const key = u.roleName;
+      if (!roleUsersMap.has(key)) roleUsersMap.set(key, { active: [], quiet: [] });
+      const user = {
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        centreName: abbreviateCentre(u.centreName) || null,
+        actionsInPeriod: u.actionsInPeriod,
+        lastActivityDate: u.lastActivityDate || null,
+        lastLoginDate: u.lastLoginDate || null,
+      };
+      if (u.actionsInPeriod > 0) roleUsersMap.get(key).active.push(user);
+      else roleUsersMap.get(key).quiet.push(user);
+    }
+
+    // Sort role user lists
+    for (const lists of roleUsersMap.values()) {
+      lists.active.sort((a, b) => b.actionsInPeriod - a.actionsInPeriod);
+      lists.quiet.sort((a, b) => {
+        const ta = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
+        const tb = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
+        return tb - ta;
+      });
+    }
+
+    // Build centreId → user lists map
+    const centreUsersMap = new Map();
+    for (const u of usersForCentresResult.recordset) {
+      const key = u.centreId;
+      if (!centreUsersMap.has(key)) centreUsersMap.set(key, { active: [], quiet: [] });
+      const user = {
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        roleName: u.roleName,
+        actionsInPeriod: u.actionsInPeriod,
+        lastActivityDate: u.lastActivityDate || null,
+        lastLoginDate: u.lastLoginDate || null,
+        neverActive: u.neverActive === 1,
+      };
+      if (u.actionsInPeriod > 0) centreUsersMap.get(key).active.push(user);
+      else centreUsersMap.get(key).quiet.push(user);
+    }
+
+    // Sort centre user lists
+    for (const lists of centreUsersMap.values()) {
+      lists.active.sort((a, b) => b.actionsInPeriod - a.actionsInPeriod);
+      lists.quiet.sort((a, b) => {
+        const ta = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
+        const tb = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
+        return tb - ta;
+      });
+    }
 
     res.json({
       total: t.total ?? 0,
       dateFrom: req.query.dateFrom ?? null,
       dateTo: req.query.dateTo ?? null,
-      byRole: byRoleResult.recordset.map((r) => ({
-        roleName: r.roleName,
-        count: r.count,
-        activeCount: r.activeCount,
-        inactiveCount: r.inactiveCount,
-      })),
+      byRole: byRoleResult.recordset.map((r) => {
+        const users = roleUsersMap.get(r.roleName) || { active: [], quiet: [] };
+        return {
+          roleName: r.roleName,
+          total: r.total,
+          active: r.active,
+          quiet: r.quiet,
+          activePercent: r.total > 0 ? Math.round((r.active / r.total) * 100) : 0,
+          activeUsers: users.active,
+          quietUsers: users.quiet,
+        };
+      }),
       byStatus: { active: t.active ?? 0, inactive: t.inactive ?? 0 },
-      byCentre: byCentreResult.recordset.map((r) => ({
-        centreId: r.centreId,
-        centreName: r.CentreName,
-        total: r.total,
-        clinicians: r.clinicians,
-        managers: r.managers,
-        activeInPeriod: r.activeInPeriod ?? 0,
-      })),
+      byCentre: byCentreResult.recordset.map((r) => {
+        const users = centreUsersMap.get(r.centreId) || { active: [], quiet: [] };
+        const active = r.activeInPeriod ?? 0;
+        const quiet = (r.total ?? 0) - active;
+        return {
+          centreId: r.centreId,
+          centreName: abbreviateCentre(r.CentreName),
+          total: r.total,
+          clinicians: r.clinicians,
+          managers: r.managers,
+          active,
+          quiet,
+          activePercent: r.total > 0 ? Math.round((active / r.total) * 100) : 0,
+          activeUsers: users.active,
+          quietUsers: users.quiet,
+        };
+      }),
       recentlyInactive: recentlyInactiveResult.recordset.map((r) => ({
         id: r.id,
         firstName: r.firstName,
         lastName: r.lastName,
         email: r.email,
         roleName: r.roleName,
-        centreName: r.centreName || null,
+        centreName: abbreviateCentre(r.centreName) || null,
         lastActivityDate: r.lastActivityDate || null,
         lastLoginDate: r.lastLoginDate || null,
         daysSinceActive: r.daysSinceActive ?? 0,
@@ -234,7 +401,7 @@ router.get('/breakdown', async (req, res, next) => {
         lastName: r.lastName,
         email: r.email,
         roleName: r.roleName,
-        centreName: r.centreName || null,
+        centreName: abbreviateCentre(r.centreName) || null,
         createdDate: r.createdDate || null,
       })),
     });
@@ -288,7 +455,7 @@ router.get('/:id', async (req, res, next) => {
     const first = userResult.recordset[0];
     const roleName = first.roleName || '';
     const isClinician = roleName.toLowerCase().includes('clinician');
-    const centreName = first.CentreName || null;
+    const centreName = abbreviateCentre(first.CentreName) || null;
 
     const [
       activityResult,
@@ -530,7 +697,7 @@ router.get('/:id/profile', async (req, res, next) => {
     const centresMap = new Map();
     for (const row of userResult.recordset) {
       if (row.centreId != null) {
-        centresMap.set(row.centreId, { id: row.centreId, name: row.CentreName });
+        centresMap.set(row.centreId, { id: row.centreId, name: abbreviateCentre(row.CentreName) });
       }
     }
     const centres = [...centresMap.values()];
@@ -645,13 +812,13 @@ router.get('/:id/profile', async (req, res, next) => {
         type: r.type,
         description: r.description || null,
         patientId: r.patientId ?? null,
-        centreName: r.CentreName || null,
+        centreName: abbreviateCentre(r.CentreName) || null,
       })),
       activeCases: activeCasesResult.recordset.map((r) => ({
         patientId: r.patientId,
         status: r.status,
         centreId: r.centreId,
-        centreName: r.CentreName || null,
+        centreName: abbreviateCentre(r.CentreName) || null,
         assignedAt: r.assignedAt || null,
         daysSinceAssigned: r.daysSinceAssigned ?? 0,
         lastAction: r.lastAction || null,

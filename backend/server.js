@@ -18,6 +18,7 @@ const bottlenecksRouter = require('./routes/bottlenecks');
 const assessmentsRouter = require('./routes/assessments');
 const usersRouter = require('./routes/users');
 const pipelineRouter = require('./routes/pipeline');
+const workloadRouter = require('./routes/workload');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -75,6 +76,7 @@ app.use('/api/assessments', assessmentsRouter);
 app.use('/api/role', require('./routes/role'));
 app.use('/api/users', usersRouter);
 app.use('/api/pipeline', pipelineRouter);
+app.use('/api/workload', workloadRouter);
 
 // 404 for unknown routes
 app.use((_req, res) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Clinician } from '@/lib/types';
+import type { Clinician, WorkloadCentreRow } from '@/lib/types';
 import type { OnRoleDrillDown, RoleSummary, ClinicalPipelineData } from '@/lib/roleDrillDown';
 import { DRILL_DOWN_HINT } from '@/lib/roleDrillDown';
 import {
@@ -11,7 +11,7 @@ import { KPI } from '@/lib/kpiDefinitions';
 import { IDLE_CLINICIAN_LABEL, IDLE_CLINICIAN_SUBTITLE, IDLE_CLINICIAN_DRILL_TITLE } from '@/lib/idleClinician';
 import { KpiTooltip } from '@/components/shared/KpiTooltip';
 import RoleCentreChart from '@/components/shared/RoleCentreChart';
-import RoleCentreTable from '@/components/shared/RoleCentreTable';
+import WorkloadByCentreTable from '@/components/clinicians/WorkloadByCentreTable';
 
 interface Props {
   clinicians: Clinician[];
@@ -20,6 +20,8 @@ interface Props {
   loading: boolean;
   summaryLoading?: boolean;
   pipelineLoading?: boolean;
+  workload: WorkloadCentreRow[] | null;
+  workloadLoading: boolean;
   onDrillDown?: OnRoleDrillDown;
 }
 
@@ -114,7 +116,7 @@ function KpiCard({
 }
 
 export default function ClinicianChart({
-  clinicians, summary, pipeline, loading, summaryLoading, onDrillDown,
+  clinicians, summary, pipeline, loading, summaryLoading, workload, workloadLoading, onDrillDown,
 }: Props) {
   const kpis = clinicianKpis(clinicians);
   const byCentre = aggregateCliniciansByCentre(clinicians);
@@ -214,31 +216,17 @@ export default function ClinicianChart({
 
       <RoleCentreChart
         title="Delivery by centre"
-        subtitle="Caseload vs report PDFs vs activity — spot high workload and low output"
+        subtitle="Caseload vs report PDFs — spot high workload and low output"
         rows={byCentre}
         loading={loading}
         onDrillDown={onDrillDown}
         datasets={[
-          { label: 'Caseload', color: 'rgba(29,158,117,0.82)', metricKey: 'metric1', drillType: 'clinician-caseload' },
+          { label: 'Caseload',    color: 'rgba(29,158,117,0.82)', metricKey: 'metric1', drillType: 'clinician-caseload' },
           { label: 'Report PDFs', color: 'rgba(55,138,221,0.82)', metricKey: 'metric2', drillType: 'clinician-pipeline-report-pdf' },
-          { label: 'Actions', color: 'rgba(124,58,237,0.75)', metricKey: 'metric3', drillType: 'clinician-caseload' },
         ]}
       />
 
-      <RoleCentreTable
-        title="Workload by centre"
-        subtitle="Where delivery is concentrated — compare caseload to outputs"
-        actionNote="Not an onboarding queue. Prioritise centres with high caseload and few report PDFs."
-        tooltip={KPI.CLINICIAN_CENTRE_QUEUE}
-        rows={byCentre}
-        loading={loading}
-        onDrillDown={onDrillDown}
-        cols={[
-          { key: 'metric1', label: 'Caseload', colorClass: 'bg-emerald-500', drillType: 'clinician-caseload' },
-          { key: 'metric2', label: 'Report PDFs', colorClass: 'bg-blue-500', drillType: 'clinician-pipeline-report-pdf' },
-          { key: 'metric3', label: 'Actions', colorClass: 'bg-violet-400' },
-        ]}
-      />
+      <WorkloadByCentreTable rows={workload} loading={workloadLoading} />
     </div>
   );
 }

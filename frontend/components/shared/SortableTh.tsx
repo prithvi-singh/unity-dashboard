@@ -40,11 +40,19 @@ export default function SortableTh({
     <th scope="col" className={`px-5 py-3 ${alignClass} ${className}`} aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
-        title={title}
         onClick={() => onSort(col, defaultDir)}
         className={`inline-flex items-center w-full ${align === 'right' ? 'justify-end' : 'justify-start'} text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em] hover:text-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded`}
       >
         {label}
+        {title && (
+          <span
+            title={title}
+            aria-label={title}
+            className="ml-0.5 text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal"
+          >
+            ⓘ
+          </span>
+        )}
         <SortIcon active={active} dir={sortDir} />
       </button>
     </th>

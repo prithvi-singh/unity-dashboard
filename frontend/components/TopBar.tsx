@@ -510,7 +510,7 @@ export default function TopBar({
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
             <span className="text-[13px] font-semibold text-slate-400 tracking-wide hidden md:inline">
-              Unity Ops
+              Ops Dashboard
             </span>
           </div>
 
@@ -592,7 +592,7 @@ export default function TopBar({
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
               <span className="text-[12px] font-semibold text-slate-400 tracking-wide">
-                Unity Ops
+                Ops Dashboard
               </span>
             </div>
             <LogoutButton />

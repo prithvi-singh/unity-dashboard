@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { Clinician, WorkloadCentreRow } from '@/lib/types';
 import type { OnRoleDrillDown, RoleSummary, ClinicalPipelineData } from '@/lib/roleDrillDown';
 import { DRILL_DOWN_HINT } from '@/lib/roleDrillDown';
@@ -12,6 +13,7 @@ import { IDLE_CLINICIAN_LABEL, IDLE_CLINICIAN_SUBTITLE, IDLE_CLINICIAN_DRILL_TIT
 import { KpiTooltip } from '@/components/shared/KpiTooltip';
 import RoleCentreChart from '@/components/shared/RoleCentreChart';
 import WorkloadByCentreTable from '@/components/clinicians/WorkloadByCentreTable';
+import ActiveStaffPanel from '@/components/clinicians/ActiveStaffPanel';
 
 interface Props {
   clinicians: Clinician[];
@@ -118,6 +120,7 @@ function KpiCard({
 export default function ClinicianChart({
   clinicians, summary, pipeline, loading, summaryLoading, workload, workloadLoading, onDrillDown,
 }: Props) {
+  const [activeStaffOpen, setActiveStaffOpen] = useState(false);
   const kpis = clinicianKpis(clinicians);
   const byCentre = aggregateCliniciansByCentre(clinicians);
   const stuck = summary?.stuckCases ?? 0;
@@ -211,8 +214,18 @@ export default function ClinicianChart({
           tooltip={KPI.CLINICIAN_ACTIVE_STAFF}
           iconBg="bg-teal-50" iconFg="text-teal-600"
           icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+          clickable
+          onClick={() => setActiveStaffOpen(true)}
+          ariaLabel={`Active Staff: ${kpis.activeCount} of ${kpis.people} clinicians engaged. ${DRILL_DOWN_HINT}`}
         />
       </div>
+
+      {activeStaffOpen && (
+        <ActiveStaffPanel
+          clinicians={clinicians}
+          onClose={() => setActiveStaffOpen(false)}
+        />
+      )}
 
       <RoleCentreChart
         title="Delivery by centre"

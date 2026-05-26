@@ -1,0 +1,25 @@
+---
+description: Deployment conventions for Unity Dashboard
+alwaysApply: true
+---
+
+# Deployment Rules
+
+## Never create Azure resources manually through the portal
+All infrastructure (Container Apps, environments, resource groups) must be created via GitHub Actions CI/CD. Manual portal creation causes provisioning state mismatches and deployment conflicts.
+
+## Stack
+- **Frontend**: Vercel — auto-deploys from `main`, root directory set to `frontend/`
+- **Backend**: Azure Container Apps — built and deployed via GitHub Actions using `azure/container-apps-deploy-action@v2`
+- **Registry**: Azure Container Registry (`parivaremindersacr.azurecr.io`)
+
+## Workflow file
+`.github/workflows/unity-dashboard-api-AutoDeployTrigger-*.yml` is the single source of truth for backend deploys. Do not create additional deploy workflows.
+
+## When deployment breaks
+1. Delete the broken Azure resource (Container App or resource group)
+2. Fix the workflow file
+3. Push to `main` — GitHub Actions recreates everything from scratch
+
+## Environment variables
+Backend env vars live in Azure Container App → Environment variables (not in the workflow file). Never commit secrets.

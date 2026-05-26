@@ -96,7 +96,7 @@ export default function BottleneckByCentre({ data, loading, onDrillDown }: Props
           responsive: true,
           maintainAspectRatio: false,
           animation: false,
-          onClick: (_event, elements) => {
+          onClick: (_event: unknown, elements: { datasetIndex: number; index: number }[]) => {
             if (!elements.length || !onDrillDownRef.current) return;
             const { datasetIndex, index } = elements[0];
             const centre = sorted[index];

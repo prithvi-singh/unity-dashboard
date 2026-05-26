@@ -235,7 +235,7 @@ function LoginForm() {
               className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               style={{
                 backgroundColor: '#00B8A9',
-                focusRingOffsetColor: '#0F1117',
+                
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#00A699';

@@ -259,7 +259,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange }: {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] border border-gray-100 flex overflow-hidden max-w-[calc(100vw-2rem)]">
+        <div className="absolute left-0 top-full mt-2 z-50 bg-white rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.16)] border border-gray-200 flex overflow-hidden max-w-[calc(100vw-2rem)]">
           {/* Presets */}
           <div className="w-36 border-r border-gray-100 py-2 flex flex-col">
             <p className="px-3.5 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
@@ -476,6 +476,12 @@ interface TopBarProps {
   onRefresh: () => void;
   countdown: number;
   lastUpdated: Date | null;
+  /** Whether MetricsContext has loaded successfully — drives the "In sync" indicator */
+  metricsSynced?: boolean;
+  /** Whether MetricsContext is currently loading */
+  metricsLoading?: boolean;
+  /** Whether the active tab shows daily-only data (Live tab) — adds picker tooltip */
+  isDailyTab?: boolean;
 }
 
 function formatTime(d: Date): string {
@@ -486,6 +492,7 @@ export default function TopBar({
   centres, centreId, dateFrom, dateTo,
   onCentreChange, onDateFromChange, onDateToChange,
   onRefresh, countdown, lastUpdated,
+  metricsSynced, metricsLoading, isDailyTab,
 }: TopBarProps) {
 
   const handleDateChange = useCallback(
@@ -527,20 +534,48 @@ export default function TopBar({
           {/* Period */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden lg:inline">
-              Period
+              {isDailyTab ? 'Day' : 'Period'}
             </span>
-            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
+            <div className="relative group/datepicker">
+              <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
+              {isDailyTab && (
+                <div
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full mt-2 z-50 w-56 rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-2 text-[11px] text-slate-300 shadow-xl opacity-0 group-hover/datepicker:opacity-100 transition-opacity duration-150"
+                >
+                  Daily view only. For period analysis use the Overview tab.
+                  <span className="absolute -top-1 left-3 h-2 w-2 rotate-45 bg-slate-800 border-l border-t border-slate-700" />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex-1" />
 
-          {/* Last updated */}
-          {lastUpdated && (
-            <span className="text-[11px] text-slate-500 whitespace-nowrap hidden lg:inline">
-              Updated{' '}
-              <span className="font-semibold text-slate-300">{formatTime(lastUpdated)}</span>
-            </span>
-          )}
+          {/* Last updated + sync indicator */}
+          <div className="hidden lg:flex items-center gap-2">
+            {lastUpdated && (
+              <span className="text-[11px] text-slate-500 whitespace-nowrap">
+                Updated{' '}
+                <span className="font-semibold text-slate-300">{formatTime(lastUpdated)}</span>
+              </span>
+            )}
+            {(metricsSynced !== undefined || metricsLoading !== undefined) && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium"
+                title={metricsLoading ? 'Fetching latest metrics…' : 'All tabs are reading from the same data fetch'}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    metricsLoading ? 'bg-amber-400 animate-pulse' : 'bg-[#1D9E75]'
+                  }`}
+                />
+                <span className={metricsLoading ? 'text-amber-400' : 'text-[#1D9E75]'}>
+                  {metricsLoading ? 'Syncing…' : 'In sync'}
+                </span>
+              </span>
+            )}
+          </div>
 
           {/* Refresh */}
           <div className="relative group">

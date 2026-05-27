@@ -7,14 +7,86 @@ const { abbreviateCentre } = require('../lib/formatters');
 
 const router = Router();
 
+const { getCoreMetrics } = require('../services/metricsService');
+
 const VALID_ROLES = new Set(['clinician', 'manager', 'centre-admin']);
 
 // ── User exclusion filter (shared across routes) ──────────────────────────────
+// Includes both @webority.com and @mailinator.com dev/test accounts.
 const USER_EXCLUSION = `
   LOWER(au.FirstName) NOT LIKE '%test%'
   AND LOWER(au.LastName)  NOT LIKE '%test%'
   AND LOWER(au.Email)     NOT LIKE '%@webority.com'
+  AND LOWER(au.Email)     NOT LIKE '%@mailinator.com'
 `;
+
+// ── Core job definitions ──────────────────────────────────────────────────────
+const CORE_JOB_EVENTS = {
+  clinician:      new Set(['AssessmentResultGenerated', 'ReportAdded', 'UpdateReport', 'GoalAdded', 'ActivityAdded']),
+  manager:        new Set(['ReportPDFGenerated', 'GoalAdded', 'GoalUpdated', 'ActivityAdded', 'CaseRegistered']),
+  'centre-admin': new Set(['CaseRegistered', 'CaseAssigned']),
+};
+
+const CORE_JOB_DEFINITION = {
+  clinician:      'Score assessments · draft reports · add goals · case history',
+  manager:        'Approve reports · approve goals · case history · register cases',
+  'centre-admin': 'Register cases · assign clinicians',
+};
+
+const EVENT_LABELS = {
+  AssessmentResultGenerated: 'Assessment scored',
+  AssessmentStatusChanged:   'Assessment status updated',
+  ReportAdded:               'Report drafted',
+  UpdateReport:              'Report edited',
+  ReportPDFGenerated:        'Report approved',
+  GoalAdded:                 'Goal added',
+  GoalUpdated:               'Goal updated',
+  CaseRegistered:            'Case registered',
+  CaseAssigned:              'Clinician assigned',
+  CaseTransfer:              'Assessment transferred',
+  BaselineAdded:             'Baseline added',
+  ProgressAdded:             'Progress noted',
+  ActivityAdded:             'Case history updated',
+  AssessmentAdd:             'Assessment added',
+};
+
+function translateEvent(type) {
+  if (!type) return 'Unknown action';
+  return EVENT_LABELS[type] ?? type.replace(/([A-Z])/g, ' $1').trim();
+}
+
+/**
+ * Count Mon–Fri working days between two Date boundaries (inclusive).
+ *
+ * Uses UTC noon for all comparisons so the function is robust to any timezone
+ * stored in the Date objects (parseDateParam now returns IST midnight, which is
+ * UTC-18:30 of the same calendar day — iterating with setUTCDate + comparing
+ * UTC noon values keeps us on the correct calendar day regardless).
+ */
+function countWorkingDays(from, to) {
+  const start = from ? new Date(from) : new Date(Date.now() - 30 * 86400000);
+  const end   = to   ? new Date(to)   : new Date();
+  let count = 0;
+  const d = new Date(start);
+  // Normalise to UTC noon so the day-of-week and date arithmetic are unambiguous
+  // regardless of what timezone the input Date objects carry.
+  d.setUTCHours(12, 0, 0, 0);
+  const endNoon = new Date(end);
+  endNoon.setUTCHours(12, 0, 0, 0);
+  while (d <= endNoon) {
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return count;
+}
+
+function calcConsistencyStatus(pct) {
+  if (pct === 0)  return 'silent';
+  if (pct < 30)   return 'inactive';
+  if (pct < 70)   return 'irregular';
+  return 'consistent';
+}
 
 function bindBreakdownParams(request, { centreId, dateFrom, dateTo }) {
   return request
@@ -63,29 +135,7 @@ router.get('/breakdown', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
     const dateFilterPal = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
-    // SuperAdmin exclusion applied to all roster queries
     const superAdminExclusion = `(ar.Name IS NULL OR ar.Name NOT IN ('SuperAdmin', 'Super Admin'))`;
-
-    const rosterCte = `
-      WITH roster AS (
-        SELECT DISTINCT
-          au.Id AS userId,
-          ISNULL(ar.Name, 'Unassigned') AS roleName
-        FROM AdminUser au
-        LEFT JOIN AdminUserRole aur ON aur.UserId = au.Id
-        LEFT JOIN AdminRole ar ON ar.Id = aur.RoleId
-        LEFT JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
-        LEFT JOIN Centre c ON c.Id = auc.CentreId
-        WHERE ${USER_EXCLUSION}
-          AND (@centreId IS NULL OR c.Id = @centreId)
-          AND (c.Id IS NULL OR ${centreExclusion})
-          AND ${superAdminExclusion}
-      ),
-      period_active AS (
-        SELECT DISTINCT pal.AdminUserId AS userId
-        FROM PatientAuditLog pal
-        WHERE ${dateFilterPal}
-      )`;
 
     const centreScope = `
       AND (@centreId IS NULL OR EXISTS (
@@ -97,7 +147,6 @@ router.get('/breakdown', async (req, res, next) => {
           AND ${buildCentreExclusion('c_f')}
       ))`;
 
-    // Shared CTEs for user-level queries (period action counts + all-time last seen)
     const userStatsCtes = `
       WITH period_counts AS (
         SELECT pal.AdminUserId AS userId, COUNT(*) AS actionsInPeriod
@@ -111,71 +160,19 @@ router.get('/breakdown', async (req, res, next) => {
         GROUP BY pal.AdminUserId
       )`;
 
+    // Totals, byRole, and byCentre come from the shared metrics service.
+    // Drawer-specific lists (per-user detail, recentlyInactive, neverActive)
+    // remain as dedicated queries here since they're unique to this endpoint.
     const [
-      totalsResult,
-      byRoleResult,
-      byCentreResult,
+      metrics,
       recentlyInactiveResult,
       neverActiveResult,
       usersForRolesResult,
       usersForCentresResult,
     ] = await Promise.all([
 
-      // Overall totals
-      bindBreakdownParams(pool.request(), filters).query(`
-        ${rosterCte}
-        SELECT
-          COUNT(DISTINCT r.userId) AS total,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN r.userId END) AS active,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NULL THEN r.userId END) AS inactive
-        FROM roster r
-        LEFT JOIN period_active pa ON pa.userId = r.userId
-      `),
-
-      // By-role counts (SuperAdmin filtered via roster CTE)
-      bindBreakdownParams(pool.request(), filters).query(`
-        ${rosterCte}
-        SELECT
-          r.roleName,
-          COUNT(DISTINCT r.userId) AS total,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN r.userId END) AS active,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NULL THEN r.userId END) AS quiet
-        FROM roster r
-        LEFT JOIN period_active pa ON pa.userId = r.userId
-        WHERE r.roleName NOT IN ('SuperAdmin', 'Super Admin')
-        GROUP BY r.roleName
-        ORDER BY total DESC
-      `),
-
-      // By-centre counts (SuperAdmin excluded)
-      bindBreakdownParams(pool.request(), filters).query(`
-        WITH period_active AS (
-          SELECT DISTINCT pal.AdminUserId AS userId
-          FROM PatientAuditLog pal
-          WHERE ${dateFilterPal}
-        )
-        SELECT
-          c.Id AS centreId,
-          c.CentreName,
-          COUNT(DISTINCT au.Id) AS total,
-          COUNT(DISTINCT CASE WHEN LOWER(ar.Name) LIKE '%clinician%' THEN au.Id END) AS clinicians,
-          COUNT(DISTINCT CASE WHEN LOWER(ar.Name) NOT LIKE '%clinician%'
-                               AND ar.Name IS NOT NULL
-                               AND ar.Name NOT IN ('SuperAdmin', 'Super Admin') THEN au.Id END) AS managers,
-          COUNT(DISTINCT CASE WHEN pa.userId IS NOT NULL THEN au.Id END) AS activeInPeriod
-        FROM AdminUser au
-        JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
-        JOIN Centre c ON c.Id = auc.CentreId
-        LEFT JOIN AdminUserRole aur ON aur.UserId = au.Id
-        LEFT JOIN AdminRole ar ON ar.Id = aur.RoleId
-        LEFT JOIN period_active pa ON pa.userId = au.Id
-        WHERE ${USER_EXCLUSION}
-          AND ${centreExclusion}
-          AND (@centreId IS NULL OR c.Id = @centreId)
-          AND ${superAdminExclusion}
-        GROUP BY c.Id, c.CentreName
-        ORDER BY total DESC
-      `),
+      // Shared metrics — totals + byRole + byCentre
+      getCoreMetrics({ dateFrom, dateTo, centreId }),
 
       // Recently inactive (>30 days, SuperAdmin excluded)
       bindBreakdownParams(pool.request(), filters).query(`
@@ -228,7 +225,7 @@ router.get('/breakdown', async (req, res, next) => {
         ORDER BY MAX(au.CreatedDateTimeUtc) DESC
       `),
 
-      // Full user list for role drawers — one row per (user × role), primary centre
+      // Full user list for role drawers
       bindBreakdownParams(pool.request(), filters).query(`
         ${userStatsCtes}
         SELECT
@@ -257,7 +254,7 @@ router.get('/breakdown', async (req, res, next) => {
         ORDER BY ISNULL(ar.Name, 'Unassigned'), au.LastName, au.FirstName
       `),
 
-      // Full user list for centre drawers — one row per (user × centre), primary role
+      // Full user list for centre drawers
       bindBreakdownParams(pool.request(), filters).query(`
         ${userStatsCtes}
         SELECT
@@ -289,7 +286,8 @@ router.get('/breakdown', async (req, res, next) => {
       `),
     ]);
 
-    const t = totalsResult.recordset[0] || {};
+    // Use shared metrics for totals and breakdowns
+    const { users: mu } = metrics;
 
     // Build role → user lists map
     const roleUsersMap = new Map();
@@ -351,39 +349,39 @@ router.get('/breakdown', async (req, res, next) => {
     }
 
     res.json({
-      total: t.total ?? 0,
+      // ── Totals + byRole + byCentre from shared metrics service ─────────────
+      total:   mu.total,
       dateFrom: req.query.dateFrom ?? null,
-      dateTo: req.query.dateTo ?? null,
-      byRole: byRoleResult.recordset.map((r) => {
+      dateTo:   req.query.dateTo   ?? null,
+      byRole: mu.byRole.map((r) => {
         const users = roleUsersMap.get(r.roleName) || { active: [], quiet: [] };
         return {
-          roleName: r.roleName,
-          total: r.total,
-          active: r.active,
-          quiet: r.quiet,
+          roleName:     r.roleName,
+          total:        r.total,
+          active:       r.active,
+          quiet:        r.quiet,
           activePercent: r.total > 0 ? Math.round((r.active / r.total) * 100) : 0,
-          activeUsers: users.active,
-          quietUsers: users.quiet,
+          activeUsers:  users.active,
+          quietUsers:   users.quiet,
         };
       }),
-      byStatus: { active: t.active ?? 0, inactive: t.inactive ?? 0 },
-      byCentre: byCentreResult.recordset.map((r) => {
+      byStatus: { active: mu.active, inactive: mu.quiet },
+      byCentre: mu.byCentre.map((r) => {
         const users = centreUsersMap.get(r.centreId) || { active: [], quiet: [] };
-        const active = r.activeInPeriod ?? 0;
-        const quiet = (r.total ?? 0) - active;
         return {
-          centreId: r.centreId,
-          centreName: abbreviateCentre(r.CentreName),
-          total: r.total,
-          clinicians: r.clinicians,
-          managers: r.managers,
-          active,
-          quiet,
-          activePercent: r.total > 0 ? Math.round((active / r.total) * 100) : 0,
-          activeUsers: users.active,
-          quietUsers: users.quiet,
+          centreId:     r.centreId,
+          centreName:   abbreviateCentre(r.centreName),
+          total:        r.total,
+          clinicians:   r.clinicians,
+          managers:     r.managers,
+          active:       r.active,
+          quiet:        r.quiet,
+          activePercent: r.total > 0 ? Math.round((r.active / r.total) * 100) : 0,
+          activeUsers:  users.active,
+          quietUsers:   users.quiet,
         };
       }),
+      // ── Drawer-specific lists (not in shared service) ──────────────────────
       recentlyInactive: recentlyInactiveResult.recordset.map((r) => ({
         id: r.id,
         firstName: r.firstName,
@@ -455,7 +453,16 @@ router.get('/:id', async (req, res, next) => {
     const first = userResult.recordset[0];
     const roleName = first.roleName || '';
     const isClinician = roleName.toLowerCase().includes('clinician');
-    const centreName = abbreviateCentre(first.CentreName) || null;
+
+    // Collect all distinct centres for this user
+    const centresMap = new Map();
+    for (const row of userResult.recordset) {
+      if (row.centreId != null) {
+        centresMap.set(row.centreId, { centreId: row.centreId, centreName: abbreviateCentre(row.CentreName) });
+      }
+    }
+    const centres = [...centresMap.values()];
+    const centreName = centres.length > 0 ? centres[0].centreName : null;
 
     const [
       activityResult,
@@ -477,17 +484,25 @@ router.get('/:id', async (req, res, next) => {
           WHERE pal.AdminUserId = @userId
         `),
 
-      // Recent activity (last 20)
+      // Recent activity (last 20) — includes full patient name and display ID.
+      // Test patients are excluded so "test" entries never surface in the drawer.
       pool.request()
         .input('userId', sql.BigInt, userId)
         .query(`
           SELECT TOP 20
-            pal.CreatedDateTime                   AS date,
-            pal.Type                              AS type,
-            ISNULL(pal.Description, pal.Type)     AS description,
-            pal.PatientId                         AS patientId
+            pal.CreatedDateTime                                                      AS date,
+            pal.Type                                                                 AS type,
+            ISNULL(pal.Description, pal.Type)                                        AS description,
+            pal.PatientId                                                            AS patientId,
+            NULLIF(LTRIM(RTRIM(ISNULL(pt.FirstName, '') + ' ' + ISNULL(pt.LastName, ''))), '') AS patientName,
+            pt.PatientID                                                             AS patientDisplayId
           FROM PatientAuditLog pal
+          LEFT JOIN Patient pt ON pt.Id = pal.PatientId
           WHERE pal.AdminUserId = @userId
+            AND (pt.Id IS NULL OR (
+              pt.FirstName NOT LIKE '%test%'
+              AND pt.LastName  NOT LIKE '%test%'
+            ))
           ORDER BY pal.CreatedDateTime DESC
         `),
 
@@ -514,7 +529,10 @@ router.get('/:id', async (req, res, next) => {
             `)
         : Promise.resolve({ recordset: [] }),
 
-      // Active + total caseload — clinician only
+      // Active + total caseload — clinician only.
+      // Joins Patient and Centre so test patient / deleted centre rows are excluded,
+      // matching the same filter contract used by activeCaseloadWhere() and the
+      // clinician-caseload drill-down in roleDrillDown.js.
       isClinician
         ? pool.request()
             .input('userId', sql.BigInt, userId)
@@ -523,7 +541,13 @@ router.get('/:id', async (req, res, next) => {
                 SUM(CASE WHEN ap.Status IN ('NotStarted', 'InProgress', 'OnHold') THEN 1 ELSE 0 END) AS activeCaseload,
                 COUNT(*) AS totalCasesAllTime
               FROM AllocatePatient ap
+              JOIN Patient pt ON pt.Id = ap.PatientId
+              JOIN Centre c   ON c.Id  = pt.CentreId
               WHERE ap.ClinicianUserId = @userId
+                AND pt.FirstName NOT LIKE '%test%'
+                AND pt.LastName  NOT LIKE '%test%'
+                AND LOWER(c.CentreName) NOT LIKE '%test%'
+                AND LOWER(c.CentreName) NOT LIKE '%delete%'
             `)
         : Promise.resolve({ recordset: [{ activeCaseload: 0, totalCasesAllTime: 0 }] }),
 
@@ -578,15 +602,32 @@ router.get('/:id', async (req, res, next) => {
       status: first.Status,
       roleName: roleName || null,
       centreName,
-      lastLoginDate: first.LastLoginDateTimeUtc || null,
-      lastActivityDate: act.lastActivityDate || null,
+      centres,
+      lastLoginDate: first.LastLoginDateTimeUtc
+        ? (first.LastLoginDateTimeUtc instanceof Date
+            ? first.LastLoginDateTimeUtc.toISOString()
+            : new Date(first.LastLoginDateTimeUtc).toISOString())
+        : null,
+      lastActivityDate: act.lastActivityDate
+        ? (act.lastActivityDate instanceof Date
+            ? act.lastActivityDate.toISOString()
+            : new Date(act.lastActivityDate).toISOString())
+        : null,
       totalAuditActions: act.totalAuditActions ?? 0,
-      recentActivity: recentResult.recordset.map((r) => ({
-        date: r.date,
-        type: r.type,
-        description: r.description || null,
-        patientId: r.patientId ?? null,
-      })),
+      recentActivity: recentResult.recordset.map((r) => {
+        const dt = r.date instanceof Date ? r.date : new Date(r.date);
+        const iso = isNaN(dt.getTime()) ? null : dt.toISOString();
+        return {
+          isoDateTime: iso,
+          date: iso ? iso.slice(0, 10) : null,
+          time: iso ? iso.slice(11, 16) : null,
+          type: r.type,
+          description: r.description || null,
+          patientId: r.patientId ?? null,
+          patientName: r.patientName || null,
+          patientDisplayId: r.patientDisplayId || null,
+        };
+      }),
     };
 
     if (isClinician) {
@@ -702,18 +743,32 @@ router.get('/:id/profile', async (req, res, next) => {
     }
     const centres = [...centresMap.values()];
 
+    // Build core-job IN clause for this role (safe — validated against VALID_ROLES)
+    const coreJobEvents = CORE_JOB_EVENTS[role] || new Set();
+    const coreJobSqlIn  = coreJobEvents.size
+      ? [...coreJobEvents].map((t) => `'${t}'`).join(', ')
+      : "'__NONE__'";
+
     const [
-      trendResult,
-      breakdownResult,
+      activityByDayResult,
       recentResult,
       summaryResult,
       activeCasesResult,
+      activityCountResult,
     ] = await Promise.all([
-      // Daily activity trend (date range or last 30 days)
+      // Per-day activity with core-job indicators (replaces raw trend)
       bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
         SELECT
           CONVERT(varchar(10), CAST(pal.CreatedDateTime AS DATE), 23) AS date,
-          COUNT(*) AS count
+          COUNT(*) AS totalActions,
+          SUM(CASE WHEN pal.Type IN (${coreJobSqlIn}) THEN 1 ELSE 0 END) AS coreJobCount,
+          SUM(CASE WHEN pal.Type = 'AssessmentResultGenerated' THEN 1 ELSE 0 END) AS assessmentsScored,
+          SUM(CASE WHEN pal.Type IN ('ReportAdded', 'UpdateReport') THEN 1 ELSE 0 END) AS reportsDrafted,
+          SUM(CASE WHEN pal.Type IN ('GoalAdded', 'GoalUpdated') THEN 1 ELSE 0 END) AS goalsAdded,
+          SUM(CASE WHEN pal.Type = 'ReportPDFGenerated' THEN 1 ELSE 0 END) AS reportsApproved,
+          SUM(CASE WHEN pal.Type = 'CaseRegistered' THEN 1 ELSE 0 END) AS casesRegistered,
+          SUM(CASE WHEN pal.Type = 'CaseAssigned' THEN 1 ELSE 0 END) AS cliniciansAssigned,
+          SUM(CASE WHEN pal.Type IN ('ActivityAdded', 'BaselineAdded', 'ProgressAdded') THEN 1 ELSE 0 END) AS caseHistory
         FROM PatientAuditLog pal
         LEFT JOIN Patient p ON p.Id = pal.PatientId
         LEFT JOIN Centre c  ON c.Id = p.CentreId
@@ -725,44 +780,40 @@ router.get('/:id/profile', async (req, res, next) => {
         ORDER BY date
       `),
 
-      // Action type breakdown
+      // Recent actions — with full patient name, test-patient filtered, assessment type
       bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
-        SELECT pal.Type AS type, COUNT(*) AS count
-        FROM PatientAuditLog pal
-        LEFT JOIN Patient p ON p.Id = pal.PatientId
-        LEFT JOIN Centre c  ON c.Id = p.CentreId
-        WHERE pal.AdminUserId = @userId
-          AND ${dateFilterPal}
-          AND (p.Id IS NULL OR (${cpf} AND ${buildCentreExclusion('c')}))
-        GROUP BY pal.Type
-        ORDER BY count DESC
-      `),
-
-      // Recent actions
-      bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
-        SELECT TOP 50
+        SELECT TOP 100
           pal.CreatedDateTime AS time,
           pal.Type            AS type,
-          pal.Description     AS description,
           pal.PatientId       AS patientId,
-          c.CentreName        AS centreName
+          NULLIF(LTRIM(RTRIM(ISNULL(pt.FirstName, '') + ' ' + ISNULL(pt.LastName, ''))), '') AS patientName,
+          c.CentreName        AS centreName,
+          ap.Assessment       AS assessmentType
         FROM PatientAuditLog pal
-        LEFT JOIN Patient p ON p.Id = pal.PatientId
-        LEFT JOIN Centre c  ON c.Id = p.CentreId
+        LEFT JOIN Patient pt          ON pt.Id = pal.PatientId
+        LEFT JOIN Centre c            ON c.Id = pt.CentreId
+        LEFT JOIN AllocatePatient ap  ON ap.Id = pal.AllocatePatientId
         WHERE pal.AdminUserId = @userId
           AND ${dateFilterPal}
-          AND (p.Id IS NULL OR (${cpf} AND ${buildCentreExclusion('c')}))
+          AND (pt.Id IS NULL OR (
+            LOWER(pt.FirstName) NOT LIKE '%test%'
+            AND LOWER(pt.LastName) NOT LIKE '%test%'
+          ))
+          AND (@centreId IS NULL OR pt.Id IS NULL OR pt.CentreId = @centreId)
+          AND (pt.Id IS NULL OR ${buildCentreExclusion('c')})
         ORDER BY pal.CreatedDateTime DESC
       `),
 
-      // Role-specific summary (built per role below)
+      // Role-specific summary (core metrics)
       buildSummaryQuery(pool, role, { userId, centreId, dateFrom, dateTo, centreExclusion, dateFilterPal, cpf, cpfPt }),
 
-      // Active caseload (clinicians only)
+      // Active caseload (clinicians only) — with patient name, assessment type, and pipeline state.
       role === 'clinician'
         ? bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
             SELECT
               ap.PatientId       AS patientId,
+              NULLIF(LTRIM(RTRIM(ISNULL(pt.FirstName, '') + ' ' + ISNULL(pt.LastName, ''))), '') AS patientName,
+              ap.Assessment      AS assessmentType,
               ap.Status          AS status,
               pt.CentreId        AS centreId,
               c.CentreName       AS centreName,
@@ -772,7 +823,47 @@ router.get('/:id/profile', async (req, res, next) => {
                 SELECT MAX(pal2.CreatedDateTime)
                 FROM PatientAuditLog pal2
                 WHERE pal2.PatientId = ap.PatientId AND pal2.AdminUserId = @userId
-              ) AS lastAction
+              ) AS lastAction,
+              -- Pipeline state classification signals
+              CASE WHEN EXISTS (
+                SELECT 1 FROM PatientAuditLog pal
+                WHERE pal.AllocatePatientId = ap.Id
+                  AND pal.Type = 'AssessmentResultGenerated'
+              ) THEN 1 ELSE 0 END AS scoringDone,
+              CASE WHEN EXISTS (
+                SELECT 1 FROM PatientAuditLog pal
+                WHERE pal.AllocatePatientId = ap.Id
+                  AND pal.Type IN ('ReportAdded','ReportPDFGenerated')
+              ) THEN 1 ELSE 0 END AS hasReport,
+              CASE WHEN EXISTS (
+                SELECT 1 FROM PatientAuditLog pal
+                WHERE pal.AllocatePatientId = ap.Id
+                  AND pal.Type = 'AssessmentResultGenerated'
+              ) THEN 1 ELSE 0 END AS reportApproved,
+              CASE WHEN EXISTS (
+                SELECT 1 FROM PatientGoalApprovalRequestGoal pgar
+                JOIN PatientGoalApprovalRequest pga ON pga.Id = pgar.PatientGoalApprovalRequestId
+                WHERE pga.AllocatePatientId = ap.Id
+                  AND pgar.Status = 'Approved'
+              ) THEN 1 ELSE 0 END AS goalsApproved,
+              CASE WHEN (
+                EXISTS (
+                  SELECT 1 FROM PatientAuditLog pal
+                  WHERE pal.AllocatePatientId = ap.Id AND pal.Type = 'ReportAdded'
+                ) AND NOT EXISTS (
+                  SELECT 1 FROM PatientAuditLog pal
+                  WHERE pal.AllocatePatientId = ap.Id AND pal.Type = 'AssessmentResultGenerated'
+                )
+              ) OR (
+                EXISTS (
+                  SELECT 1 FROM PatientAuditLog pal
+                  WHERE pal.AllocatePatientId = ap.Id AND pal.Type = 'GoalsAdded'
+                ) AND NOT EXISTS (
+                  SELECT 1 FROM PatientGoalApprovalRequestGoal pgar
+                  JOIN PatientGoalApprovalRequest pga ON pga.Id = pgar.PatientGoalApprovalRequestId
+                  WHERE pga.AllocatePatientId = ap.Id AND pgar.Status = 'Approved'
+                )
+              ) THEN 1 ELSE 0 END AS pendingApproval
             FROM AllocatePatient ap
             JOIN Patient pt ON pt.Id = ap.PatientId
             JOIN Centre c   ON c.Id = pt.CentreId
@@ -780,12 +871,65 @@ router.get('/:id/profile', async (req, res, next) => {
               AND ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
               AND ${cpfPt}
               AND ${buildCentreExclusion('c')}
+              AND pt.FirstName NOT LIKE '%test%'
+              AND pt.LastName  NOT LIKE '%test%'
             ORDER BY daysSinceAssigned DESC
           `)
         : Promise.resolve({ recordset: [] }),
+
+      // Period-wide action counts (supplementary metrics not in the summary query)
+      bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
+        SELECT
+          SUM(CASE WHEN pal.Type = 'ReportAdded'               THEN 1 ELSE 0 END) AS reportsDrafted,
+          SUM(CASE WHEN pal.Type = 'GoalAdded'                 THEN 1 ELSE 0 END) AS goalsAdded,
+          SUM(CASE WHEN pal.Type = 'ActivityAdded'             THEN 1 ELSE 0 END) AS caseHistoryCompleted,
+          SUM(CASE WHEN pal.Type = 'ReportPDFGenerated'        THEN 1 ELSE 0 END) AS reportsApproved,
+          SUM(CASE WHEN pal.Type = 'AssessmentResultGenerated' THEN 1 ELSE 0 END) AS assessmentsScored
+        FROM PatientAuditLog pal
+        LEFT JOIN Patient p ON p.Id = pal.PatientId
+        WHERE pal.AdminUserId = @userId
+          AND ${dateFilterPal}
+          AND (@centreId IS NULL OR p.Id IS NULL OR p.CentreId = @centreId)
+      `),
     ]);
 
-    const summary = mapSummary(role, summaryResult.recordset[0] || {});
+    const coreMetrics = mapCoreMetrics(role, summaryResult.recordset[0] || {}, activityCountResult.recordset[0] || {});
+
+    // Build activityByDay array
+    const activityByDay = activityByDayResult.recordset.map((r) => ({
+      date:         String(r.date).slice(0, 10),
+      didCoreJob:   r.coreJobCount > 0,
+      coreJobCount: r.coreJobCount,
+      totalActions: r.totalActions,
+      breakdown: {
+        assessmentsScored:  r.assessmentsScored,
+        reportsDrafted:     r.reportsDrafted,
+        goalsAdded:         r.goalsAdded,
+        reportsApproved:    r.reportsApproved,
+        goalsApproved:      0,
+        casesRegistered:    r.casesRegistered,
+        cliniciansAssigned: r.cliniciansAssigned,
+        caseHistory:        r.caseHistory,
+      },
+    }));
+
+    // Consistency score
+    const totalWorkingDays   = countWorkingDays(dateFrom, dateTo);
+    const coreJobDays        = activityByDay.filter((d) => d.didCoreJob).length;
+    const consistencyPercent = totalWorkingDays > 0
+      ? Math.round((coreJobDays / totalWorkingDays) * 100)
+      : 0;
+    const consistencyScore = {
+      totalWorkingDays,
+      coreJobDays,
+      consistencyPercent,
+      status: calcConsistencyStatus(consistencyPercent),
+    };
+
+    // Primary centre name
+    const primaryCentreName = centres.length > 0
+      ? centres.find((c) => c.id === centreId)?.name ?? centres[0].name
+      : null;
 
     res.json({
       user: {
@@ -796,33 +940,52 @@ router.get('/:id/profile', async (req, res, next) => {
         roleName: first.roleName || null,
         lastLoginDate: first.LastLoginDateTimeUtc || null,
         centres,
+        centreName: primaryCentreName,
       },
       role,
-      summary,
-      trend: trendResult.recordset.map((r) => ({
-        date: String(r.date).slice(0, 10),
-        count: r.count,
-      })),
-      actionBreakdown: breakdownResult.recordset.map((r) => ({
-        type: r.type,
-        count: r.count,
-      })),
-      recentActions: recentResult.recordset.map((r) => ({
-        time: r.time,
-        type: r.type,
-        description: r.description || null,
-        patientId: r.patientId ?? null,
-        centreName: abbreviateCentre(r.CentreName) || null,
-      })),
-      activeCases: activeCasesResult.recordset.map((r) => ({
-        patientId: r.patientId,
-        status: r.status,
-        centreId: r.centreId,
-        centreName: abbreviateCentre(r.CentreName) || null,
-        assignedAt: r.assignedAt || null,
-        daysSinceAssigned: r.daysSinceAssigned ?? 0,
-        lastAction: r.lastAction || null,
-      })),
+      coreJobDefinition: CORE_JOB_DEFINITION[role] || '',
+      consistencyScore,
+      coreMetrics,
+      activityByDay,
+      recentActions: recentResult.recordset.map((r) => {
+        const dt  = r.time instanceof Date ? r.time : new Date(r.time);
+        const iso = isNaN(dt.getTime()) ? null : dt.toISOString();
+        return {
+          isoDateTime:    iso,
+          date:           iso ? iso.slice(0, 10) : null,
+          time:           iso ? iso.slice(11, 16) : null,
+          eventType:      translateEvent(r.type),
+          rawType:        r.type || null,
+          assessmentType: r.assessmentType || null,
+          patientName:    r.patientName || null,
+          patientId:      r.patientId != null ? String(r.patientId) : null,
+          centreName:     abbreviateCentre(r.centreName) || null,
+          isCoreJob:      coreJobEvents.has(r.type),
+        };
+      }),
+      activeCases: activeCasesResult.recordset.map((r) => {
+        // Derive pipeline state label from signals
+        let pipelineState = 'in_progress';
+        if (r.goalsApproved)         pipelineState = 'completed';
+        else if (r.pendingApproval)  pipelineState = r.hasReport ? 'goals_pending_approval' : 'report_pending_approval';
+        else if (r.reportApproved)   pipelineState = 'goals_not_added';
+        else if (r.hasReport)        pipelineState = 'report_not_drafted';
+        else if (r.scoringDone)      pipelineState = 'report_not_drafted';
+        else if (r.status === 'NotStarted') pipelineState = 'not_started';
+
+        return {
+          patientId:         r.patientId,
+          patientName:       r.patientName || null,
+          assessmentType:    r.assessmentType || null,
+          status:            r.status,
+          pipelineState,
+          centreId:          r.centreId,
+          centreName:        abbreviateCentre(r.centreName) || null,
+          assignedAt:        r.assignedAt || null,
+          daysSinceAssigned: r.daysSinceAssigned ?? 0,
+          lastAction:        r.lastAction || null,
+        };
+      }),
     });
   } catch (err) {
     next(err);
@@ -835,52 +998,41 @@ async function buildSummaryQuery(pool, role, ctx) {
   if (role === 'clinician') {
     return bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
       SELECT
-        ISNULL(rs.reportPdfCreated, 0) AS resultsGenerated,
-        ISNULL(rs.scoringComplete, 0) AS scoringComplete,
-        ISNULL(rs.reportPdfCreated, 0) AS reportPdfCreated,
-        ISNULL(cs.activeCaseload, 0)   AS activeCaseload,
-        ISNULL(act.totalAuditActions, 0) AS totalAuditActions,
-        ISNULL(act.activeDays, 0) AS activeDays,
-        tat.avgTimeToResultHours,
-        ISNULL(stuck.stuckCases, 0) AS stuckCases
+        ISNULL(rs.scoringComplete, 0) AS assessmentsScored,
+        ISNULL(cs.activeCaseload, 0)  AS activeCaseload,
+        ISNULL(cs.totalCases, 0)      AS totalCases,
+        ISNULL(cs.completedCases, 0)  AS completedCases,
+        tat.avgDaysToResult,
+        ISNULL(stuck.stuckCases, 0)   AS stuckCases
       FROM AdminUser au
       OUTER APPLY (
         SELECT
-          COUNT(DISTINCT CASE WHEN pal2.Type = 'AssessmentResultGenerated' THEN pal2.AllocatePatientId END) AS scoringComplete,
-          COUNT(DISTINCT CASE WHEN pal2.Type = 'ReportPDFGenerated' THEN pal2.AllocatePatientId END) AS reportPdfCreated
+          COUNT(DISTINCT CASE WHEN pal2.Type = 'AssessmentResultGenerated' THEN pal2.AllocatePatientId END) AS scoringComplete
         FROM PatientAuditLog pal2
         JOIN AllocatePatient ap ON ap.Id = pal2.AllocatePatientId
         JOIN Patient pt         ON pt.Id = ap.PatientId
         JOIN Centre rc          ON rc.Id = pt.CentreId
         WHERE ap.ClinicianUserId = au.Id
-          AND pal2.Type IN ('ReportPDFGenerated', 'AssessmentResultGenerated')
+          AND pal2.Type = 'AssessmentResultGenerated'
           AND pal2.AllocatePatientId IS NOT NULL
           AND ${buildDateFilter('pal2.CreatedDateTime', '@dateFrom', '@dateTo')}
           AND ${cpfPt.replace(/\bpt\b/g, 'pt')}
           AND ${buildCentreExclusion('rc')}
       ) rs
       OUTER APPLY (
-        SELECT COUNT(*) AS activeCaseload
+        SELECT
+          COUNT(*) AS totalCases,
+          SUM(CASE WHEN ap.Status NOT IN ('NotStarted', 'InProgress', 'OnHold') THEN 1 ELSE 0 END) AS completedCases,
+          SUM(CASE WHEN ap.Status IN ('NotStarted', 'InProgress', 'OnHold') THEN 1 ELSE 0 END) AS activeCaseload
         FROM AllocatePatient ap
         JOIN Patient pt ON pt.Id = ap.PatientId
-        JOIN Centre cc ON cc.Id = pt.CentreId
+        JOIN Centre cc  ON cc.Id = pt.CentreId
         WHERE ap.ClinicianUserId = au.Id
-          AND ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
           AND ${cpfPt}
           AND ${buildCentreExclusion('cc')}
       ) cs
       OUTER APPLY (
-        SELECT
-          COUNT(*) AS totalAuditActions,
-          COUNT(DISTINCT CAST(pal.CreatedDateTime AS DATE)) AS activeDays
-        FROM PatientAuditLog pal
-        LEFT JOIN Patient p ON p.Id = pal.PatientId
-        WHERE pal.AdminUserId = au.Id
-          AND ${dateFilterPal}
-          AND (p.Id IS NULL OR ${cpf})
-      ) act
-      OUTER APPLY (
-        SELECT AVG(CAST(DATEDIFF(minute, a.assignedAt, r.resultAt) AS FLOAT) / 60.0) AS avgTimeToResultHours
+        SELECT AVG(CAST(DATEDIFF(day, a.assignedAt, r.resultAt) AS FLOAT)) AS avgDaysToResult
         FROM (
           SELECT ap.Id AS allocatePatientId, MIN(pal.CreatedDateTime) AS assignedAt
           FROM AllocatePatient ap
@@ -895,7 +1047,7 @@ async function buildSummaryQuery(pool, role, ctx) {
           JOIN AllocatePatient ap ON ap.Id = pal.AllocatePatientId
           JOIN Patient pt ON pt.Id = ap.PatientId
           WHERE ap.ClinicianUserId = au.Id
-            AND pal.Type = 'ReportPDFGenerated'
+            AND pal.Type = 'AssessmentResultGenerated'
             AND pal.AllocatePatientId IS NOT NULL
             AND ${cpfPt}
           GROUP BY pal.AllocatePatientId
@@ -913,10 +1065,65 @@ async function buildSummaryQuery(pool, role, ctx) {
           AND NOT EXISTS (
             SELECT 1 FROM PatientAuditLog pal3
             WHERE pal3.AllocatePatientId = ap.Id
-              AND pal3.Type IN ('ReportPDFGenerated', 'AssessmentResultGenerated')
+              AND pal3.Type = 'AssessmentResultGenerated'
           )
           AND ${cpfPt}
       ) stuck
+      OUTER APPLY (
+        SELECT
+          -- scoring: assigned but no AssessmentResultGenerated, not completed
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
+            AND NOT EXISTS (
+              SELECT 1 FROM PatientAuditLog pal4
+              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'AssessmentResultGenerated'
+            )
+            THEN 1 END) AS plScoring,
+          -- reportsToWrite: result generated but no ReportAdded
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
+            AND EXISTS (
+              SELECT 1 FROM PatientAuditLog pal4
+              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'AssessmentResultGenerated'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM PatientAuditLog pal4
+              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportAdded'
+            )
+            THEN 1 END) AS plReportsToWrite,
+          -- goalsToAdd: ReportPDFGenerated but no goal request (and no approved goal)
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
+            AND EXISTS (
+              SELECT 1 FROM PatientAuditLog pal4
+              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportPDFGenerated'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM PatientGoalApprovalRequest pgar6
+              WHERE pgar6.AllocatePatientId = ap.Id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM PatientGoalApprovalRequest pgar7
+              JOIN PatientGoalApprovalRequestGoal pgarg7 ON pgarg7.PatientGoalApprovalRequestId = pgar7.Id
+              WHERE pgar7.AllocatePatientId = ap.Id AND pgarg7.Status = 'Approved'
+            )
+            THEN 1 END) AS plGoalsToAdd,
+          -- pendingApproval: report or goals awaiting manager action
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
+            AND (
+              (EXISTS (SELECT 1 FROM PatientAuditLog pal4 WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportAdded')
+               AND NOT EXISTS (SELECT 1 FROM PatientAuditLog pal4 WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportPDFGenerated'))
+              OR
+              (EXISTS (SELECT 1 FROM PatientGoalApprovalRequest pgar8 WHERE pgar8.AllocatePatientId = ap.Id)
+               AND NOT EXISTS (
+                  SELECT 1 FROM PatientGoalApprovalRequest pgar9
+                  JOIN PatientGoalApprovalRequestGoal pgarg9 ON pgarg9.PatientGoalApprovalRequestId = pgar9.Id
+                  WHERE pgar9.AllocatePatientId = ap.Id AND pgarg9.Status = 'Approved'
+               ))
+            )
+            THEN 1 END) AS plPendingApproval
+        FROM AllocatePatient ap
+        JOIN Patient pt ON pt.Id = ap.PatientId
+        WHERE ap.ClinicianUserId = au.Id
+          AND ${cpfPt}
+      ) pl
       WHERE au.Id = @userId
     `);
   }
@@ -924,60 +1131,85 @@ async function buildSummaryQuery(pool, role, ctx) {
   if (role === 'manager') {
     return bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
       SELECT
-        SUM(CASE WHEN pal.Type = 'CaseRegistered' AND ${cpf} THEN 1 ELSE 0 END) AS casesRegistered,
-        SUM(CASE WHEN pal.Type = 'CaseAssigned'   AND ${cpf} THEN 1 ELSE 0 END) AS assessmentsAssigned,
-        SUM(CASE WHEN p.Id IS NOT NULL AND ${cpf} THEN 1 ELSE 0 END) AS totalActions,
-        ISNULL(stuck.stuckOnboarding, 0) AS stuckOnboarding,
-        onboard.avgOnboardingHours,
-        ISNULL(xfers.transfers, 0) AS transfers,
-        ISNULL(xfers.statusChanges, 0) AS statusChanges
+        SUM(CASE WHEN pal.Type = 'CaseRegistered'    AND ${cpf} THEN 1 ELSE 0 END) AS casesRegistered,
+        SUM(CASE WHEN pal.Type = 'ReportPDFGenerated' AND ${cpf} THEN 1 ELSE 0 END) AS reportsApproved,
+        ISNULL(goals.goalsApproved, 0)    AS goalsApproved,
+        ISNULL(goals.pendingApprovals, 0) AS pendingApprovals,
+        ISNULL(goals.avgDaysToApproveGoal, NULL) AS avgDaysToApproveGoal,
+        rptTat.avgDaysToApproveReport,
+        ISNULL(ptApproval.reportsToApprove, 0) AS reportsToApprove,
+        ISNULL(ptApproval.goalsToApprove, 0)   AS goalsToApprove
       FROM AdminUser au
       LEFT JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id AND ${dateFilterPal}
       LEFT JOIN Patient p ON p.Id = pal.PatientId
       LEFT JOIN Centre c  ON c.Id = p.CentreId
       OUTER APPLY (
-        SELECT COUNT(DISTINCT pal_reg.PatientId) AS stuckOnboarding
-        FROM PatientAuditLog pal_reg
-        JOIN Patient pt ON pt.Id = pal_reg.PatientId
-        WHERE pal_reg.AdminUserId = au.Id
-          AND pal_reg.Type = 'CaseRegistered'
-          AND pal_reg.CreatedDateTime < DATEADD(hour, -48, SYSDATETIMEOFFSET())
-          AND ${cpfPt.replace(/\bpt\b/g, 'pt')}
-          AND NOT EXISTS (
-            SELECT 1 FROM PatientAuditLog p2
-            WHERE p2.PatientId = pal_reg.PatientId AND p2.Type = 'CaseAssigned'
-          )
-      ) stuck
+        SELECT
+          SUM(CASE WHEN pgarg.Status = 'Approved' THEN 1 ELSE 0 END) AS goalsApproved,
+          SUM(CASE WHEN pgarg.Status NOT IN ('Approved','Rejected') THEN 1 ELSE 0 END) AS pendingApprovals,
+          AVG(
+            CASE WHEN pgarg.Status = 'Approved'
+              AND pgarg.UpdatedDateTimeUtc > pgar.CreatedDateTimeUtc
+            THEN CAST(DATEDIFF(day, pgar.CreatedDateTimeUtc, pgarg.UpdatedDateTimeUtc) AS FLOAT)
+            ELSE NULL END
+          ) AS avgDaysToApproveGoal
+        FROM PatientGoalApprovalRequestGoal pgarg
+        JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+        JOIN AllocatePatient ap              ON ap.Id  = pgar.AllocatePatientId
+        JOIN Patient pt                      ON pt.Id  = ap.PatientId
+        WHERE pt.CentreId IN (
+          SELECT auc.CentreId FROM AdminUserCentre auc WHERE auc.AdminUserId = au.Id
+        )
+          AND ${dateFrom || dateTo ? buildDateFilter('pgar.CreatedDateTimeUtc', '@dateFrom', '@dateTo') : '1=1'}
+      ) goals
       OUTER APPLY (
-        SELECT AVG(CAST(DATEDIFF(minute, r.registeredAt, a.assignedAt) AS FLOAT) / 60.0) AS avgOnboardingHours
+        SELECT AVG(CAST(DATEDIFF(day, drafted.draftedAt, approved.approvedAt) AS FLOAT)) AS avgDaysToApproveReport
         FROM (
-          SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS registeredAt
-          FROM PatientAuditLog pal
-          JOIN Patient pt ON pt.Id = pal.PatientId
-          WHERE pal.AdminUserId = au.Id AND pal.Type = 'CaseRegistered' AND ${cpfPt}
-          GROUP BY pal.PatientId
-        ) r
+          SELECT pal_d.AllocatePatientId, MIN(pal_d.CreatedDateTime) AS draftedAt
+          FROM PatientAuditLog pal_d
+          WHERE pal_d.Type = 'ReportAdded' AND pal_d.AllocatePatientId IS NOT NULL
+          GROUP BY pal_d.AllocatePatientId
+        ) drafted
         JOIN (
-          SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS assignedAt
-          FROM PatientAuditLog pal
-          WHERE pal.Type = 'CaseAssigned'
-          GROUP BY pal.PatientId
-        ) a ON a.PatientId = r.PatientId
-        WHERE a.assignedAt > r.registeredAt
-      ) onboard
+          SELECT pal_a.AllocatePatientId, MIN(pal_a.CreatedDateTime) AS approvedAt
+          FROM PatientAuditLog pal_a
+          WHERE pal_a.AdminUserId = au.Id
+            AND pal_a.Type = 'ReportPDFGenerated'
+            AND pal_a.AllocatePatientId IS NOT NULL
+          GROUP BY pal_a.AllocatePatientId
+        ) approved ON approved.AllocatePatientId = drafted.AllocatePatientId
+        WHERE approved.approvedAt > drafted.draftedAt
+      ) rptTat
       OUTER APPLY (
         SELECT
-          SUM(CASE WHEN pal.Type = 'CaseTransfer' THEN 1 ELSE 0 END) AS transfers,
-          SUM(CASE WHEN pal.Type = 'CaseStatusChanged' THEN 1 ELSE 0 END) AS statusChanges
-        FROM PatientAuditLog pal
-        LEFT JOIN Patient p ON p.Id = pal.PatientId
-        WHERE pal.AdminUserId = au.Id
-          AND pal.Type IN ('CaseTransfer', 'CaseStatusChanged')
-          AND ${dateFilterPal}
-          AND (p.Id IS NULL OR ${cpf})
-      ) xfers
+          -- reports currently awaiting approval (drafted but not yet PDF-generated)
+          SUM(CASE WHEN rptDrafted.apId IS NOT NULL AND rptApproved.apId IS NULL THEN 1 ELSE 0 END) AS reportsToApprove,
+          -- goal sets currently awaiting approval
+          SUM(CASE WHEN pgar2.Id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM PatientGoalApprovalRequestGoal g2
+            WHERE g2.PatientGoalApprovalRequestId = pgar2.Id
+              AND g2.Status = 'Approved'
+          ) THEN 1 ELSE 0 END) AS goalsToApprove
+        FROM AdminUserCentre auc2
+        JOIN Patient pt2   ON pt2.CentreId = auc2.CentreId
+        JOIN AllocatePatient ap2 ON ap2.PatientId = pt2.Id
+          AND ap2.Status NOT IN ('Completed')
+        LEFT JOIN (
+          SELECT DISTINCT pal3.AllocatePatientId AS apId
+          FROM PatientAuditLog pal3
+          WHERE pal3.Type = 'ReportAdded'
+        ) rptDrafted ON rptDrafted.apId = ap2.Id
+        LEFT JOIN (
+          SELECT DISTINCT pal4.AllocatePatientId AS apId
+          FROM PatientAuditLog pal4
+          WHERE pal4.Type = 'ReportPDFGenerated'
+        ) rptApproved ON rptApproved.apId = ap2.Id
+        LEFT JOIN PatientGoalApprovalRequest pgar2 ON pgar2.AllocatePatientId = ap2.Id
+        WHERE auc2.AdminUserId = au.Id
+      ) ptApproval
       WHERE au.Id = @userId
-      GROUP BY au.Id, stuck.stuckOnboarding, onboard.avgOnboardingHours, xfers.transfers, xfers.statusChanges
+      GROUP BY au.Id, goals.goalsApproved, goals.pendingApprovals, goals.avgDaysToApproveGoal,
+               rptTat.avgDaysToApproveReport, ptApproval.reportsToApprove, ptApproval.goalsToApprove
     `);
   }
 
@@ -985,16 +1217,15 @@ async function buildSummaryQuery(pool, role, ctx) {
   return bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
     SELECT
       SUM(CASE WHEN pal.Type = 'CaseRegistered' AND ${cpf} THEN 1 ELSE 0 END) AS casesRegistered,
-      SUM(CASE WHEN pal.Type = 'CaseAssigned'   AND ${cpf} THEN 1 ELSE 0 END) AS casesAssignedToClinical,
-      SUM(CASE WHEN p.Id IS NOT NULL AND ${cpf} THEN 1 ELSE 0 END) AS totalActions,
-      route.avgRoutingHours,
-      ISNULL(sameDay.sameDayRoutingPct, 0) AS sameDayRoutingPct
+      SUM(CASE WHEN pal.Type = 'CaseAssigned'   AND ${cpf} THEN 1 ELSE 0 END) AS cliniciansAssigned,
+      route.avgDaysToAssign,
+      ISNULL(stuck.stuckOnboarding, 0) AS stuckOnboarding
     FROM AdminUser au
     LEFT JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id AND ${dateFilterPal}
     LEFT JOIN Patient p ON p.Id = pal.PatientId
     LEFT JOIN Centre c  ON c.Id = p.CentreId
     OUTER APPLY (
-      SELECT AVG(CAST(DATEDIFF(minute, r.registeredAt, a.assignedAt) AS FLOAT) / 60.0) AS avgRoutingHours
+      SELECT AVG(CAST(DATEDIFF(day, r.registeredAt, a.assignedAt) AS FLOAT)) AS avgDaysToAssign
       FROM (
         SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS registeredAt
         FROM PatientAuditLog pal
@@ -1011,72 +1242,71 @@ async function buildSummaryQuery(pool, role, ctx) {
       WHERE a.assignedAt > r.registeredAt
     ) route
     OUTER APPLY (
-      SELECT
-        CASE WHEN COUNT(*) = 0 THEN 0
-        ELSE CAST(SUM(CASE WHEN DATEDIFF(hour, r.registeredAt, a.assignedAt) <= 24 THEN 1 ELSE 0 END) AS FLOAT)
-             / COUNT(*) * 100
-        END AS sameDayRoutingPct
-      FROM (
-        SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS registeredAt
-        FROM PatientAuditLog pal
-        JOIN Patient pt ON pt.Id = pal.PatientId
-        WHERE pal.AdminUserId = au.Id AND pal.Type = 'CaseRegistered' AND ${cpfPt}
-          AND ${dateFilterPal.replace(/pal\./g, 'pal.')}
-        GROUP BY pal.PatientId
-      ) r
-      JOIN (
-        SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS assignedAt
-        FROM PatientAuditLog pal
-        WHERE pal.Type = 'CaseAssigned'
-        GROUP BY pal.PatientId
-      ) a ON a.PatientId = r.PatientId
-      WHERE a.assignedAt > r.registeredAt
-    ) sameDay
+      SELECT COUNT(DISTINCT pal_reg.PatientId) AS stuckOnboarding
+      FROM PatientAuditLog pal_reg
+      JOIN Patient pt ON pt.Id = pal_reg.PatientId
+      WHERE pal_reg.AdminUserId = au.Id
+        AND pal_reg.Type = 'CaseRegistered'
+        AND pal_reg.CreatedDateTime < DATEADD(hour, -48, SYSDATETIMEOFFSET())
+        AND ${cpfPt.replace(/\bpt\b/g, 'pt')}
+        AND NOT EXISTS (
+          SELECT 1 FROM PatientAuditLog p2
+          WHERE p2.PatientId = pal_reg.PatientId AND p2.Type = 'CaseAssigned'
+        )
+    ) stuck
     WHERE au.Id = @userId
-    GROUP BY au.Id, route.avgRoutingHours, sameDay.sameDayRoutingPct
+    GROUP BY au.Id, route.avgDaysToAssign, stuck.stuckOnboarding
   `);
 }
 
-function mapSummary(role, row) {
+function mapCoreMetrics(role, summaryRow, countRow) {
   if (role === 'clinician') {
-    const results = row.resultsGenerated ?? 0;
-    const caseload = row.activeCaseload ?? 0;
-    const denom = results + caseload;
+    const scored = summaryRow.assessmentsScored ?? 0;
+    const active = summaryRow.activeCaseload    ?? 0;
     return {
-      resultsGenerated: results,
-      activeCaseload: caseload,
-      yield: denom > 0 ? Math.round((results / denom) * 100) : null,
-      totalAuditActions: row.totalAuditActions ?? 0,
-      activeDays: row.activeDays ?? 0,
-      avgTimeToResultHours: row.avgTimeToResultHours != null ? Math.round(row.avgTimeToResultHours * 10) / 10 : null,
-      stuckCases: row.stuckCases ?? 0,
+      assessmentsScored:    scored,
+      reportsDrafted:       countRow.reportsDrafted      ?? 0,
+      goalsAdded:           countRow.goalsAdded          ?? 0,
+      caseHistoryCompleted: countRow.caseHistoryCompleted ?? 0,
+      activeCaseload:       active,
+      avgDaysToResult:      summaryRow.avgDaysToResult != null
+        ? Math.round(summaryRow.avgDaysToResult * 10) / 10
+        : null,
+      stuckCases: summaryRow.stuckCases ?? 0,
+      pipelineBreakdown: {
+        scoring:        summaryRow.plScoring        ?? 0,
+        reportsToWrite: summaryRow.plReportsToWrite ?? 0,
+        goalsToAdd:     summaryRow.plGoalsToAdd     ?? 0,
+        pendingApproval: summaryRow.plPendingApproval ?? 0,
+      },
     };
   }
 
   if (role === 'manager') {
-    const registered = row.casesRegistered ?? 0;
-    const assigned = row.assessmentsAssigned ?? 0;
     return {
-      casesRegistered: registered,
-      assessmentsAssigned: assigned,
-      handoffRate: registered > 0 ? Math.round((assigned / registered) * 100) : null,
-      totalActions: row.totalActions ?? 0,
-      stuckOnboarding: row.stuckOnboarding ?? 0,
-      avgOnboardingHours: row.avgOnboardingHours != null ? Math.round(row.avgOnboardingHours * 10) / 10 : null,
-      transfers: row.transfers ?? 0,
-      statusChanges: row.statusChanges ?? 0,
+      reportsApproved:      summaryRow.reportsApproved     ?? 0,
+      goalsApproved:        summaryRow.goalsApproved       ?? 0,
+      casesRegistered:      summaryRow.casesRegistered     ?? 0,
+      avgDaysToApproveReport: summaryRow.avgDaysToApproveReport != null
+        ? Math.round(summaryRow.avgDaysToApproveReport * 10) / 10
+        : null,
+      avgDaysToApproveGoal: summaryRow.avgDaysToApproveGoal != null
+        ? Math.round(summaryRow.avgDaysToApproveGoal * 10) / 10
+        : null,
+      pendingApprovals:  summaryRow.pendingApprovals  ?? 0,
+      reportsToApprove:  summaryRow.reportsToApprove  ?? 0,
+      goalsToApprove:    summaryRow.goalsToApprove    ?? 0,
     };
   }
 
-  const registered = row.casesRegistered ?? 0;
-  const assigned = row.casesAssignedToClinical ?? 0;
+  // centre-admin
   return {
-    casesRegistered: registered,
-    casesAssignedToClinical: assigned,
-    routingRate: registered > 0 ? Math.round((assigned / registered) * 100) : null,
-    totalActions: row.totalActions ?? 0,
-    avgRoutingHours: row.avgRoutingHours != null ? Math.round(row.avgRoutingHours * 10) / 10 : null,
-    sameDayRoutingPct: row.sameDayRoutingPct != null ? Math.round(row.sameDayRoutingPct) : null,
+    casesRegistered:  summaryRow.casesRegistered  ?? 0,
+    cliniciansAssigned: summaryRow.cliniciansAssigned ?? 0,
+    avgDaysToAssign:  summaryRow.avgDaysToAssign != null
+      ? Math.round(summaryRow.avgDaysToAssign * 10) / 10
+      : null,
+    stuckOnboarding:  summaryRow.stuckOnboarding ?? 0,
   };
 }
 

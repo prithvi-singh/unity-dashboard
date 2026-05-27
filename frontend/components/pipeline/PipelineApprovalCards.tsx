@@ -30,7 +30,7 @@ function RateCard({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 animate-pulse">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4 animate-pulse">
         <div className="h-4 w-32 bg-gray-100 rounded" />
         <div className="h-12 w-24 bg-gray-100 rounded" />
         <div className="h-3 w-48 bg-gray-50 rounded" />
@@ -39,7 +39,7 @@ function RateCard({
   }
 
   return (
-    <div className={`bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-6 ring-2 ${color.ring} transition-all`}>
+    <div className={`bg-white rounded-xl border border-gray-200 p-6 ring-2 ${color.ring} transition-all`}>
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-[0.07em]">{title}</h3>

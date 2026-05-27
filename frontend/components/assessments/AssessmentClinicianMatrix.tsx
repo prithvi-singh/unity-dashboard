@@ -113,14 +113,14 @@ export default function AssessmentClinicianMatrix({ data, loading }: Props) {
   const totalClinicians = data?.byClinician.length ?? 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1">
-            <h2 className="text-sm font-semibold text-gray-900">Clinician Matrix</h2>
+            <h2 className="text-[14px] font-medium text-gray-900">Clinician Matrix</h2>
             <KpiTooltip {...MATRIX_TOOLTIP} />
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-[12px] text-gray-500 mt-0.5">
             {totalClinicians} clinician{totalClinicians !== 1 ? 's' : ''} · grey = none · red = low completion
           </p>
         </div>

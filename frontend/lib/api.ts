@@ -1,5 +1,6 @@
 import type {
   FilterParams,
+  CoreMetrics,
   OverviewData,
   Clinician,
   Manager,
@@ -15,6 +16,10 @@ import type {
   WorkloadCentreRow,
   ReportPdfCentre,
   TopPerformersResponse,
+  DailyReviewData,
+  CentresOverviewData,
+  CentreDetailData,
+  IssuesData,
 } from './types';
 import type {
   BottleneckDrillDownParams,
@@ -39,8 +44,9 @@ function buildQuery(params: FilterParams): string {
   return str ? `?${str}` : '';
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { cache: 'no-store' });
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((body as { error?: string }).error || `Request failed: ${res.status}`);
@@ -48,8 +54,12 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchOverview(params: FilterParams = {}): Promise<OverviewData> {
-  return get<OverviewData>(`/api/overview${buildQuery(params)}`);
+export function fetchMetrics(params: FilterParams = {}): Promise<CoreMetrics> {
+  return get<CoreMetrics>(`/api/metrics${buildQuery(params)}`);
+}
+
+export function fetchOverview(params: FilterParams = {}, signal?: AbortSignal): Promise<OverviewData> {
+  return get<OverviewData>(`/api/overview${buildQuery(params)}`, signal);
 }
 
 export function fetchReportPdfs(params: FilterParams = {}): Promise<ReportPdfCentre[]> {
@@ -157,9 +167,27 @@ export function fetchWorkload(params: FilterParams = {}): Promise<WorkloadCentre
   return get<WorkloadCentreRow[]>(`/api/workload${buildQuery(params)}`);
 }
 
+export function fetchCentresOverview(params: FilterParams = {}): Promise<CentresOverviewData> {
+  return get<CentresOverviewData>(`/api/centres/overview${buildQuery(params)}`);
+}
+
+export function fetchCentreDetail(centreId: number, params: FilterParams = {}): Promise<CentreDetailData> {
+  return get<CentreDetailData>(`/api/centres/${centreId}/detail${buildQuery(params)}`);
+}
+
+export function fetchDailyReview(date: string, centreId?: number): Promise<DailyReviewData> {
+  const q = new URLSearchParams({ date });
+  if (centreId != null) q.set('centreId', String(centreId));
+  return get<DailyReviewData>(`/api/daily-review?${q.toString()}`);
+}
+
 export interface TopPerformersParams extends FilterParams {
   role?:  string;
   limit?: number;
+}
+
+export function fetchIssues(): Promise<IssuesData> {
+  return get<IssuesData>('/api/issues');
 }
 
 export function fetchTopPerformers(params: TopPerformersParams = {}): Promise<TopPerformersResponse> {

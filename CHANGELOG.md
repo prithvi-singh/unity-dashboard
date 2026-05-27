@@ -6,6 +6,120 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.0] - 2026-05-27
+
+### Backend — New Routes
+
+- `GET /api/metrics` — debug endpoint exposing the raw `metricsService` result; useful for verifying numbers match across tabs
+- `GET /api/monitoring/top-performers` — top performers ranked by role-specific clinical output score (Clinician: assessments + reports + goals; Manager: approvals; Ops Admin: registrations + assignments); supports centre and date filters
+- `GET /api/daily-review` — daily operational review data for the Daily Ops Review section
+- `GET /api/centres` — per-centre operational overview with centre status classification (`blocked` / `needs-attention` / `ok`) based on stuck cases, completion rate, and staff activity
+- `GET /api/issues` — all active assessments grouped by pipeline state with per-case severity levels (`watching` / `warning` / `critical`) and responsible-party attribution; point-in-time, no date filter
+- `GET /api/workload` — per-centre workload metrics: active caseload (live snapshot), reports drafted, report edits, PDFs approved
+- `GET /api/role` — role drill-down endpoint
+- Refactored `GET /api/overview` to consume `metricsService` so overview numbers are guaranteed to match all other tabs
+- Added `GET /api/bottlenecks/drill-down` for bottleneck detail expansion
+
+### Backend — Infrastructure and Libraries
+
+- **`services/metricsService.js`** — centralised single source of truth for all core dashboard metrics; runs all core queries in a single parallel batch; smart TTL cache (60 s for live periods, 30 min for historical periods) so two tabs with the same filters share one DB hit and see identical numbers
+- **`lib/routeCache.js`** — lightweight in-memory route cache utility; `makeCache(ttlMs)` returns a per-route `get(key)` / `set(key, value)` pair
+- **`lib/queryHelpers.js`** — shared SQL helper functions: `parseDateParam`, `buildDateFilter`, `buildCentreExclusion`, `buildPatientExclusion`; single place to update filter logic
+- **`utils/assessmentState.js`** — single source of truth for the 7-state clinical pipeline classifier:
+  - `NOT_STARTED` → `IN_PROGRESS` → `REPORT_NOT_DRAFTED` → `REPORT_PENDING_APPROVAL` → `GOALS_NOT_ADDED` → `GOALS_PENDING_APPROVAL` → `COMPLETED`
+  - Three completion paths detected (direct status, `CaseStatusChanged` audit event, approved goal)
+  - `TERMINAL_STATUSES`, `EXCLUDED_STATUSES`, `THRESHOLDS`, `STATE_LABELS`, `STATE_RESPONSIBLE` constants
+  - Helper predicates: `isStuckAtScoring`, `isManagerBlocked`, `isClinicianBlocked`
+  - SQL fragment helper: `terminalStatusExclusion(alias)`
+- **`lib/clinicalPipelineQueries.js`** — shared pipeline query builder and row mapper used by both `metricsService` and `pipeline` route
+- **`lib/formatters.js`** — shared formatting utilities including `abbreviateCentre` (applied consistently across all routes)
+- **`lib/auditEventLabels.js`** — human-readable labels for all `PatientAuditLog.Type` values
+- **`lib/pipelineDetailExprs.js`** — SQL column expressions for pipeline stage detail shared across queries
+- **`utils/filters.js`** — unified filter constants and helpers
+- **`utils/metrics.js`** — shared `FILTERS` object with `centreExclusion`, `patientExclusion`, `userExclusionStrict` helpers; used by every route and `metricsService`
+- Self-ping warmup added to server startup: pings `/api/health` (or `SELF_PING_URL`) every 4 minutes to prevent Azure Container App idle scale-down
+- Performance timing middleware logs all requests with latency; warns on requests >1 second
+- Schema discovery now runs on dev startup only, not production
+
+### Backend — Data Integrity and Bug Fixes
+
+- **Assessment state classifier** fixes the "completed assessments showing as overdue" bug: `AllocatePatient.Status = 'Completed'` is checked first, before any audit-log-based logic, covering cases that pre-date the goal workflow and lack `AssessmentResultGenerated` events
+- Verified all status values in `AllocatePatient.Status`: `NotStarted` (292), `InProgress` (211), `Completed` (54), `OnHold` (14) — no `Closed`, `Cancelled`, or `Inactive` values exist
+- `ReportAdded`-only counting enforced across all routes (never `UpdateReport`) to prevent report-edit inflation
+- `@mailinator.com` added to test-user exclusion filter in all routes
+- `(Ops)` suffix in `FirstName`/`LastName` used to distinguish Ops Admins from Centre Managers in all queries
+- Data discrepancy in active caseload queries resolved — now consistently uses non-terminal `AllocatePatient` rows (live snapshot, not date-filtered)
+- Consistent `buildCentreExclusion` / `buildPatientExclusion` applied at SQL level across every route
+
+### Frontend — New Tabs and Major Sections
+
+- **Issues tab** (`/issues`) — complete redesign; assessments grouped by pipeline state with colour-coded severity chips; responsible-party badge (Clinician / Manager) on each group; expandable per-state tables with case name, assessment type, clinician, centre, and days waiting; compact header
+- **Centres tab** (`/centres`) — per-centre status cards with `blocked` / `needs-attention` / `ok` classification; staff activity, completion rate, and stuck-case counts
+- **Pipeline tab** — layout redesign; separate `PipelineFunnel` and `PipelineApprovalCards` components; manager approval performance cards
+- **Daily Ops Review section** rebuilt as a dedicated view
+
+### Frontend — Overview Tab Redesign
+
+- New `PeriodSummary` component — headline numbers for the selected period
+- New `YesterdayOutput` component — yesterday's clinical output at a glance
+- New `EventTypeChart` component — audit event breakdown by type
+- New `ActionFeed` component — chronological list of recent audit activity
+- New `IdleCentresDrawer` component — slide-over listing idle centres with context
+- New `MultipleAssessmentCasesPanel` component — cases with more than one concurrent active assessment
+- `MetricCards` and `ActiveCentresPanel` updated to consume `metricsService`-backed data
+
+### Frontend — Monitoring Tab Enhancements
+
+- `DayPicker` component for selecting a specific day in the calendar view
+- `ActivityHeatmap` — heatmap of user activity by day and hour
+- `LivePulse` — live-updating pulse indicator
+- `MonitoringEngagementFunnel` — funnel showing active → scoring → reporting engagement
+- Top performers calendar view restored and fixed
+
+### Frontend — Users Tab Enhancements
+
+- `UserKpiCards` — KPI chips at the top of the Users tab
+- `UserTrendChart` — user activity trend over the selected period
+- `UserActionBreakdown` — per-action-type breakdown for a user
+- `UserConsistencyHeatmap` — consistency heatmap for individual users
+- `ActiveCaseloadTable` — live caseload table on the user profile page
+- `RecentActionsTable` — recent audit actions on the user profile page
+- `UserProfileLink` — inline link component that deep-links to a user profile page
+
+### Frontend — Assessments Tab Enhancements
+
+- `AssessmentTypeCards` — per-type KPI cards (SPM, DP3, REELS, ISAA)
+- `AssessmentCompletionChart` — completion rate trend chart
+- `AssessmentClinicianMatrix` — clinician × assessment-type output matrix
+- `OverdueAssessmentsTable` — list of assessments past threshold, sorted by days overdue
+
+### Frontend — Bottlenecks Tab Enhancements
+
+- `BottleneckFunnel` — pipeline funnel visualisation showing where cases are accumulating
+- `BottleneckByCentre` — per-centre bottleneck breakdown
+- `BottleneckActionTable` — actionable table of assessments requiring immediate attention
+- `BottleneckCards` — top-line bottleneck metric cards
+- `BottleneckDrillDownPanel` — expandable detail panel for a bottleneck stage
+
+### Frontend — Shared Components
+
+- `DrillDownTable` and `DrillDownDetailLines` — reusable drill-down table with expandable detail rows
+- `RoleDrillDownPanel` — reusable panel for role-specific metric drill-down
+- `RoleCentreTable` and `RoleCentreChart` — shared role × centre breakdown table and chart
+- `PersonActivityChart` — per-person activity trend chart used across Clinicians, Managers, and Users tabs
+- `ScrollRegion` — scroll-container wrapper with consistent overflow behaviour
+- `ExportExcelButton` — one-click XLSX export for any table in the dashboard
+- `KpiTooltip` — standardised `ⓘ` tooltip component used on all KPI cards
+
+### Frontend — Navigation and UX
+
+- Clickable navigation for profile pages — any name in any table is now a link to that user's profile
+- Tab navigation positioning and layout fixes
+- Managers tab 500-error bug fixed (bad join on missing `roleDrillDown` route)
+- Centre names abbreviated consistently everywhere using shared `abbreviateCentre` helper
+
+---
+
 ## [1.0.0] - 2026-05-26
 
 ### Infrastructure
@@ -109,4 +223,5 @@ Applied at SQL level across all routes — no application-layer filtering:
 
 ---
 
+[1.1.0]: https://github.com/momsbelief/unity-dashboard/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/momsbelief/unity-dashboard/releases/tag/v1.0.0

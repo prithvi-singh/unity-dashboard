@@ -7,8 +7,10 @@ import type {
   UserBreakdownCentre,
   RosterListUser,
 } from '@/lib/types';
+import { useMetrics } from '@/lib/metricsContext';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
+import SharedRoleBadge, { formatRoleName } from '@/components/shared/RoleBadge';
 import UserProfileDrawer from './UserProfileDrawer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,46 +51,20 @@ function pctOf(part: number, total: number): string {
     : `${pct.toFixed(1)}%`;
 }
 
-/** Convert CamelCase role names to plain English: "CentreManager" → "Centre Manager" */
-function formatRoleName(roleName: string): string {
-  if (!roleName) return roleName;
-  return roleName.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
-}
-
-// ── Role badge colours ────────────────────────────────────────────────────────
-
-const ROLE_BADGE: Record<string, string> = {
-  clinician:     'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-  manager:       'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
-  'centre admin':'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
-  admin:         'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
-};
-
-function getRoleBadge(roleName: string): string {
-  const lower = roleName.toLowerCase();
-  for (const [key, style] of Object.entries(ROLE_BADGE)) {
-    if (lower.includes(key)) return style;
-  }
-  return 'bg-gray-50 text-gray-500 ring-1 ring-gray-200';
-}
-
 function RoleBadge({ roleName }: { roleName: string }) {
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${getRoleBadge(roleName)}`}>
-      {formatRoleName(roleName)}
-    </span>
-  );
+  return <SharedRoleBadge role={roleName} />;
 }
 
-// ── Role accent colours ───────────────────────────────────────────────────────
+// ── Role accent colours (dot + text badge for RoleBreakdownTable) ─────────────
 
-const ROLE_ACCENT: Array<{ match: string; dot: string; bg: string; text: string }> = [
-  { match: 'clinician',    dot: 'bg-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700'   },
-  { match: 'manager',      dot: 'bg-violet-500', bg: 'bg-violet-50', text: 'text-violet-700' },
-  { match: 'centre admin', dot: 'bg-teal-500',   bg: 'bg-teal-50',   text: 'text-teal-700'   },
-  { match: 'admin',        dot: 'bg-teal-500',   bg: 'bg-teal-50',   text: 'text-teal-700'   },
+const ROLE_ACCENT: Array<{ match: string; dotStyle: string; bg: string; fg: string }> = [
+  { match: 'clinician',    dotStyle: 'bg-[#0C447C]',  bg: '#E6F1FB', fg: '#0C447C' },
+  { match: 'manager',      dotStyle: 'bg-[#3B6D11]',  bg: '#EAF3DE', fg: '#3B6D11' },
+  { match: 'centre admin', dotStyle: 'bg-[#0F6E56]',  bg: '#E1F5EE', fg: '#0F6E56' },
+  { match: 'admin',        dotStyle: 'bg-[#0F6E56]',  bg: '#E1F5EE', fg: '#0F6E56' },
+  { match: 'super',        dotStyle: 'bg-[#3C3489]',  bg: '#EEEDFE', fg: '#3C3489' },
 ];
-const ROLE_ACCENT_DEFAULT = { dot: 'bg-gray-400', bg: 'bg-gray-50', text: 'text-gray-600' };
+const ROLE_ACCENT_DEFAULT = { dotStyle: 'bg-gray-400', bg: '#F3F4F6', fg: '#6B7280' };
 
 function getRoleAccent(roleName: string) {
   const lower = roleName.toLowerCase();
@@ -112,13 +88,13 @@ function SummaryCard({
   };
   const c = colorMap[color];
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-3">
+    <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3">
       <div className={`${c.bg} ${c.fg} w-9 h-9 rounded-xl flex items-center justify-center`} aria-hidden="true">
         {icon}
       </div>
       <div>
         <div className="flex items-center mb-1">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">{label}</p>
+          <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">{label}</p>
           {tooltip && <KpiTooltip {...tooltip} />}
         </div>
         <p className={`text-[2rem] font-bold leading-none tabular-nums ${c.val}`}>{value.toLocaleString()}</p>
@@ -161,39 +137,42 @@ function RoleBreakdownTable({
   const sorted = [...roles].sort((a, b) => b.total - a.total);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
-      <div className="mb-4">
-        <div className="flex items-center gap-1">
-          <h3 className="text-sm font-semibold text-gray-900">Role Breakdown</h3>
-          <InfoTooltip text="Active = performed at least one clinical action in Unity during the selected period. Quiet = no recorded activity." />
-        </div>
-        <p className="text-xs text-gray-400 mt-0.5">By role · active vs quiet · {periodLabel}</p>
-      </div>
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
+          <div className="mb-3">
+            <div className="flex items-center gap-1">
+              <h3 className="text-[14px] font-medium text-gray-900">Role Breakdown</h3>
+              <InfoTooltip text="Active = performed at least one clinical action in Unity during the selected period. Quiet = no recorded activity." />
+            </div>
+            <p className="text-[12px] text-gray-500 mt-0.5">By role · active vs quiet · {periodLabel}</p>
+          </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm" role="table">
           <thead>
-            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-100">
-              <th className="py-2.5 text-left">Role</th>
-              <th className="py-2.5 px-3 text-right">Total</th>
-              <th className="py-2.5 px-3 text-right">Active</th>
-              <th className="py-2.5 px-3 text-right">Quiet</th>
-              <th className="py-2.5 pl-3 text-right">Active %</th>
+            <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] border-b border-gray-100">
+              <th className="py-[7px] px-[10px] text-left">Role</th>
+              <th className="py-[7px] px-[10px] text-right">Total</th>
+              <th className="py-[7px] px-[10px] text-right">Active</th>
+              <th className="py-[7px] px-[10px] text-right">Quiet</th>
+              <th className="py-[7px] px-[10px] text-right">Active %</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sorted.map((role) => {
-              const ac = getRoleAccent(role.roleName);
-              return (
-                <tr key={role.roleName} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="py-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ac.dot}`} />
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ac.bg} ${ac.text}`}>
-                        {formatRoleName(role.roleName)}
-                      </span>
-                    </div>
-                  </td>
+                  const ac = getRoleAccent(role.roleName);
+                  return (
+                    <tr key={role.roleName} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ac.dotStyle}`} />
+                          <span
+                            className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: ac.bg, color: ac.fg }}
+                          >
+                            {formatRoleName(role.roleName)}
+                          </span>
+                        </div>
+                      </td>
                   <td className="py-3 px-3 text-right font-semibold tabular-nums text-gray-800">
                     {role.total.toLocaleString()}
                   </td>
@@ -248,25 +227,27 @@ function CentreBreakdownTable({
   onQuietClick: (centre: UserBreakdownCentre) => void;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
-      <div className="mb-4">
-        <div className="flex items-center gap-1">
-          <h3 className="text-sm font-semibold text-gray-900">Centre Breakdown</h3>
-          <KpiTooltip {...KPI.USER_CENTRE_BREAKDOWN} />
-        </div>
-        <p className="text-xs text-gray-400 mt-0.5">Users per centre · {periodLabel}</p>
-      </div>
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
+          <div className="mb-3">
+            <div className="flex items-center gap-1">
+              <h3 className="text-[14px] font-medium text-gray-900">Centre Breakdown</h3>
+              <KpiTooltip {...KPI.USER_CENTRE_BREAKDOWN} />
+            </div>
+            <p className="text-[12px] text-gray-500 mt-0.5">Users per centre · {periodLabel}</p>
+          </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" role="table">
           <thead>
-            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-100">
-              <th className="py-2.5 text-left">Centre</th>
-              <th className="py-2.5 px-3 text-right">Total</th>
-              <th className="py-2.5 px-3 text-right">Active</th>
-              <th className="py-2.5 px-3 text-right">Quiet</th>
-              <th className="py-2.5 pl-3 text-right flex items-center justify-end gap-0.5">
-                Active %
-                <InfoTooltip text="Percentage of users at this centre who performed at least one action during the selected period." />
+            <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] border-b border-gray-100">
+              <th className="py-[7px] px-[10px] text-left">Centre</th>
+              <th className="py-[7px] px-[10px] text-right">Total</th>
+              <th className="py-[7px] px-[10px] text-right">Active</th>
+              <th className="py-[7px] px-[10px] text-right">Quiet</th>
+              <th className="py-[7px] px-[10px] text-right">
+                <span className="flex items-center justify-end gap-0.5">
+                  Active %
+                  <InfoTooltip text="Percentage of users at this centre who performed at least one action during the selected period." />
+                </span>
               </th>
             </tr>
           </thead>
@@ -490,7 +471,7 @@ function RosterUserDrawer({ title, subtitle, users, isOpen, onClose, onUserClick
           ) : (
             <table className="w-full text-sm" role="table">
               <thead className="sticky top-0 bg-white border-b border-gray-100 z-10">
-                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                   <th className="py-2.5 pl-6 pr-3 text-left">Name</th>
                   <th className="py-2.5 px-3 text-left hidden sm:table-cell">Centre</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
@@ -520,7 +501,7 @@ function RosterUserDrawer({ title, subtitle, users, isOpen, onClose, onUserClick
                     >
                       <td className="py-3 pl-6 pr-3">
                         <p className={`font-medium ${isNeverActive ? 'text-rose-700' : 'text-gray-900'}`}>
-                          {u.firstName} {u.lastName}
+                          <span className="border-b border-dotted border-current">{u.firstName} {u.lastName}</span>
                           {isNeverActive && (
                             <span className="ml-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-wide">Never active</span>
                           )}
@@ -604,10 +585,10 @@ function AttentionRow({
 
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 animate-pulse">
-      <div className="h-9 w-9 bg-gray-100 rounded-xl mb-4" />
-      <div className="h-2.5 w-16 bg-gray-100 rounded mb-2" />
-      <div className="h-8 w-12 bg-gray-100 rounded" />
+    <div className="bg-gray-50 rounded-xl p-4 animate-pulse">
+      <div className="h-9 w-9 bg-gray-200 rounded-xl mb-4" />
+      <div className="h-2.5 w-16 bg-gray-200 rounded mb-2" />
+      <div className="h-8 w-12 bg-gray-200 rounded" />
     </div>
   );
 }
@@ -635,6 +616,9 @@ export default function UsersTab({ data, loading, error }: Props) {
   const [inactiveSearch, setInactiveSearch] = useState('');
   const [neverSearch, setNeverSearch] = useState('');
 
+  // Shared user aggregate metrics from MetricsContext (single source of truth)
+  const { metrics } = useMetrics();
+
   const periodLabel = formatPeriodLabel(data?.dateFrom, data?.dateTo);
 
   const filteredInactive = useMemo(() => {
@@ -658,6 +642,11 @@ export default function UsersTab({ data, loading, error }: Props) {
   }, [data, neverSearch]);
 
   const neverActiveCount = data?.neverActive.length ?? 0;
+
+  // Prefer MetricsContext aggregate values (guaranteed consistent with Overview tab)
+  const totalUsers   = metrics?.users.total  ?? data?.total         ?? 0;
+  const activeUsers  = metrics?.users.active ?? data?.byStatus.active ?? 0;
+  const quietUsers   = metrics?.users.quiet  ?? data?.byStatus.inactive ?? 0;
 
   // Role drawer handlers
   const openRoleActive = useCallback((role: UserBreakdownRole) => {
@@ -723,7 +712,7 @@ export default function UsersTab({ data, loading, error }: Props) {
           <>
             <SummaryCard
               label="Total Users"
-              value={data.total}
+              value={totalUsers}
               sub={`${data.byRole.length} role type${data.byRole.length !== 1 ? 's' : ''} · roster`}
               color="blue"
               tooltip={KPI.USER_TOTAL}
@@ -735,8 +724,8 @@ export default function UsersTab({ data, loading, error }: Props) {
             />
             <SummaryCard
               label="Active in Period"
-              value={data.byStatus.active}
-              sub={`${pctOf(data.byStatus.active, data.total)} of roster · ${periodLabel}`}
+              value={activeUsers}
+              sub={`${pctOf(activeUsers, totalUsers)} of roster · ${periodLabel}`}
               color="emerald"
               tooltip={KPI.USER_ACTIVE_IN_PERIOD}
               icon={
@@ -747,8 +736,8 @@ export default function UsersTab({ data, loading, error }: Props) {
             />
             <SummaryCard
               label="Quiet in Period"
-              value={data.byStatus.inactive}
-              sub={`${pctOf(data.byStatus.inactive, data.total)} of roster · no audit activity`}
+              value={quietUsers}
+              sub={`${pctOf(quietUsers, totalUsers)} of roster · no audit activity`}
               color="gray"
               tooltip={KPI.USER_QUIET_IN_PERIOD}
               icon={
@@ -776,8 +765,8 @@ export default function UsersTab({ data, loading, error }: Props) {
       {/* ── Role + Centre breakdown ── */}
       {loading || !data ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 h-56 animate-pulse" />
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 h-56 animate-pulse" />
+          <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 h-56 animate-pulse" />
+          <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 h-56 animate-pulse" />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -799,16 +788,16 @@ export default function UsersTab({ data, loading, error }: Props) {
       {/* ── Needs Attention ── */}
       {!loading && data && (
         <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: '#BA7517' }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <h3 className="text-sm font-semibold text-gray-900">Needs Attention</h3>
+            <h3 className="text-[14px] font-medium text-gray-900">Needs Attention</h3>
           </div>
 
           {/* Recently inactive */}
           {data.recentlyInactive.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)]">
+            <div className="bg-white rounded-xl border border-gray-200">
               <div className="px-5 py-4 border-b border-gray-50 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-1">
@@ -838,12 +827,12 @@ export default function UsersTab({ data, loading, error }: Props) {
               <div className="overflow-x-auto">
                 <table className="w-full" role="table">
                   <thead>
-                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-50">
-                      <th className="py-2.5 pl-4 pr-3 text-left">User</th>
-                      <th className="py-2.5 px-3 text-left">Role</th>
-                      <th className="py-2.5 px-3 text-left">Centre</th>
-                      <th className="py-2.5 px-3 text-left">Last Active</th>
-                      <th className="py-2.5 pl-3 pr-4 text-left">Idle</th>
+                    <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] border-b border-gray-100">
+                      <th className="py-[7px] pl-4 pr-[10px] text-left">User</th>
+                      <th className="py-[7px] px-[10px] text-left">Role</th>
+                      <th className="py-[7px] px-[10px] text-left">Centre</th>
+                      <th className="py-[7px] px-[10px] text-left">Last Active</th>
+                      <th className="py-[7px] pl-[10px] pr-4 text-left">Idle</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -872,7 +861,7 @@ export default function UsersTab({ data, loading, error }: Props) {
 
           {/* Never active */}
           {data.neverActive.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)]">
+            <div className="bg-white rounded-xl border border-gray-200">
               <div className="px-5 py-4 border-b border-gray-50 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-1">
@@ -902,11 +891,11 @@ export default function UsersTab({ data, loading, error }: Props) {
               <div className="overflow-x-auto">
                 <table className="w-full" role="table">
                   <thead>
-                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-50">
-                      <th className="py-2.5 pl-4 pr-3 text-left">User</th>
-                      <th className="py-2.5 px-3 text-left">Role</th>
-                      <th className="py-2.5 px-3 text-left">Centre</th>
-                      <th className="py-2.5 pl-3 pr-4 text-left">Created</th>
+                    <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] border-b border-gray-100">
+                      <th className="py-[7px] pl-4 pr-[10px] text-left">User</th>
+                      <th className="py-[7px] px-[10px] text-left">Role</th>
+                      <th className="py-[7px] px-[10px] text-left">Centre</th>
+                      <th className="py-[7px] pl-[10px] pr-4 text-left">Created</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -933,10 +922,12 @@ export default function UsersTab({ data, loading, error }: Props) {
           )}
 
           {data.recentlyInactive.length === 0 && data.neverActive.length === 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] px-6 py-10 flex flex-col items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <p className="text-sm font-medium text-gray-700">All users engaged</p>
-              <p className="text-xs text-gray-400">Everyone is active.</p>
+            <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center py-10 gap-2">
+              <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-[14px] text-gray-500">All users engaged</p>
+              <p className="text-[12px] text-gray-400">Everyone has been active in this period.</p>
             </div>
           )}
         </section>

@@ -30,19 +30,34 @@ const config = {
     encrypt: true,
     trustServerCertificate: false,
   },
+  // 45s query timeout — the overview endpoint runs 8 parallel queries and can
+  // take 20–30s on a cold start before the SQL plan cache is warm.
+  // This was 15s during the perf pass but caused silent timeouts on cold starts.
+  requestTimeout: 45000,
+  connectionTimeout: 30000,
   pool: {
     max: 10,
-    min: 0,
+    // Keep 2 warm connections at all times so the first requests after a
+    // period of low traffic don't pay the TCP handshake + TLS cost.
+    min: 2,
     idleTimeoutMillis: 30000,
+    // Fail fast if all connections are busy rather than queuing indefinitely.
+    acquireTimeoutMillis: 15000,
   },
-  connectionTimeout: 30000,
-  requestTimeout: 30000,
 };
 
-const poolPromise = new sql.ConnectionPool(config)
+const _pool = new sql.ConnectionPool(config);
+
+if (process.env.NODE_ENV !== 'production') {
+  _pool.on('connect', () => console.log('[db] New connection created'));
+  _pool.on('remove',  () => console.log('[db] Connection removed from pool'));
+}
+
+const poolPromise = _pool
   .connect()
   .then((pool) => {
     console.log(`[db] Connected to ${process.env.DB_SERVER} / ${process.env.DB_NAME} (read-only)`);
+    console.log(`[db] Pool: min=${config.pool.min} max=${config.pool.max}`);
     return pool;
   })
   .catch((err) => {

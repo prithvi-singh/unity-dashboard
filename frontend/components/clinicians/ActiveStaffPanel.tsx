@@ -136,7 +136,7 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">
               Drill-down
             </p>
             <h2 id="active-staff-title" className="text-base font-semibold text-gray-900">
@@ -241,16 +241,16 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
               <table className="w-full text-sm min-w-[380px]">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
-                    <th className="px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                    <th className="px-4 sm:px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                       Centre
                     </th>
-                    <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                       Active
                     </th>
-                    <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                       Total
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-40">
+                    <th className="px-4 sm:px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-40">
                       Engagement
                     </th>
                   </tr>
@@ -301,22 +301,22 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
                 <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   <p className="text-sm font-medium text-gray-700">All clinicians engaged</p>
-                  <p className="text-xs text-gray-400">Every clinician has been active in the last 7 days.</p>
+                  <p className="text-[12px] text-gray-500">Every clinician has been active in the last 7 days.</p>
                 </div>
               ) : (
                 <table className="w-full text-sm min-w-[420px]">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/60">
-                      <th className="px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                      <th className="px-4 sm:px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                         Clinician
                       </th>
-                      <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                      <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                         Centre
                       </th>
-                      <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                      <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                         Caseload
                       </th>
-                      <th className="px-4 sm:px-6 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                      <th className="px-4 sm:px-6 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                         Last seen
                       </th>
                     </tr>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { MonitoringData } from '@/lib/types';
+import type { MonitoringData, ClinicalOutputToday } from '@/lib/types';
 import { computeDayStats, aggregateByCentre } from '@/lib/monitoringStats';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
@@ -11,29 +11,6 @@ interface Props {
   loading: boolean;
 }
 
-function ProgressRing({ pct, color, size = 52 }: { pct: number; color: string; size?: number }) {
-  const r = (size - 8) / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = Math.min(pct / 100, 1) * circ;
-  const cx = size / 2;
-  return (
-    <svg width={size} height={size} aria-hidden="true">
-      <circle cx={cx} cy={cx} r={r} fill="none" stroke="#F3F4F6" strokeWidth="4" />
-      <circle
-        cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth="4"
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-        transform={`rotate(-90, ${cx}, ${cx})`}
-        style={{ transition: 'stroke-dasharray 0.7s ease' }}
-      />
-      <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central"
-        style={{ fontSize: '9.5px', fontWeight: 700, fill: '#6B7280' }}
-      >
-        {pct === 0 ? '—' : `${Math.round(pct)}%`}
-      </text>
-    </svg>
-  );
-}
-
 interface CardProps {
   label: string;
   value: string;
@@ -41,25 +18,19 @@ interface CardProps {
   iconBg: string;
   iconFg: string;
   icon: React.ReactNode;
-  ring?: { pct: number; color: string };
   alert?: boolean;
   tooltip?: KpiDefinition;
 }
 
-function KpiCard({ label, value, sub, iconBg, iconFg, icon, ring, alert, tooltip }: CardProps) {
+function KpiCard({ label, value, sub, iconBg, iconFg, icon, alert, tooltip }: CardProps) {
   return (
-    <div className={`bg-white rounded-2xl p-5 flex flex-col justify-between gap-3 ${
-      alert
-        ? 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] ring-1 ring-rose-200/80'
-        : 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100'
-    }`}>
+    <div className={`bg-gray-50 rounded-xl p-4 flex flex-col justify-between gap-3 ${alert ? 'ring-1 ring-rose-200/80' : ''}`}>
       <div className="flex items-start justify-between">
         <div className={`${iconBg} ${iconFg} p-2.5 rounded-xl`}>{icon}</div>
-        {ring && <ProgressRing pct={ring.pct} color={ring.color} />}
       </div>
       <div>
         <div className="flex items-center mb-1">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">{label}</p>
+          <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">{label}</p>
           {tooltip && <KpiTooltip {...tooltip} />}
         </div>
         <p className="text-[2rem] font-bold text-gray-900 leading-none tracking-tight tabular-nums">{value}</p>
@@ -69,15 +40,44 @@ function KpiCard({ label, value, sub, iconBg, iconFg, icon, ring, alert, tooltip
   );
 }
 
+function ClinicalOutputCard({ output }: { output: ClinicalOutputToday }) {
+  const rows: { label: string; value: number }[] = [
+    { label: 'Cases',              value: output.cases },
+    { label: 'Assessments scored', value: output.assessmentsScored },
+    { label: 'Reports',            value: output.reports },
+    { label: 'Goals',              value: output.goals },
+  ];
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-4 flex flex-col justify-between gap-3">
+      <div className="flex items-start justify-between">
+        <div className="bg-violet-50 text-violet-600 p-2.5 rounded-xl"><ChartIcon /></div>
+      </div>
+      <div>
+        <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-2">
+          Clinical output today
+        </p>
+        <div className="space-y-1">
+          {rows.map(({ label, value }) => (
+            <div key={label} className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">{label}</span>
+              <span className="text-sm font-bold text-gray-900 tabular-nums">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Skeleton() {
   return (
-    <div className="bg-white rounded-2xl p-5 animate-pulse border border-gray-100">
+    <div className="bg-gray-50 rounded-xl p-4 animate-pulse">
       <div className="flex justify-between mb-4">
-        <div className="h-9 w-9 bg-gray-100 rounded-xl" />
-        <div className="h-[52px] w-[52px] bg-gray-100 rounded-full" />
+        <div className="h-9 w-9 bg-gray-200 rounded-xl" />
       </div>
-      <div className="h-2.5 w-24 bg-gray-100 rounded mb-2" />
-      <div className="h-8 w-16 bg-gray-100 rounded" />
+      <div className="h-2.5 w-24 bg-gray-200 rounded mb-2" />
+      <div className="h-8 w-16 bg-gray-200 rounded" />
     </div>
   );
 }
@@ -115,7 +115,7 @@ function CentresActiveCard({ centresActive, centreRows }: CentresCardProps) {
   const active = centreRows.filter((c) => c.actions > 0);
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
       {/* KPI header row */}
       <div className="p-5 flex flex-col justify-between gap-3 flex-1">
         <div className="flex items-start justify-between">
@@ -126,7 +126,7 @@ function CentresActiveCard({ centresActive, centreRows }: CentresCardProps) {
         </div>
         <div>
           <div className="flex items-center mb-1">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
               Centres Active
             </p>
           </div>
@@ -194,33 +194,21 @@ export default function MonitoringCards({ data, loading }: Props) {
   const stats = computeDayStats(data);
   if (!stats) return null;
 
-  const avgActions = stats.active > 0
-    ? (stats.totalActions / stats.active).toFixed(1)
-    : '0';
-
   const centreRows = aggregateByCentre(stats.users);
+  const clinicalOutput = data.clinicalOutput ?? { cases: 0, assessmentsScored: 0, reports: 0, goals: 0 };
 
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4" role="list" aria-label="Monitoring metrics">
       <KpiCard
-        label="Engagement Rate"
-        value={`${stats.coreActive} / ${stats.coreStaff}`}
-        sub={`${stats.active} active across all ${stats.total} accounts · ${stats.loggedIn} signed in`}
-        ring={{ pct: stats.coreStaff > 0 ? (stats.coreActive / stats.coreStaff) * 100 : 0, color: '#059669' }}
+        label="Active today"
+        value={`${stats.active} / ${stats.total}`}
+        sub={`${stats.active} performed clinical actions today`}
         iconBg="bg-emerald-50"
         iconFg="text-emerald-600"
         icon={<BoltIcon />}
         tooltip={KPI.ENGAGEMENT_RATE}
       />
-      <KpiCard
-        label="Actions Today"
-        value={stats.totalActions.toLocaleString()}
-        sub={`${avgActions} avg per active user`}
-        iconBg="bg-violet-50"
-        iconFg="text-violet-600"
-        icon={<ChartIcon />}
-        tooltip={KPI.ACTIONS_TODAY}
-      />
+      <ClinicalOutputCard output={clinicalOutput} />
       <CentresActiveCard
         centresActive={stats.centresActive}
         centreRows={centreRows}

@@ -124,10 +124,10 @@ export default function AssessmentByCentreTable({ data, loading }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-900">By Centre</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <h2 className="text-[14px] font-medium text-gray-900">By Centre</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">
           Completion % per type. <span className="text-emerald-600 font-medium">≥80%</span> · <span className="text-amber-600 font-medium">50–80%</span> · <span className="text-rose-600 font-medium">&lt;50%</span>
         </p>
       </div>

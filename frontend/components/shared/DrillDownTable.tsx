@@ -83,7 +83,7 @@ function CompactPipelineTable({
   return (
     <table className="w-full text-sm" role="table">
       <thead className="sticky top-0 bg-gray-50/95 backdrop-blur border-b border-gray-100 z-10">
-        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+        <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
           <th className="pl-4 pr-2 py-2.5 text-left">Patient</th>
           <th className="px-2 py-2.5 text-left">Centre</th>
           <th className="px-2 py-2.5 text-left">Type</th>
@@ -165,7 +165,7 @@ function IdleClinicianTable({ items }: { items: DrillDownTableItem[] }) {
   return (
     <table className="w-full text-sm" role="table">
       <thead className="sticky top-0 bg-gray-50/95 backdrop-blur border-b border-gray-100 z-10">
-        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+        <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
           <th className="pl-4 pr-2 py-2.5 text-left">Person</th>
           <th className="px-2 py-2.5 text-left w-24">Centre</th>
           <th className="px-2 py-2.5 text-left">Case</th>
@@ -234,7 +234,7 @@ export default function DrillDownTable({ items, isUserList = false, showUnityLin
   return (
     <table className="w-full text-sm" role="table">
       <thead className="sticky top-0 bg-gray-50/95 backdrop-blur border-b border-gray-100 z-10">
-        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+        <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
           <th className="pl-4 pr-2 py-2.5 text-left">Patient</th>
           <th className="px-2 py-2.5 text-left">Centre</th>
           {showCategory && <th className="px-2 py-2.5 text-left">Category</th>}

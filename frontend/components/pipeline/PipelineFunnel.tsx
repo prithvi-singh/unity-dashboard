@@ -42,7 +42,7 @@ export default function PipelineFunnel({ data, loading, onStageSelect, selectedS
 
   if (loading && !data) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="h-5 w-40 bg-gray-100 rounded animate-pulse mb-6" />
         <div className="flex flex-col items-center gap-2">
           {Array.from({ length: 7 }).map((_, i) => (
@@ -60,7 +60,7 @@ export default function PipelineFunnel({ data, loading, onStageSelect, selectedS
   if (!stages.length) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-[15px] font-bold text-gray-900 tracking-[-0.01em]">Clinical Pipeline</h2>

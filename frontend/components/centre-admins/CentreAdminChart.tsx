@@ -51,7 +51,7 @@ function KpiCard({
       type={clickable ? 'button' : undefined}
       onClick={clickable ? onClick : undefined}
       title={clickable ? DRILL_DOWN_HINT : undefined}
-      className={`bg-white rounded-2xl p-5 flex flex-col justify-between gap-3 text-left w-full ${
+      className={`bg-gray-50 rounded-xl p-4 flex flex-col justify-between gap-3 text-left w-full ${
         hasAlert ? 'ring-1 ring-rose-200/80' : 'border border-gray-100'
       } shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] ${
         clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : ''
@@ -62,7 +62,7 @@ function KpiCard({
         {pct !== undefined && ringColor && <ProgressRing pct={pct} color={ringColor} />}
       </div>
       <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">{label}</p>
+        <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">{label}</p>
         <p className="text-[2rem] font-bold text-gray-900 leading-none tabular-nums">{value}</p>
         {sub && <p className="text-xs text-gray-500 mt-1.5">{sub}</p>}
         {clickable && <p className="text-[10px] text-blue-500 font-semibold mt-2">{DRILL_DOWN_HINT} →</p>}
@@ -82,13 +82,13 @@ export default function CentreAdminChart({
 
   if (loading && admins.length === 0) {
     return <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-      {[1, 2, 3, 4].map((i) => <div key={i} className="bg-white rounded-2xl h-36 border border-gray-100" />)}
+      {[1, 2, 3, 4].map((i) => <div key={i} className="bg-gray-100 rounded-xl h-36 border border-gray-100" />)}
     </div>;
   }
 
   if (kpis.people === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-sm text-gray-400">
+      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
         No centre admin data for the selected filters
       </div>
     );

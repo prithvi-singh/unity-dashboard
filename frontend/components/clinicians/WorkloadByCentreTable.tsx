@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { WorkloadCentreRow } from '@/lib/types';
 import { shortCentreName } from '@/lib/centreNames';
 
@@ -30,7 +30,7 @@ const COLS: ColConfig[] = [
   { key: 'reportsDrafted',  label: 'Reports Drafted',  tip: 'ReportAdded events in the selected period (UpdateReport excluded)' },
   { key: 'reportEdits',     label: 'Report Edits',     tip: 'UpdateReport events — informational only, not a performance metric. High count vs Drafted may indicate padding.', secondary: true },
   { key: 'reportsApproved', label: 'Reports Approved', tip: 'ReportPDFGenerated events in the selected period (distinct per assessment)' },
-  { key: 'goalsAdded',      label: 'Goals Added',      tip: 'GoalAdded events in the selected period' },
+  { key: 'goalsAdded',      label: 'Cases w/ Goals',    tip: 'Number of cases where at least one intervention goal was added in the selected period. Counts cases not individual goals to prevent inflation.' },
   { key: 'goalsApproved',   label: 'Goals Approved',   tip: 'PatientGoalApprovalRequestGoal rows approved in the selected period' },
 ];
 
@@ -58,7 +58,7 @@ interface Props {
   loading: boolean;
 }
 
-export default function WorkloadByCentreTable({ rows, loading }: Props) {
+function WorkloadByCentreTableInner({ rows, loading }: Props) {
   const [sort, setSort] = useState<{ col: ColKey; dir: SortDir }>({ col: 'caseload', dir: 'desc' });
   const [expanded, setExpanded] = useState(false);
   const [scrollCaptured, setScrollCaptured] = useState(false);
@@ -97,14 +97,14 @@ export default function WorkloadByCentreTable({ rows, loading }: Props) {
   const hiddenCount = totalCount - DEFAULT_VISIBLE;
 
   const cardClass =
-    'bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden';
+    'bg-white rounded-xl border border-gray-200 overflow-hidden';
 
   return (
     <div className={cardClass}>
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-900">Workload by Centre</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <h2 className="text-[14px] font-medium text-gray-900">Workload by Centre</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">
           Sorted by caseload · Report Edits is informational only — not a performance metric
         </p>
       </div>
@@ -130,7 +130,7 @@ export default function WorkloadByCentreTable({ rows, loading }: Props) {
           <thead>
             <tr className="border-b border-gray-100">
               {/* Row number */}
-              <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-8">
+              <th className="px-5 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-8">
                 #
               </th>
               {COLS.map(({ key, label, tip, secondary, isText }) => (
@@ -265,6 +265,14 @@ export default function WorkloadByCentreTable({ rows, loading }: Props) {
     </div>
   );
 }
+
+// Memoized — this table renders up to 437 clinician rows. Without memo it
+// re-renders on every parent state update (loading flags, tab changes, etc.).
+const WorkloadByCentreTable = React.memo(WorkloadByCentreTableInner, (prev, next) =>
+  prev.rows === next.rows && prev.loading === next.loading
+);
+
+export default WorkloadByCentreTable;
 
 /** Plain bold number cell — right-aligned, em-dash when zero */
 function Num({ value }: { value: number }) {

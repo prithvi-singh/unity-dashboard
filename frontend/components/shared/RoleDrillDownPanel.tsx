@@ -55,13 +55,13 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
 
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Drill-down</p>
             <h2 id="role-drilldown-title" className="text-base font-semibold text-gray-900">
               {title}
             </h2>
             <p className="text-xs text-gray-500 mt-1">{scope}</p>
             {data && (
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-[12px] text-gray-500 mt-0.5">
                 {data.count} record{data.count !== 1 ? 's' : ''}
                 {data.truncated ? ' · showing first 500' : ''}
               </p>
@@ -131,7 +131,7 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
               );
             })()}
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] mb-1.5">How to action</p>
+              <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1.5">How to action</p>
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-2.5 py-1.5 leading-snug">
                   <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" />
@@ -168,7 +168,7 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
             <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2" role="status">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <p className="text-sm font-medium text-gray-700">Nothing to show</p>
-              <p className="text-xs text-gray-400">No matching records for the current filters.</p>
+              <p className="text-[12px] text-gray-500">No matching records for the current filters.</p>
             </div>
           )}
 

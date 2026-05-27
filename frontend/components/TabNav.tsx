@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef } from 'react';
+
 // Tab icon map — displayed instead of text on mobile (< sm)
 const TAB_ICONS: Record<string, React.ReactNode> = {
   Overview: (
@@ -24,18 +26,49 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
+export interface TabBadge {
+  count: number;
+  /** 'red' if critical issues present, 'amber' if only warnings */
+  variant: 'red' | 'amber';
+}
+
 interface TabNavProps {
   tabs: string[];
   activeTab: number;
   onTabChange: (index: number) => void;
   /** Indices to hide completely from the nav (tab still exists internally). */
   hiddenTabs?: ReadonlySet<number>;
+  /** Map of tab index → badge to display on that tab */
+  badges?: ReadonlyMap<number, TabBadge>;
+  /**
+   * Called when a tab has been hovered for 300ms without clicking.
+   * Parent should use this to prefetch that tab's data before the click.
+   */
+  onTabHoverIntent?: (index: number) => void;
 }
 
-export default function TabNav({ tabs, activeTab, onTabChange, hiddenTabs }: TabNavProps) {
+export default function TabNav({ tabs, activeTab, onTabChange, hiddenTabs, badges, onTabHoverIntent }: TabNavProps) {
   const visibleTabs = tabs
     .map((tab, index) => ({ tab, index }))
     .filter(({ index }) => !hiddenTabs?.has(index));
+
+  // Prefetch-on-hover: fire onTabHoverIntent after 300ms of continuous hover.
+  // Cancelled immediately if the user moves away — prevents wasted prefetches.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = (index: number) => {
+    if (!onTabHoverIntent || index === activeTab) return;
+    hoverTimer.current = setTimeout(() => {
+      onTabHoverIntent(index);
+    }, 300);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent, pos: number) => {
     const len = visibleTabs.length;
@@ -58,7 +91,7 @@ export default function TabNav({ tabs, activeTab, onTabChange, hiddenTabs }: Tab
     <nav
       role="tablist"
       aria-label="Dashboard sections"
-      className="flex gap-0.5 bg-white border-b border-gray-200 overflow-x-auto scrollbar-none px-3 sm:px-5 shadow-sm"
+      className="flex bg-white border-b border-gray-200 overflow-x-auto scrollbar-none px-1 sm:px-5 shadow-sm"
     >
       {visibleTabs.map(({ tab, index }, pos) => {
         const icon = TAB_ICONS[tab];
@@ -72,18 +105,33 @@ export default function TabNav({ tabs, activeTab, onTabChange, hiddenTabs }: Tab
             tabIndex={activeTab === index ? 0 : -1}
             onClick={() => onTabChange(index)}
             onKeyDown={(e) => handleKeyDown(e, pos)}
+            onMouseEnter={() => handleMouseEnter(index)}
+            onMouseLeave={handleMouseLeave}
             className={[
-              'px-3 sm:px-4 py-2.5 text-[13px] font-semibold tracking-[-0.01em] whitespace-nowrap border-b-2 transition-all',
+              'px-4 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-[13px] font-semibold tracking-[-0.01em] whitespace-nowrap border-b-2 transition-all',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1',
-              'min-h-[44px] flex items-center justify-center gap-1.5',
+              'min-h-[52px] sm:min-h-[44px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 flex-1 sm:flex-none',
               activeTab === index
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
             ].join(' ')}
           >
-            {/* Icon only on mobile, icon + text on desktop */}
-            {icon && <span className="sm:hidden">{icon}</span>}
-            <span className={icon ? 'hidden sm:inline' : ''}>{tab}</span>
+            {icon && <span className="opacity-90">{icon}</span>}
+            <span className="relative inline-flex items-center gap-1.5">
+              {tab}
+              {(() => {
+                const badge = badges?.get(index);
+                if (!badge || badge.count === 0) return null;
+                const cls = badge.variant === 'red'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-amber-400 text-white';
+                return (
+                  <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold leading-none ${cls}`} aria-label={`${badge.count} open issues`}>
+                    {badge.count}
+                  </span>
+                );
+              })()}
+            </span>
           </button>
         );
       })}

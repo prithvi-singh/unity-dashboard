@@ -1,12 +1,30 @@
 'use strict';
 
 /**
- * Parse an ISO date string from a query parameter.
+ * Parse an ISO date string (YYYY-MM-DD) from a query parameter.
  * Returns a Date object if valid, or null if falsy / invalid.
+ *
+ * TIMEZONE CONTRACT:
+ * The SQL Server runs in IST (UTC+05:30) and PatientAuditLog.CreatedDateTime
+ * is stored in IST local time.  When we bind a date boundary as a
+ * DateTimeOffset parameter we must pass IST midnight — not UTC midnight —
+ * so that "2026-05-27" means "all of May 27 IST" in every query.
+ *
+ * `new Date("2026-05-27")` in Node.js (which runs in UTC on Azure) produces
+ * 2026-05-27T00:00:00Z.  SQL Server converts that to 2026-05-27T05:30 IST,
+ * which silently shifts the boundary by 5 h 30 m and causes early-morning
+ * records to land outside the requested window.
+ *
+ * Fix: append T00:00:00+05:30 so the Date object always represents IST
+ * midnight regardless of the Node.js process timezone.
  */
 function parseDateParam(value) {
   if (!value) return null;
-  const d = new Date(value);
+  const s = String(value).slice(0, 10);
+  // Require YYYY-MM-DD format before constructing the Date.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  // Parse as IST midnight (UTC+05:30) to match the SQL Server's local timezone.
+  const d = new Date(`${s}T00:00:00+05:30`);
   return isNaN(d.getTime()) ? null : d;
 }
 

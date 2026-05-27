@@ -8,7 +8,11 @@ export type ActionFocusId =
   | 'bottleneck-incomplete-assessments'
   | 'bottleneck-action-table'
   | 'clinician-idle'
-  | 'assess-overdue';
+  | 'assess-overdue'
+  | 'issues-stuck-scoring'
+  | 'issues-reports-overdue'
+  | 'issues-approvals-needed'
+  | 'issues-goals-not-added';
 
 export type BottleneckActionSortCol = 'stuckOnboarding' | 'pendingGoals' | 'incompleteAssessments';
 
@@ -25,7 +29,11 @@ export type ActionSignalId =
   | 'pending-goals'
   | 'idle-clinicians'
   | 'incomplete-assessments'
-  | 'overdue-assessments';
+  | 'overdue-assessments'
+  | 'stuck-in-scoring'
+  | 'reports-overdue'
+  | 'approvals-needed'
+  | 'goals-not-added';
 
 // Tab indices after consolidation:
 //   0 = Overview   1 = Live (Monitoring)   2 = Team   3 = Issues
@@ -74,5 +82,25 @@ export const ACTION_SIGNAL_NAV: Record<
     tab: 3,
     focusId: 'assess-overdue',
     cta: 'View overdue',
+  },
+  'stuck-in-scoring': {
+    tab: 3,
+    focusId: 'issues-stuck-scoring',
+    cta: 'Show stuck cases',
+  },
+  'reports-overdue': {
+    tab: 3,
+    focusId: 'issues-reports-overdue',
+    cta: 'Show overdue reports',
+  },
+  'approvals-needed': {
+    tab: 3,
+    focusId: 'issues-approvals-needed',
+    cta: 'Show pending approvals',
+  },
+  'goals-not-added': {
+    tab: 3,
+    focusId: 'issues-goals-not-added',
+    cta: 'Show goals pending',
   },
 };

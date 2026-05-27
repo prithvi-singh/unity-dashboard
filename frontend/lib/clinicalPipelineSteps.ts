@@ -1,6 +1,5 @@
 import type { ClinicalPipelineData } from '@/lib/roleDrillDown';
 import type { FunnelStep } from '@/components/shared/RoleFunnel';
-import { pctOf } from '@/components/shared/RoleFunnel';
 
 const EMPTY: ClinicalPipelineData = {
   assigned: 0,
@@ -11,10 +10,16 @@ const EMPTY: ClinicalPipelineData = {
   goalsApproved: 0,
 };
 
+function pct(part: number, base: number): number | undefined {
+  if (base <= 0) return undefined;
+  return Math.round((part / base) * 100);
+}
+
 export function buildClinicalPipelineSteps(
   pipeline: ClinicalPipelineData | null | undefined,
 ): FunnelStep[] {
   const pipe = pipeline ?? EMPTY;
+  const base = pipe.assigned;
 
   return [
     {
@@ -30,7 +35,7 @@ export function buildClinicalPipelineSteps(
       value: pipe.scoringComplete,
       barColor: 'bg-teal-500',
       ownerHint: 'Clinician',
-      pctLabel: pctOf(pipe.scoringComplete, pipe.assigned),
+      pct: pct(pipe.scoringComplete, base),
       drillType: 'clinician-pipeline-scoring',
       drillLabel: 'Scoring complete',
     },
@@ -39,7 +44,7 @@ export function buildClinicalPipelineSteps(
       value: pipe.reportPdfCreated,
       barColor: 'bg-blue-500',
       ownerHint: 'Clinician',
-      pctLabel: pctOf(pipe.reportPdfCreated, pipe.assigned),
+      pct: pct(pipe.reportPdfCreated, base),
       drillType: 'clinician-pipeline-report-pdf',
       drillLabel: 'Report PDF created',
     },
@@ -48,25 +53,25 @@ export function buildClinicalPipelineSteps(
       value: pipe.reportShared,
       barColor: 'bg-indigo-500',
       ownerHint: 'Manager',
-      pctLabel: pctOf(pipe.reportShared, pipe.assigned),
+      pct: pct(pipe.reportShared, base),
       drillType: 'clinician-pipeline-report-shared',
       drillLabel: 'Report shared with family',
     },
     {
-      label: 'Goals added',
+      label: 'Cases with goals added',
       value: pipe.goalsAdded,
       barColor: 'bg-violet-500',
       ownerHint: 'Clinician',
-      pctLabel: pctOf(pipe.goalsAdded, pipe.assigned),
+      pct: pct(pipe.goalsAdded, base),
       drillType: 'clinician-pipeline-goals-added',
-      drillLabel: 'Goals added',
+      drillLabel: 'Cases with goals added',
     },
     {
       label: 'Goals approved',
       value: pipe.goalsApproved,
       barColor: 'bg-purple-600',
       ownerHint: 'Manager',
-      pctLabel: pctOf(pipe.goalsApproved, pipe.assigned),
+      pct: pct(pipe.goalsApproved, base),
       drillType: 'clinician-pipeline-goals-approved',
       drillLabel: 'Goals approved',
     },

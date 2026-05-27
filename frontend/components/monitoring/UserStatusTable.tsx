@@ -12,6 +12,7 @@ import {
 } from '@/lib/monitoringStats';
 import UserProfileLink from '@/components/users/UserProfileLink';
 import { inferProfileRole, ROLE_LABELS } from '@/lib/userProfile';
+import RoleBadge from '@/components/shared/RoleBadge';
 
 interface Props {
   users: MonitoringUser[];
@@ -57,23 +58,6 @@ function SortTh({
   );
 }
 
-function RoleBadge({ role }: { role: string | null }) {
-  if (!role) return <span className="text-gray-400 text-xs">—</span>;
-  const styles: Record<string, string> = {
-    Clinician:        'bg-blue-100 text-blue-700',
-    CentreManager:    'bg-green-100 text-green-700',
-    SuperAdmin:       'bg-purple-100 text-purple-700',
-    'Centre Manager': 'bg-green-100 text-green-700',
-    'Centre Admin':   'bg-orange-100 text-orange-700',
-    'Super Admin':    'bg-purple-100 text-purple-700',
-  };
-  const cls = styles[role] ?? 'bg-gray-100 text-gray-600';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      {role}
-    </span>
-  );
-}
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—';
@@ -159,10 +143,11 @@ export default function UserStatusTable({
       });
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">User Status</h2>
+          <h2 className="text-[14px] font-medium text-gray-900">User Status</h2>
+          <p className="section-click-hint">Click any name to view their full profile</p>
           {engagementFilter && engagementFilter.kind !== 'all' && (
             <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-2 flex-wrap">
               <span>Showing: {engagementFilterLabel(engagementFilter)}</span>
@@ -178,7 +163,7 @@ export default function UserStatusTable({
             </p>
           )}
           {query && (
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-[12px] text-gray-500 mt-0.5">
               {filtered.length} of {afterEngagement.length} user{afterEngagement.length !== 1 ? 's' : ''}
             </p>
           )}
@@ -211,14 +196,13 @@ export default function UserStatusTable({
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
-        <table className="w-full text-sm" role="table" aria-label="User activity status table" style={{ minWidth: '480px' }}>
+        <table className="w-full text-sm" role="table" aria-label="User activity status table" style={{ minWidth: '400px' }}>
           <thead>
-            <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+            <tr className="border-b border-gray-100 text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
               <SortTh col="name"          label="User"    sort={sort} onSort={handleSort} isText />
               <SortTh col="roleName"      label="Role"    sort={sort} onSort={handleSort} isText />
               <SortTh col="centreName"    label="Centre"  sort={sort} onSort={handleSort} isText />
               <SortTh col="active"        label="Status"  sort={sort} onSort={handleSort} />
-              <SortTh col="actionCount"   label="Actions" sort={sort} onSort={handleSort} align="right" />
               <SortTh col="lastActionTime" label="Last Action" sort={sort} onSort={handleSort} />
             </tr>
           </thead>
@@ -226,7 +210,7 @@ export default function UserStatusTable({
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 5 }).map((__, j) => (
                     <td key={j} className="px-3 sm:px-5 py-2 sm:py-3.5">
                       <div className="h-4 bg-gray-100 rounded w-20" />
                     </td>
@@ -235,7 +219,7 @@ export default function UserStatusTable({
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                <td colSpan={5} className="px-6 py-10 text-center text-gray-400">
                   {query ? `No users found for "${centreSearch}"` : 'No user data available'}
                 </td>
               </tr>
@@ -253,7 +237,8 @@ export default function UserStatusTable({
                         <UserProfileLink
                           userId={u.id}
                           role={profileRole}
-                          className={`${textMuted ? 'text-gray-400 hover:text-gray-700' : 'text-gray-800 hover:text-blue-600'} hover:underline underline-offset-2 transition-colors`}
+                          firstName={u.firstName}
+                          className={textMuted ? 'person-link text-gray-400' : undefined}
                         >
                           {u.firstName} {u.lastName}
                         </UserProfileLink>
@@ -298,14 +283,14 @@ export default function UserStatusTable({
                     </td>
                     <td className="px-3 sm:px-5 py-2 sm:py-3.5">
                       <span className="flex items-center gap-1.5">
-                        <span className={['h-2 w-2 rounded-full flex-shrink-0', u.active ? 'bg-green-500' : 'bg-rose-400'].join(' ')} />
-                        <span className={`text-xs ${u.active ? 'text-green-700' : 'text-rose-500'}`}>
+                        <span
+                          className="h-2 w-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: u.active ? '#1D9E75' : '#888780' }}
+                        />
+                        <span className="text-xs" style={{ color: u.active ? '#1D9E75' : '#888780' }}>
                           {u.active ? 'Active' : 'No activity'}
                         </span>
                       </span>
-                    </td>
-                    <td className={`px-3 sm:px-5 py-2 sm:py-3.5 text-right tabular-nums ${textMuted || 'text-gray-700'}`}>
-                      {u.actionCount}
                     </td>
                     <td className={`px-3 sm:px-5 py-2 sm:py-3.5 whitespace-nowrap hidden sm:table-cell ${textMuted || 'text-gray-600'}`}>
                       {formatTime(u.lastActionTime)}

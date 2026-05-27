@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { PipelineManagerRow } from '@/lib/types';
 import ScrollRegion from '@/components/shared/ScrollRegion';
+import PersonLink from '@/components/PersonLink';
 
 interface Props {
   rows: PipelineManagerRow[];
@@ -36,7 +37,7 @@ export default function PipelineManagerTable({ rows, loading }: Props) {
 
   if (loading && !rows.length) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="h-4 w-48 bg-gray-100 rounded animate-pulse mb-5" />
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -49,32 +50,33 @@ export default function PipelineManagerTable({ rows, loading }: Props) {
 
   if (!rows.length) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
         <p className="text-sm text-gray-400 text-center py-8">No manager approval data for this period.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-6 pt-5 pb-4">
         <h2 className="text-[15px] font-bold text-gray-900 tracking-[-0.01em]">Approval Rates by Manager</h2>
         <p className="text-[12px] text-gray-400 mt-0.5">
           Sorted by worst performers first — lowest approval rate at top
         </p>
+        <p className="section-click-hint">Click any name to view their full profile</p>
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[480px]" label="table">
         <table className="w-full text-sm" role="table" aria-label="Manager approval rates">
           <thead>
             <tr className="border-t border-gray-50">
-              <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Manager</th>
-              <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Centre</th>
-              <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Report Approval</th>
-              <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Report Pending</th>
-              <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Goal Approval</th>
-              <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Goal Pending</th>
-              <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Avg Turnaround</th>
+              <th className="px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Manager</th>
+              <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</th>
+              <th className="px-4 py-3 text-center text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Report Approval</th>
+              <th className="px-4 py-3 text-center text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Report Pending</th>
+              <th className="px-4 py-3 text-center text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Goal Approval</th>
+              <th className="px-4 py-3 text-center text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Goal Pending</th>
+              <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Avg Turnaround</th>
             </tr>
           </thead>
           <tbody>
@@ -98,7 +100,12 @@ export default function PipelineManagerTable({ rows, loading }: Props) {
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-400 flex-shrink-0" aria-hidden />
                       )}
                       <span className="font-semibold text-gray-800 text-[13px]">
-                        {row.firstName} {row.lastName}
+                        <PersonLink
+                          userId={row.managerId}
+                          role="manager"
+                          firstName={row.firstName}
+                          lastName={row.lastName}
+                        />
                       </span>
                     </div>
                   </td>

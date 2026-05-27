@@ -4,6 +4,7 @@ const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
 const { abbreviateCentre } = require('../lib/formatters');
+const { activeCaseloadWhere } = require('../utils/queries');
 const {
   pipelineAuditDetailExpr,
   caseRegisteredDetailExpr,
@@ -308,8 +309,10 @@ async function queryPipelineGoalsApproved(ctx) {
 }
 
 async function queryClinicianCaseload(ctx) {
-  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, clinicianFilter } = ctx;
+  const { bindAll, patientNameExpr, clinicianFilter } = ctx;
   const pool = await poolPromise;
+  // activeCaseloadWhere is the single source of truth shared with clinicians.js
+  // so COUNT in the table always equals the number of rows here.
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
       'Active case' AS category,
@@ -324,12 +327,9 @@ async function queryClinicianCaseload(ctx) {
       CONCAT('Clinician: ', ISNULL(au.FirstName, ''), ' ', ISNULL(au.LastName, '')) AS detail
     FROM AllocatePatient ap
     JOIN Patient pt ON pt.Id = ap.PatientId
-    JOIN Centre c ON c.Id = pt.CentreId
+    JOIN Centre c   ON c.Id  = pt.CentreId
     LEFT JOIN AdminUser au ON au.Id = ap.ClinicianUserId
-    WHERE ap.Status IN ('NotStarted', 'InProgress', 'OnHold')
-      AND (@centreId IS NULL OR c.Id = @centreId)
-      AND ${centreExclusion}
-      AND ${patientExclusion}
+    WHERE ${activeCaseloadWhere('ap', 'pt', 'c')}
       AND ${clinicianFilter}
     ORDER BY ap.CreatedDateTimeUtc ASC
   `);

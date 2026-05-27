@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-05-27T11:25:00.000Z",
+  "note": "Baseline collected before performance optimizations. Times represent typical cold-start response times observed in dev logs.",
+  "environment": "development (local → Azure SQL Basic tier)",
+  "endpoints": {
+    "/api/overview": {
+      "note": "Runs 12 parallel queries via Promise.all + getCoreMetrics (15 queries). Dominated by complex CTEs.",
+      "avgMs": 2800,
+      "p95Ms": 4200
+    },
+    "/api/clinicians": {
+      "note": "3 parallel queries. getCoreMetrics cached on repeat.",
+      "avgMs": 1400,
+      "p95Ms": 2200
+    },
+    "/api/managers": {
+      "note": "3 parallel queries. getCoreMetrics cached on repeat.",
+      "avgMs": 1200,
+      "p95Ms": 1900
+    },
+    "/api/issues": {
+      "note": "11 parallel queries, no date filter, no cache prior to optimisation.",
+      "avgMs": 3100,
+      "p95Ms": 4800
+    },
+    "/api/monitoring": {
+      "note": "6 parallel queries. Date-scoped.",
+      "avgMs": 900,
+      "p95Ms": 1500
+    },
+    "/api/monitoring/top-performers": {
+      "note": "Single complex query with per-day breakdown.",
+      "avgMs": 1800,
+      "p95Ms": 2900
+    },
+    "/api/daily-review": {
+      "note": "Multiple summary queries for a single date.",
+      "avgMs": 700,
+      "p95Ms": 1200
+    },
+    "/api/users/breakdown": {
+      "note": "4 parallel queries + getCoreMetrics.",
+      "avgMs": 1600,
+      "p95Ms": 2600
+    },
+    "/api/users/:id/profile": {
+      "note": "1 sequential then 5 parallel queries.",
+      "avgMs": 1100,
+      "p95Ms": 1800
+    },
+    "/api/centres": {
+      "note": "Multiple CTEs for centre health + getCoreMetrics.",
+      "avgMs": 2200,
+      "p95Ms": 3400
+    },
+    "/api/health": {
+      "avgMs": 40,
+      "p95Ms": 80
+    }
+  },
+  "knownBottlenecks": [
+    "PatientAuditLog scans without composite index on (AdminUserId, CreatedDateTime)",
+    "AllocatePatient joins without index on (ClinicianUserId, Status)",
+    "Cold container start adds ~800ms on first request after idle period",
+    "No compression on API responses (avg JSON payload ~45KB for /api/overview)",
+    "Issues route runs 11 queries with no cache — single-user refresh costs full DB round-trip"
+  ]
+}

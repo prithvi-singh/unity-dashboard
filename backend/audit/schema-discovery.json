@@ -1,0 +1,342 @@
+{
+  "generatedAt": "2026-05-27T14:19:15.479Z",
+  "allocatePatientStatuses": [
+    {
+      "Status": "NotStarted",
+      "cnt": 292
+    },
+    {
+      "Status": "InProgress",
+      "cnt": 211
+    },
+    {
+      "Status": "Completed",
+      "cnt": 54
+    },
+    {
+      "Status": "OnHold",
+      "cnt": 14
+    }
+  ],
+  "patientGoalApprovalStatuses": [
+    {
+      "Status": "Approved",
+      "cnt": 24
+    },
+    {
+      "Status": "Rejected",
+      "cnt": 1
+    }
+  ],
+  "adminRoles": [
+    {
+      "Name": "CentreManager",
+      "cnt": 1
+    },
+    {
+      "Name": "Clinician",
+      "cnt": 1
+    },
+    {
+      "Name": "SuperAdmin",
+      "cnt": 1
+    }
+  ],
+  "patientAuditLogTypes": [
+    {
+      "Type": "CaseAssigned",
+      "cnt": 498
+    },
+    {
+      "Type": "CaseRegistered",
+      "cnt": 355
+    },
+    {
+      "Type": "GoalAdded",
+      "cnt": 296
+    },
+    {
+      "Type": "AssessmentResultGenerated",
+      "cnt": 278
+    },
+    {
+      "Type": "ReportAdded",
+      "cnt": 198
+    },
+    {
+      "Type": "BaselineAdded",
+      "cnt": 191
+    },
+    {
+      "Type": "ReportPDFGenerated",
+      "cnt": 151
+    },
+    {
+      "Type": "UpdateReport",
+      "cnt": 139
+    },
+    {
+      "Type": "ActivityAdded",
+      "cnt": 69
+    },
+    {
+      "Type": "AssessmentStatusChanged",
+      "cnt": 58
+    },
+    {
+      "Type": "AssessmentAdd",
+      "cnt": 52
+    },
+    {
+      "Type": "BaselineDeleted",
+      "cnt": 37
+    },
+    {
+      "Type": "CaseTransfer",
+      "cnt": 27
+    },
+    {
+      "Type": "ProgressAdded",
+      "cnt": 22
+    },
+    {
+      "Type": "ReportPDFDeleted",
+      "cnt": 13
+    },
+    {
+      "Type": "GoalDeleted",
+      "cnt": 11
+    },
+    {
+      "Type": "CaseStatusChanged",
+      "cnt": 8
+    },
+    {
+      "Type": "GoalUpdated",
+      "cnt": 5
+    },
+    {
+      "Type": "BaselineUpdated",
+      "cnt": 2
+    },
+    {
+      "Type": "ActivityDeleted",
+      "cnt": 2
+    },
+    {
+      "Type": "ProgressDeleted",
+      "cnt": 1
+    }
+  ],
+  "testUserEmails": [
+    {
+      "Email": "Manish@mailinator.com"
+    },
+    {
+      "Email": "mehul.garg@webority.com"
+    },
+    {
+      "Email": "navneet@webority.com"
+    },
+    {
+      "Email": "prithviMB@mailinator.com"
+    },
+    {
+      "Email": "rahul12@mailinator.com"
+    },
+    {
+      "Email": "test@gmail3.com"
+    }
+  ],
+  "deletedOrTestCentres": [
+    {
+      "CentreName": "DELETE - MBLC AMRITSAR"
+    },
+    {
+      "CentreName": "DELETE - MBLC DEHRADOON"
+    },
+    {
+      "CentreName": "DELETE - MBLC MAYUR VIHAR"
+    },
+    {
+      "CentreName": "DELETE - MBLC Trishika CDC"
+    },
+    {
+      "CentreName": "DELETE - Mom`s Belief Learning Centre Malleswaram"
+    },
+    {
+      "CentreName": "DELETE - Mom`s Belief Learning Centre Mathura"
+    },
+    {
+      "CentreName": "DELETE -Mom's Belief Learning Center Gomti Nagar"
+    },
+    {
+      "CentreName": "Mom's belief Learning Center Test"
+    },
+    {
+      "CentreName": "Test Gurgaon"
+    },
+    {
+      "CentreName": "Test Gurgaon 2"
+    }
+  ],
+  "testPatients": [
+    {
+      "FirstName": "Test",
+      "LastName": "Child",
+      "cnt": 2
+    },
+    {
+      "FirstName": "Test",
+      "LastName": "MG",
+      "cnt": 2
+    },
+    {
+      "FirstName": "test",
+      "LastName": "test",
+      "cnt": 2
+    },
+    {
+      "FirstName": "test 3",
+      "LastName": "test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "testing",
+      "LastName": "123",
+      "cnt": 1
+    },
+    {
+      "FirstName": "testr",
+      "LastName": "agra",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Jalaj test",
+      "LastName": "Arora",
+      "cnt": 1
+    },
+    {
+      "FirstName": "V test",
+      "LastName": "n",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test",
+      "LastName": "One",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "Singh",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Prithvi",
+      "LastName": "Singh test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "testtest",
+      "LastName": "syed",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Anaya",
+      "LastName": "test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Case History",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "DP3",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Krish",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Prithvi 8 Oct",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Prithvi Test",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Raj",
+      "LastName": "Test",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM1",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM2",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM3",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM4",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM5",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM6",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM7",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM8",
+      "cnt": 1
+    },
+    {
+      "FirstName": "Test Case",
+      "LastName": "KM9",
+      "cnt": 1
+    }
+  ],
+  "activeAllocateStatuses": [
+    "NotStarted",
+    "InProgress",
+    "OnHold"
+  ],
+  "closedAllocateStatuses": [
+    "Completed"
+  ],
+  "approvedGoalStatus": "Approved",
+  "superAdminRoles": [
+    "SuperAdmin"
+  ]
+}

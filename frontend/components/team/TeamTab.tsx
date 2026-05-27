@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Clinician, Manager, CentreAdmin, UserBreakdownData, WorkloadCentreRow } from '@/lib/types';
+import type { Clinician, Manager, CentreAdmin, UserBreakdownData, WorkloadCentreRow, CentresOverviewData, FilterParams } from '@/lib/types';
 import type { OnRoleDrillDown, RoleSummary, ClinicalPipelineData } from '@/lib/roleDrillDown';
 import ClinicianChart from '@/components/clinicians/ClinicianChart';
 import ClinicianTable from '@/components/clinicians/ClinicianTable';
@@ -9,14 +9,17 @@ import ManagerChart from '@/components/managers/ManagerChart';
 import ManagerTable from '@/components/managers/ManagerTable';
 import CentreAdminChart from '@/components/centre-admins/CentreAdminChart';
 import CentreAdminTable from '@/components/centre-admins/CentreAdminTable';
+import PeriodConsistencyTable from '@/components/team/PeriodConsistencyTable';
 import UsersTab from '@/components/users/UsersTab';
+import CentresTab from '@/components/centres/CentresTab';
 
-export type TeamRole = 'clinicians' | 'managers' | 'admins' | 'roster';
+export type TeamRole = 'clinicians' | 'managers' | 'admins' | 'centres' | 'roster';
 
 const ROLE_PILLS: { id: TeamRole; label: string; accent: string }[] = [
   { id: 'clinicians', label: 'Clinicians',    accent: 'focus:ring-blue-500 focus:border-blue-500' },
   { id: 'managers',   label: 'Managers',      accent: 'focus:ring-violet-500 focus:border-violet-500' },
   { id: 'admins',     label: 'Centre Admins', accent: 'focus:ring-teal-500 focus:border-teal-500' },
+  { id: 'centres',    label: 'Centres',       accent: 'focus:ring-indigo-500 focus:border-indigo-500' },
   { id: 'roster',     label: 'Roster',        accent: 'focus:ring-gray-400 focus:border-gray-400' },
 ];
 
@@ -52,11 +55,16 @@ export interface TeamTabProps {
   adminSummary: RoleSummary | null;
   adminSummaryLoading: boolean;
 
+  centresData: CentresOverviewData | null;
+  centresLoading: boolean;
+  centresError: string | null;
+
   userBreakdown: UserBreakdownData | null;
   userBreakdownLoading: boolean;
   userBreakdownError: string | null;
 
   linkParams: LinkParams;
+  filters: FilterParams;
   onDrillDown: OnRoleDrillDown;
 }
 
@@ -123,10 +131,14 @@ export default function TeamTab({
   adminsError,
   adminSummary,
   adminSummaryLoading,
+  centresData,
+  centresLoading,
+  centresError,
   userBreakdown,
   userBreakdownLoading,
   userBreakdownError,
   linkParams,
+  filters,
   onDrillDown,
 }: TeamTabProps) {
   const [search, setSearch] = useState('');
@@ -145,18 +157,23 @@ export default function TeamTab({
       aria-labelledby="tab-2"
       className="mt-5 space-y-5"
     >
-      {/* Role selector pills */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="View by role">
+      {/* Role sub-tabs — underline style */}
+      <div
+        className="flex flex-wrap border-b border-gray-200"
+        role="tablist"
+        aria-label="View by role"
+      >
         {ROLE_PILLS.map(({ id, label }) => (
           <button
             key={id}
+            role="tab"
+            aria-selected={role === id}
             onClick={() => handleRoleChange(id)}
-            aria-pressed={role === id}
             className={[
-              'px-4 py-1.5 rounded-full text-sm font-semibold transition-all',
+              'px-4 py-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 whitespace-nowrap',
               role === id
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-800',
+                ? 'font-medium text-gray-900 border-b-2 border-gray-900 -mb-px'
+                : 'font-normal text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300',
             ].join(' ')}
           >
             {label}
@@ -197,6 +214,12 @@ export default function TeamTab({
             linkParams={linkParams}
             onDrillDown={onDrillDown}
           />
+          <PeriodConsistencyTable
+            role="clinician"
+            data={clinicians}
+            loading={cliniciansLoading}
+            linkParams={linkParams}
+          />
         </div>
       )}
 
@@ -231,6 +254,12 @@ export default function TeamTab({
             linkParams={linkParams}
             onDrillDown={onDrillDown}
           />
+          <PeriodConsistencyTable
+            role="manager"
+            data={managers}
+            loading={managersLoading}
+            linkParams={linkParams}
+          />
         </div>
       )}
 
@@ -264,7 +293,25 @@ export default function TeamTab({
             linkParams={linkParams}
             onDrillDown={onDrillDown}
           />
+          <PeriodConsistencyTable
+            role="centre-admin"
+            data={admins}
+            loading={adminsLoading}
+            linkParams={linkParams}
+          />
         </div>
+      )}
+
+      {/* ── Centres ─────────────────────────────────────────────────── */}
+      {role === 'centres' && (
+        <CentresTab
+          data={centresData}
+          loading={centresLoading}
+          error={centresError}
+          filters={filters}
+          workload={workload}
+          workloadLoading={workloadLoading}
+        />
       )}
 
       {/* ── Roster ──────────────────────────────────────────────────── */}

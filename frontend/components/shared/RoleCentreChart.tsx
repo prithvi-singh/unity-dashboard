@@ -153,7 +153,7 @@ export default function RoleCentreChart({
     };
   }, [chartKey]);
 
-  const cardClass = 'bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5';
+  const cardClass = 'bg-white rounded-xl border border-gray-200 p-5';
 
   if (loading) {
     return (
@@ -169,8 +169,8 @@ export default function RoleCentreChart({
     return (
       <div className={cardClass}>
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+          <h2 className="text-[14px] font-medium text-gray-900">{title}</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">{subtitle}</p>
         </div>
         <div className="h-40 flex items-center justify-center text-sm text-gray-400">
           No centre data for the selected filters
@@ -182,8 +182,8 @@ export default function RoleCentreChart({
   return (
     <div className={cardClass}>
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">{subtitle} · click to drill in</p>
+        <h2 className="text-[14px] font-medium text-gray-900">{title}</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">{subtitle} · click to drill in</p>
       </div>
       <div className="h-[280px]">
         <canvas ref={canvasRef} />

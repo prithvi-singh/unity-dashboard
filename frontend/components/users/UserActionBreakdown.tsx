@@ -83,10 +83,10 @@ export default function UserActionBreakdown({ breakdown, loading }: Props) {
   }, [top, loading]);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-900">Action Breakdown</h2>
-        <p className="text-xs text-gray-400 mt-0.5">By audit log type</p>
+        <h2 className="text-[14px] font-medium text-gray-900">Action Breakdown</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">By audit log type</p>
       </div>
       <div className="p-4 h-52">
         {loading ? (

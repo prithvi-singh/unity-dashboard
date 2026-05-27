@@ -176,12 +176,12 @@ export default function BottleneckActionTable({ data, loading, error, onDrillDow
   return (
     <div
       data-focus-target="bottleneck-action-table"
-      className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
     >
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Queue by Centre</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h2 className="text-[14px] font-medium text-gray-900">Queue by Centre</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">
             {totalActions > 0
               ? `${totalActions} open · click to drill in`
               : 'Nothing blocked'}
@@ -211,11 +211,11 @@ export default function BottleneckActionTable({ data, loading, error, onDrillDow
         <table className="w-full text-sm min-w-[560px]" role="table" aria-label="Bottleneck action queue by centre">
           <thead>
             <tr className="border-b border-gray-100">
-              <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-6">#</th>
+              <th className="px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-6">#</th>
               {COLS.map(({ col, label, align, defaultDir }) => (
                 <th
                   key={col}
-                  className={`px-4 py-3 text-${align} text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] cursor-pointer select-none hover:text-gray-700 transition-colors ${
+                  className={`px-4 py-3 text-${align} text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] cursor-pointer select-none hover:text-gray-700 transition-colors ${
                     sortFocus === col ? 'bg-amber-50/80 text-amber-700' : ''
                   }`}
                   onClick={() => handleSort(col, defaultDir)}
@@ -229,7 +229,7 @@ export default function BottleneckActionTable({ data, loading, error, onDrillDow
                   </span>
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">Severity</th>
+              <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Severity</th>
             </tr>
           </thead>
           <tbody>

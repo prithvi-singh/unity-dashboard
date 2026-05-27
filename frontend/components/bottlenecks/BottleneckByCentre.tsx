@@ -168,16 +168,16 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
   const hiddenCount = totalCount - DEFAULT_VISIBLE;
 
   const cardClass =
-    'bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden';
+    'bg-white rounded-xl border border-gray-200 overflow-hidden';
 
   return (
     <div className={cardClass}>
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-900">
+        <h2 className="text-[14px] font-medium text-gray-900">
           Centre Activity Summary
         </h2>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-[12px] text-gray-500 mt-0.5">
           Cases, reports and goals per centre — click any column to sort
         </p>
       </div>
@@ -202,7 +202,7 @@ export default function BottleneckByCentre({ rows, loading }: Props) {
         >
           <thead>
             <tr className="border-b border-gray-100">
-              <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-8">
+              <th className="px-5 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-8">
                 #
               </th>
               {COLS.map(({ key, label, tip, secondary, isText }) => (

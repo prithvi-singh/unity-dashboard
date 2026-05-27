@@ -115,7 +115,7 @@ export default function ActiveCentresPanel({ open, byCentre, onClose }: Props) {
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Drill-down</p>
             <h2 id="active-centres-title" className="text-base font-semibold text-gray-900">
               Active Centres
             </h2>
@@ -130,7 +130,7 @@ export default function ActiveCentresPanel({ open, byCentre, onClose }: Props) {
                 <span className="font-semibold text-gray-600">{totalCentres - activeCount}</span> idle
               </span>
               <span className="text-gray-300">·</span>
-              <span className="text-xs text-gray-400">{totalCentres} total</span>
+              <span className="text-[12px] text-gray-500">{totalCentres} total</span>
               {attentionCount > 0 && (
                 <>
                   <span className="text-gray-300">·</span>
@@ -180,7 +180,7 @@ export default function ActiveCentresPanel({ open, byCentre, onClose }: Props) {
           {(active.length > 0 || idle.length > 0) && (
             <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
               <div className="flex items-center justify-between gap-4 px-6 py-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">Centre</span>
+                <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</span>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.08em] w-[72px] text-center hidden sm:block">Cases Added</span>
                   <span className="text-[10px] font-bold text-violet-400 uppercase tracking-[0.08em] w-[108px] text-center hidden sm:block">Assessments Done</span>
@@ -244,7 +244,7 @@ export default function ActiveCentresPanel({ open, byCentre, onClose }: Props) {
           {idle.length > 0 && (
             <section>
               <div className="px-6 py-2 bg-gray-50 border-b border-gray-100">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                   Idle — {idle.length}
                 </span>
               </div>
@@ -265,7 +265,7 @@ export default function ActiveCentresPanel({ open, byCentre, onClose }: Props) {
           {active.length === 0 && idle.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center gap-2">
               <p className="text-sm font-medium text-gray-700">No centres found</p>
-              <p className="text-xs text-gray-400">Try a different search.</p>
+              <p className="text-[12px] text-gray-500">Try a different search.</p>
             </div>
           )}
         </div>

@@ -12,6 +12,7 @@ interface Props {
   onClearCentre: () => void;
   onClearDates: () => void;
   onClearAll: () => void;
+  hidePeriod?: boolean;
 }
 
 export default function FilterChips({
@@ -22,10 +23,11 @@ export default function FilterChips({
   onClearCentre,
   onClearDates,
   onClearAll,
+  hidePeriod = false,
 }: Props) {
   const centre = centreId ? centres.find((c) => c.id === centreId) : null;
   const hasCentre = centreId != null;
-  const hasDates = !!(dateFrom || dateTo);
+  const hasDates = !!(dateFrom || dateTo) && !hidePeriod;
   const hasAny = hasCentre || hasDates;
 
   if (!hasAny) return null;

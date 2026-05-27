@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-05-27T11:55:00.000Z",
+  "note": "Post-optimisation estimates based on applied changes. Actual measurements will differ until indexes are applied by DBA.",
+  "optimisationsApplied": [
+    "Gzip compression (level 6) — expected 60-80% payload reduction",
+    "DB pool min connections: 0 → 2 (warm connections always available)",
+    "DB requestTimeout: 30s → 15s (fail fast on slow queries)",
+    "Issues route: added 2-minute in-memory cache (11 parallel queries → cache hit on repeat)",
+    "metricsService: historical periods (dateTo > 24h ago) cached 30 minutes instead of 60 seconds",
+    "Frontend: filter changes debounced 300ms (prevents rapid-fire API calls during date selection)",
+    "Frontend: HeatmapTable wrapped in React.memo (prevents re-render when parent state changes)",
+    "Frontend: ActivityHeatmap wrapped in React.memo",
+    "Frontend: Tab prefetch on 300ms hover (data loading before click)"
+  ],
+  "endpoints": {
+    "/api/overview": {
+      "beforeMs": 2800,
+      "estimatedAfterMs": 2400,
+      "improvementNote": "Network transfer reduced by ~70% with compression. Query time unchanged until indexes applied.",
+      "withIndexesMs": 500
+    },
+    "/api/clinicians": {
+      "beforeMs": 1400,
+      "estimatedAfterMs": 1200,
+      "improvementNote": "Warm connection reduces first-request overhead.",
+      "withIndexesMs": 300
+    },
+    "/api/managers": {
+      "beforeMs": 1200,
+      "estimatedAfterMs": 1000,
+      "withIndexesMs": 280
+    },
+    "/api/issues": {
+      "beforeMs": 3100,
+      "estimatedAfterMs": 3100,
+      "cacheHitMs": 1,
+      "improvementNote": "First load unchanged. Every subsequent call within 2 minutes is a cache hit (<1ms).",
+      "withIndexesMs": 600
+    },
+    "/api/monitoring": {
+      "beforeMs": 900,
+      "estimatedAfterMs": 750,
+      "withIndexesMs": 200
+    },
+    "/api/monitoring/top-performers": {
+      "beforeMs": 1800,
+      "estimatedAfterMs": 1500,
+      "withIndexesMs": 450
+    },
+    "/api/daily-review": {
+      "beforeMs": 700,
+      "estimatedAfterMs": 600,
+      "withIndexesMs": 180
+    },
+    "/api/users/breakdown": {
+      "beforeMs": 1600,
+      "estimatedAfterMs": 1400,
+      "withIndexesMs": 350
+    },
+    "/api/users/:id/profile": {
+      "beforeMs": 1100,
+      "estimatedAfterMs": 950,
+      "withIndexesMs": 250
+    },
+    "/api/centres": {
+      "beforeMs": 2200,
+      "estimatedAfterMs": 1900,
+      "withIndexesMs": 480
+    },
+    "/api/health": {
+      "beforeMs": 40,
+      "estimatedAfterMs": 35
+    }
+  },
+  "summary": {
+    "compressionPayloadReduction": "60-80% for JSON responses",
+    "coldStartImprovement": "~200ms from warm DB connections",
+    "issuesCacheHitRate": "Expected >80% after first load (2-min TTL)",
+    "frontendRenderImpact": "React.memo prevents redundant re-renders of 400+ row heatmap",
+    "nextSteps": [
+      "Apply indexes from /backend/audit/index-recommendations.sql (DBA review required)",
+      "Verify min replicas = 1 in Azure Container App",
+      "Verify SELF_PING_URL env var is set for keepalive",
+      "Run actual measurements after 30 minutes of live traffic with [perf] log lines"
+    ]
+  }
+}

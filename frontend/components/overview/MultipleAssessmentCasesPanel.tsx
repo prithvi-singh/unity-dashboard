@@ -158,11 +158,11 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
         </div>
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Drill-down</p>
             <h2 id="multiple-assessment-title" className="text-base font-semibold text-gray-900">
               Multi-assessment cases
             </h2>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-[12px] text-gray-500 mt-1">
               {cases.length} with 2+ assignments
             </p>
           </div>
@@ -211,7 +211,7 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
           {filteredRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2">
               <p className="text-sm font-medium text-gray-700">No matching cases</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-[12px] text-gray-500">
                 {cases.length === 0
                   ? 'No cases with multiple assessments for the current filters.'
                   : 'Try a different search term.'}
@@ -220,7 +220,7 @@ export default function MultipleAssessmentCasesPanel({ open, cases, onClose }: P
           ) : (
             <table className="w-full text-sm" role="table">
               <thead className="sticky top-0 bg-gray-50/95 backdrop-blur border-b border-gray-100 z-10">
-                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                   {COLS.map(({ col, label, align, defaultDir }) => {
                     const active = sort.col === col;
                     return (
@@ -317,7 +317,7 @@ function FragmentRow({
             <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                  <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                     <th className="px-4 py-2.5 text-left">Type</th>
                     <th className="px-4 py-2.5 text-left">Clinician</th>
                     <th className="px-4 py-2.5 text-left">Status</th>

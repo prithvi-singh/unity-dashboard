@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { Manager } from '@/lib/types';
 import ScrollRegion from '@/components/shared/ScrollRegion';
 import { shortCentreName } from '@/lib/centreNames';
@@ -8,6 +8,7 @@ import UserProfileLink from '@/components/users/UserProfileLink';
 import type { ProfileLinkParams } from '@/lib/userProfile';
 import type { OnRoleDrillDown } from '@/lib/roleDrillDown';
 import { DRILL_DOWN_HINT } from '@/lib/roleDrillDown';
+import RoleBadge from '@/components/shared/RoleBadge';
 
 interface Props {
   managers: Manager[];
@@ -78,33 +79,22 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-function RoleBadge({ role }: { role: string | null }) {
-  if (!role) return <span className="text-gray-400">—</span>;
-  const styles: Record<string, string> = {
-    Clinician:        'bg-blue-100 text-blue-700',
-    'Centre Manager': 'bg-green-100 text-green-700',
-    'Super Admin':    'bg-purple-100 text-purple-700',
-  };
-  const cls = styles[role] ?? 'bg-gray-100 text-gray-600';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      {role}
-    </span>
-  );
-}
 
 function getVal(m: Manager, col: string): number | string {
   switch (col) {
-    case 'name':        return `${m.lastName} ${m.firstName}`.toLowerCase();
-    case 'roleName':    return (m.roleName ?? '').toLowerCase();
-    case 'centreName':  return (m.centreName ?? '').toLowerCase();
-    case 'cases':       return m.casesRegistered;
-    case 'assessments': return m.assessmentsAssigned;
-    case 'assignRate':  return m.casesRegistered > 0 ? m.assessmentsAssigned / m.casesRegistered : -1;
-    case 'totalActions': return m.totalActions;
-    case 'lastActivity': return m.lastActivityDate ?? '';
-    case 'lastLogin':   return m.lastLoginDate ?? '';
-    default:            return 0;
+    case 'name':              return `${m.lastName} ${m.firstName}`.toLowerCase();
+    case 'roleName':          return (m.roleName ?? '').toLowerCase();
+    case 'centreName':        return (m.centreName ?? '').toLowerCase();
+    case 'cases':             return m.casesRegistered;
+    case 'assessments':       return m.assessmentsAssigned;
+    case 'assignRate':        return m.casesRegistered > 0 ? m.assessmentsAssigned / m.casesRegistered : -1;
+    case 'totalActions':      return m.totalActions;
+    case 'reportsToApprove':  return m.reportsToApprove ?? 0;
+    case 'goalsToApprove':    return m.goalsToApprove ?? 0;
+    case 'pendingApprovals':  return m.pendingApprovals ?? 0;
+    case 'lastActivity':      return m.lastActivityDate ?? '';
+    case 'lastLogin':         return m.lastLoginDate ?? '';
+    default:                  return 0;
   }
 }
 
@@ -122,7 +112,7 @@ function applySort(rows: Manager[], { col, dir }: SortState): Manager[] {
   });
 }
 
-export default function ManagerTable({ managers, loading, error, linkParams, onDrillDown }: Props) {
+function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }: Props) {
   const [sort, setSort] = useState<SortState>({ col: 'cases', dir: 'desc' });
 
   const handleSort = (col: string, def: SortDir) =>
@@ -151,11 +141,12 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
   const maxActions     = Math.max(...rows.map((m) => m.totalActions), 1);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Manager Detail</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Sort by column</p>
+          <h2 className="text-[14px] font-medium text-gray-900">Manager Detail</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">Sort by column</p>
+          <p className="section-click-hint">Click any name to view their full profile</p>
         </div>
         <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
           {rows.length} centre assignment{rows.length !== 1 ? 's' : ''}
@@ -165,25 +156,29 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
         <table className="w-full text-sm" role="table" aria-label="Manager detail table">
           <thead>
-            <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+            <tr className="border-b border-gray-100 text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
               <th className="px-6 py-3 text-left w-6">#</th>
-              <SortTh col="name"        label="Manager"      sort={sort} onSort={handleSort} isText />
-              <SortTh col="roleName"    label="Role"         sort={sort} onSort={handleSort} isText />
-              <SortTh col="centreName"  label="Centre"       sort={sort} onSort={handleSort} isText />
-              <SortTh col="cases"       label="Cases"        sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="assessments" label="Assessments"  sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="assignRate"  label="Assign Rate"  sort={sort} onSort={handleSort} align="right"
+              <SortTh col="name"             label="Manager"          sort={sort} onSort={handleSort} isText />
+              <SortTh col="roleName"         label="Role"             sort={sort} onSort={handleSort} isText />
+              <SortTh col="centreName"       label="Centre"           sort={sort} onSort={handleSort} isText />
+              <SortTh col="cases"            label="Cases"            sort={sort} onSort={handleSort} align="right" />
+              <SortTh col="assessments"      label="Assessments"      sort={sort} onSort={handleSort} align="right" />
+              <SortTh col="assignRate"       label="Assign Rate"      sort={sort} onSort={handleSort} align="right"
                       title="Assessments Assigned ÷ Cases Registered" />
-              <SortTh col="totalActions" label="Total Actions" sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="lastActivity" label="Last Activity" sort={sort} onSort={handleSort} />
-              <SortTh col="lastLogin"    label="Last Login"    sort={sort} onSort={handleSort} />
+              <SortTh col="reportsToApprove" label="Reports to Approve" sort={sort} onSort={handleSort} align="right"
+                      title="Reports drafted by clinicians but not yet approved (report_pending_approval state)" />
+              <SortTh col="goalsToApprove"   label="Goals to Approve"   sort={sort} onSort={handleSort} align="right"
+                      title="Goals submitted by clinicians but not yet approved (goals_pending_approval state)" />
+              <SortTh col="totalActions"     label="Total Actions"    sort={sort} onSort={handleSort} align="right" />
+              <SortTh col="lastActivity"     label="Last Activity"    sort={sort} onSort={handleSort} />
+              <SortTh col="lastLogin"        label="Last Login"       sort={sort} onSort={handleSort} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 10 }).map((__, j) => (
+                  {Array.from({ length: 12 }).map((__, j) => (
                     <td key={j} className="px-5 py-3.5">
                       <div className="h-4 bg-gray-100 rounded w-16" />
                     </td>
@@ -192,7 +187,7 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-10 text-center text-gray-400">
+                <td colSpan={12} className="px-6 py-10 text-center text-gray-400">
                   No manager data for the selected filters
                 </td>
               </tr>
@@ -216,7 +211,7 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
                         userId={m.id}
                         role="manager"
                         params={{ ...linkParams, centreId: m.centreId }}
-                        className="text-gray-800 hover:text-blue-600 hover:underline underline-offset-2 transition-colors"
+                        firstName={m.firstName}
                       >
                         {m.firstName} {m.lastName}
                       </UserProfileLink>
@@ -284,6 +279,21 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
                     <td className={`px-5 py-3.5 text-right tabular-nums ${assignRateColor}`}>
                       {assignRateLabel}
                     </td>
+
+                    {/* Reports to Approve */}
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={`tabular-nums font-bold ${(m.reportsToApprove ?? 0) > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                        {(m.reportsToApprove ?? 0) > 0 ? (m.reportsToApprove ?? 0).toLocaleString() : '—'}
+                      </span>
+                    </td>
+
+                    {/* Goals to Approve */}
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={`tabular-nums font-bold ${(m.goalsToApprove ?? 0) > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                        {(m.goalsToApprove ?? 0) > 0 ? (m.goalsToApprove ?? 0).toLocaleString() : '—'}
+                      </span>
+                    </td>
+
                     <td className="px-5 py-3.5 text-right">
                       <span className="tabular-nums text-gray-600">
                         {m.totalActions.toLocaleString()}
@@ -306,3 +316,15 @@ export default function ManagerTable({ managers, loading, error, linkParams, onD
     </div>
   );
 }
+
+// Memoized — manager table rows contain nested sort/render logic.
+// Prevents re-render when only unrelated parent state changes.
+const ManagerTable = React.memo(ManagerTableInner, (prev, next) =>
+  prev.managers === next.managers &&
+  prev.loading  === next.loading  &&
+  prev.error    === next.error    &&
+  prev.linkParams === next.linkParams &&
+  prev.onDrillDown === next.onDrillDown
+);
+
+export default ManagerTable;

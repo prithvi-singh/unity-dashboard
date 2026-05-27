@@ -37,16 +37,17 @@ function MiniBar({
   clickable?: boolean;
   onClick?: () => void;
 }) {
-  const w = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const safe = value ?? 0;
+  const w = max > 0 ? Math.min((safe / max) * 100, 100) : 0;
   const inner = (
     <div className="flex items-center justify-end gap-2">
-      <span className="tabular-nums text-gray-700 text-sm">{value.toLocaleString()}</span>
+      <span className="tabular-nums text-gray-700 text-sm">{safe.toLocaleString()}</span>
       <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
         <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${w}%` }} />
       </div>
     </div>
   );
-  if (!clickable || value <= 0) return inner;
+  if (!clickable || safe <= 0) return inner;
   return (
     <button
       type="button"
@@ -87,7 +88,7 @@ export default function RoleCentreTable({
 }: Props) {
   const [sort, setSort] = useState<{ col: SortCol; dir: SortDir }>({ col: 'total', dir: 'desc' });
 
-  const cardClass = 'bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden';
+  const cardClass = 'bg-white rounded-xl border border-gray-200 overflow-hidden';
 
   if (loading) {
     return (
@@ -125,10 +126,10 @@ export default function RoleCentreTable({
       <div className={cardClass}>
         <div className="px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-1">
-            <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+            <h2 className="text-[14px] font-medium text-gray-900">{title}</h2>
             {tooltip && <KpiTooltip {...tooltip} />}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+          <p className="text-[12px] text-gray-500 mt-0.5">{subtitle}</p>
           {actionNote && (
             <p className="text-xs text-gray-600 mt-2 leading-relaxed">{actionNote}</p>
           )}
@@ -142,10 +143,10 @@ export default function RoleCentreTable({
     <div className={cardClass}>
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-1">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-[14px] font-medium text-gray-900">{title}</h2>
           {tooltip && <KpiTooltip {...tooltip} />}
         </div>
-        <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+        <p className="text-[12px] text-gray-500 mt-0.5">{subtitle}</p>
         {actionNote && (
           <p className="text-xs text-gray-600 mt-2 leading-relaxed max-w-3xl">{actionNote}</p>
         )}
@@ -153,7 +154,7 @@ export default function RoleCentreTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] border-b border-gray-100">
+            <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] border-b border-gray-100">
               <th className="px-5 py-3 text-left cursor-pointer hover:text-gray-700" onClick={() => toggleSort('centreName')}>Centre</th>
               {cols.map((c) => (
                 <th key={c.key} className="px-4 py-3 text-right cursor-pointer hover:text-gray-700" onClick={() => toggleSort(c.key)}>
@@ -171,7 +172,7 @@ export default function RoleCentreTable({
                   {shortCentreName(row.centreName)}
                 </td>
                 {cols.map((c) => {
-                  const val = row[c.key as keyof RoleCentreRow] as number;
+                  const val = (row[c.key as keyof RoleCentreRow] as number) ?? 0;
                   return (
                     <td key={c.key} className="px-4 py-3.5">
                       <MiniBar

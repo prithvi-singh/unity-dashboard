@@ -98,7 +98,7 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Overview · Active Centres</p>
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Overview · Active Centres</p>
             <h2 id="idle-centres-title" className="text-base font-semibold text-gray-900">
               Idle centres — {dateRangeLabel}
             </h2>
@@ -151,8 +151,8 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
         {filtered.length > 0 && (
           <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100 flex-shrink-0">
             <div className="flex items-center justify-between px-4 sm:px-6 py-2">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">Centre</span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">Last activity</span>
+              <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</span>
+              <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Last activity</span>
             </div>
           </div>
         )}
@@ -189,7 +189,7 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
               {q ? (
                 <>
                   <p className="text-sm font-medium text-gray-700">No matches</p>
-                  <p className="text-xs text-gray-400">Try a different search term.</p>
+                  <p className="text-[12px] text-gray-500">Try a different search term.</p>
                 </>
               ) : (
                 <>
@@ -197,7 +197,7 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <p className="text-sm font-medium text-gray-700">All centres active</p>
-                  <p className="text-xs text-gray-400">Every centre had at least one action this period.</p>
+                  <p className="text-[12px] text-gray-500">Every centre had at least one action this period.</p>
                 </>
               )}
             </div>

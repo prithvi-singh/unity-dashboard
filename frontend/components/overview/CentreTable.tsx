@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { OverviewData, CentreBreakdown } from '@/lib/types';
 import { shortCentreName } from '@/lib/centreNames';
 import ScrollRegion from '@/components/shared/ScrollRegion';
@@ -46,7 +46,7 @@ function applySort(rows: CentreBreakdown[], { col, dir }: SortState): CentreBrea
 
 const COL_COUNT = COLS.length + 1; // + row number column
 
-export default function CentreTable({ data, loading }: Props) {
+function CentreTableInner({ data, loading }: Props) {
   const [sort, setSort] = useState<SortState>({ col: 'reportsDrafted', dir: 'desc' });
 
   const handleSort = (col: ColKey, def: SortDir) =>
@@ -55,11 +55,11 @@ export default function CentreTable({ data, loading }: Props) {
   const rows = data ? applySort(data.byCentre, sort) : [];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Centre Breakdown</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Activity per centre in the selected period</p>
+          <h2 className="text-[14px] font-medium text-gray-900">Centre Breakdown</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">Activity per centre in the selected period</p>
         </div>
         {data && (
           <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
@@ -72,12 +72,12 @@ export default function CentreTable({ data, loading }: Props) {
         <table className="w-full text-sm min-w-[480px]" role="table" aria-label="Centre breakdown">
           <thead>
             <tr className="border-b border-gray-100">
-              <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] w-6">#</th>
+              <th className="px-6 py-[7px] text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-6">#</th>
               {COLS.map(({ col, label, tip, align, defaultDir }) => (
                 <th
                   key={col}
                   title={tip || undefined}
-                  className={`px-4 py-3 text-${align} text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] cursor-pointer select-none hover:text-gray-700 transition-colors whitespace-nowrap`}
+                  className={`px-[10px] py-[7px] text-${align} text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] cursor-pointer select-none hover:text-gray-700 transition-colors whitespace-nowrap`}
                   onClick={() => handleSort(col, defaultDir)}
                   aria-sort={sort.col === col ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
@@ -104,7 +104,15 @@ export default function CentreTable({ data, loading }: Props) {
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={COL_COUNT} className="px-6 py-10 text-center text-gray-400 text-sm">No centre data</td>
+                <td colSpan={COL_COUNT}>
+                <div className="flex flex-col items-center py-10 gap-2">
+                  <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+                  </svg>
+                  <p className="text-[14px] text-gray-500">No centre data</p>
+                  <p className="text-[12px] text-gray-400">Try adjusting the date range or centre filter</p>
+                </div>
+              </td>
               </tr>
             ) : (
               rows.map((row, idx) => (
@@ -139,3 +147,11 @@ export default function CentreTable({ data, loading }: Props) {
     </div>
   );
 }
+
+// Memoized — 118 centre rows with 5 columns each. Without memo every parent
+// re-render (tab switch, loading state, etc.) re-sorts and re-renders all rows.
+const CentreTable = React.memo(CentreTableInner, (prev, next) =>
+  prev.data === next.data && prev.loading === next.loading
+);
+
+export default CentreTable;

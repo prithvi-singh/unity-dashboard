@@ -36,6 +36,7 @@ router.get('/', async (req, res, next) => {
       loginsResult,
       heatmapResult,
       datesResult,
+      clinicalOutputResult,
     ] = await Promise.all([
 
       // Q1: per-user action counts for the specific date
@@ -104,6 +105,33 @@ router.get('/', async (req, res, next) => {
         FROM PatientAuditLog
         ORDER BY date DESC
       `),
+
+      // Q6: clinical output counts for the specific date.
+      // Filters test patients and test/webority/mailinator users so the counts
+      // are consistent with all other metric endpoints.
+      pool.request()
+        .input('date', sql.Date, new Date(date))
+        .query(`
+          SELECT
+            SUM(CASE WHEN pal.Type = 'CaseRegistered'            THEN 1 ELSE 0 END) AS cases,
+            SUM(CASE WHEN pal.Type = 'AssessmentResultGenerated' THEN 1 ELSE 0 END) AS assessmentsScored,
+            SUM(CASE WHEN pal.Type = 'ReportPDFGenerated'        THEN 1 ELSE 0 END) AS reports,
+            SUM(CASE WHEN pal.Type = 'GoalAdded'                 THEN 1 ELSE 0 END) AS goals
+          FROM PatientAuditLog pal
+          LEFT JOIN AdminUser au ON au.Id = pal.AdminUserId
+          LEFT JOIN Patient pt   ON pt.Id = pal.PatientId
+          WHERE CAST(pal.CreatedDateTime AS DATE) = @date
+            AND (au.Id IS NULL OR (
+              LOWER(au.FirstName) NOT LIKE '%test%'
+              AND LOWER(au.LastName)  NOT LIKE '%test%'
+              AND LOWER(au.Email)     NOT LIKE '%@webority.com'
+              AND LOWER(au.Email)     NOT LIKE '%@mailinator.com'
+            ))
+            AND (pt.Id IS NULL OR (
+              pt.FirstName NOT LIKE '%test%'
+              AND pt.LastName  NOT LIKE '%test%'
+            ))
+        `),
     ]);
 
     // Build lookups
@@ -157,7 +185,15 @@ router.get('/', async (req, res, next) => {
 
     const availableDates = datesResult.recordset.map((r) => String(r.date).slice(0, 10));
 
-    res.json({ date, users, heatmap, availableDates });
+    const outputRow = clinicalOutputResult.recordset[0] ?? {};
+    const clinicalOutput = {
+      cases:             outputRow.cases             || 0,
+      assessmentsScored: outputRow.assessmentsScored || 0,
+      reports:           outputRow.reports           || 0,
+      goals:             outputRow.goals             || 0,
+    };
+
+    res.json({ date, users, heatmap, availableDates, clinicalOutput });
   } catch (err) {
     next(err);
   }

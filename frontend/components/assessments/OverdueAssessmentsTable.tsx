@@ -117,14 +117,14 @@ export default function OverdueAssessmentsTable({ data, loading }: Props) {
   const overdueCount = data?.slowAssessments.length ?? 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-gray-900">Overdue Assessments</h2>
+                <h2 className="text-[14px] font-medium text-gray-900">Overdue Assessments</h2>
                 <KpiTooltip {...OVERDUE_TOOLTIP} />
                 {overdueCount > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
@@ -140,7 +140,7 @@ export default function OverdueAssessmentsTable({ data, loading }: Props) {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-[12px] text-gray-500 mt-0.5">
                 14+ days, no result · <span className="text-amber-600 font-medium">14–21d: nudge</span> · <span className="text-rose-600 font-medium">&gt;21d: escalate</span>
                 <span className="ml-2 text-gray-300">·</span>
                 <span className="ml-2 italic">All-time — not limited to the selected date range</span>
@@ -225,7 +225,7 @@ export default function OverdueAssessmentsTable({ data, loading }: Props) {
                       <div className="flex flex-col items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
                         <p className="text-sm font-medium text-gray-700">No overdue assessments</p>
-                        <p className="text-xs text-gray-400">All assessments are within the 14-day window</p>
+                        <p className="text-[12px] text-gray-500">All assessments are within the 14-day window</p>
                       </div>
                     ) : (
                       <p className="text-sm text-gray-400">No results match your filters</p>

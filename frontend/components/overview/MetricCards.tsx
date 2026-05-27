@@ -1,6 +1,7 @@
 'use client';
 
 import type { OverviewData } from '@/lib/types';
+import { useMetrics } from '@/lib/metricsContext';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
 import { DRILL_DOWN_HINT } from '@/lib/bottleneckDrillDown';
@@ -98,7 +99,7 @@ function KpiCard({
       </div>
       <div>
         <div className="flex items-center mb-1">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.1em]">{label}</p>
+          <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">{label}</p>
           {tooltip && <KpiTooltip {...tooltip} />}
         </div>
         <p className="text-[2rem] font-bold text-gray-900 leading-none tracking-tight tabular-nums">{value}</p>
@@ -108,6 +109,11 @@ function KpiCard({
     </>
   );
 
+  // Metric card style: bg-gray-50, no border, rounded-xl, p-4
+  const baseClass = `bg-gray-50 rounded-xl p-4 flex flex-col justify-between gap-3 text-left w-full ${
+    hasAlert ? 'ring-1 ring-rose-200/80' : ''
+  }`;
+
   if (clickable) {
     return (
       <button
@@ -115,42 +121,33 @@ function KpiCard({
         onClick={onClick}
         aria-label={ariaLabel ?? `${label}: ${value}. ${DRILL_DOWN_HINT}`}
         aria-haspopup="dialog"
-        className={`bg-white rounded-2xl p-5 flex flex-col justify-between gap-3 text-left w-full ${
-          hasAlert
-            ? 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] ring-1 ring-rose-200/80'
-            : 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100'
-        } cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400`}
+        className={`${baseClass} cursor-pointer hover:bg-gray-100 hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400`}
       >
         {body}
       </button>
     );
   }
 
-  return (
-    <div className={`bg-white rounded-2xl p-5 flex flex-col justify-between gap-3 text-left w-full ${
-      hasAlert
-        ? 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] ring-1 ring-rose-200/80'
-        : 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100'
-    }`}>
-      {body}
-    </div>
-  );
+  return <div className={baseClass}>{body}</div>;
 }
 
 function Skeleton() {
   return (
-    <div className="bg-white rounded-2xl p-5 animate-pulse border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+    <div className="bg-gray-50 rounded-xl p-4 animate-pulse">
       <div className="flex justify-between mb-4">
-        <div className="h-9 w-9 bg-gray-100 rounded-xl" />
-        <div className="h-[52px] w-[52px] bg-gray-100 rounded-full" />
+        <div className="h-9 w-9 bg-gray-200 rounded-xl" />
+        <div className="h-[52px] w-[52px] bg-gray-200 rounded-full" />
       </div>
-      <div className="h-2.5 w-20 bg-gray-100 rounded mb-2.5" />
-      <div className="h-8 w-14 bg-gray-100 rounded" />
+      <div className="h-2.5 w-20 bg-gray-200 rounded mb-2.5" />
+      <div className="h-8 w-14 bg-gray-200 rounded" />
     </div>
   );
 }
 
 export default function MetricCards({ data, loading, error, onOpenMultipleAssessments, onOperationalDrill, onOpenReportPdfs, onOpenIdleCentres }: Props) {
+  // Use MetricsContext for shared aggregate numbers — single source of truth
+  const { metrics, loading: mLoading } = useMetrics();
+
   if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -158,7 +155,7 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
       </div>
     );
   }
-  if (loading || !data) {
+  if (loading || !data || mLoading || !metrics) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-4">
         {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} />)}
@@ -166,18 +163,24 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
     );
   }
 
-  // Use unified counts from Query F (single source of truth — no more 57 vs 59 divergence)
-  const activeCentres = data.activeCentreCount ?? 0;
-  const idleCentres   = data.idleCentreCount   ?? 0;
-  const totalCentres  = data.totalCentresCount  ?? (activeCentres + idleCentres);
-  const alerts        = (data.totalStatusChanges ?? 0) + (data.totalTransfers ?? 0);
-  const avgAssessmentsPerCase = data.totalCases > 0
-    ? (data.totalAssessments / data.totalCases)
+  // Shared metrics come from MetricsContext (single source of truth)
+  const totalCases     = metrics.cases.total;
+  const activeCentres  = metrics.centres.active;
+  const idleCentres    = metrics.centres.idle;
+  const totalCentres   = metrics.centres.total;
+  const totalAssessments = metrics.assessments.assigned;
+  const totalResults   = metrics.reports.approved;
+  const scoringComplete = metrics.pipeline?.scoringComplete ?? 0;
+
+  // Overview-only metrics (not in metricsService)
+  const alerts = (data.totalStatusChanges ?? 0) + (data.totalTransfers ?? 0);
+
+  const avgAssessmentsPerCase = totalCases > 0
+    ? (totalAssessments / totalCases)
     : 0;
-  const completionPct = data.totalAssessments > 0
-    ? ((data.totalResults / data.totalAssessments) * 100)
+  const completionPct = totalAssessments > 0
+    ? ((totalResults / totalAssessments) * 100)
     : 0;
-  const scoringComplete = data.totalScoringComplete ?? data.pipeline?.scoringComplete ?? 0;
   const centrePct     = totalCentres > 0 ? (activeCentres / totalCentres) * 100 : 0;
   const multi = data.multipleAssessmentCases;
   const multiCount = multi?.count ?? 0;
@@ -186,17 +189,17 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-4" role="list" aria-label="Overview metrics">
-      <KpiCard label="Total Cases" value={data.totalCases.toLocaleString()} sub="This period"
+      <KpiCard label="Total Cases" value={totalCases.toLocaleString()} sub="This period"
         iconBg="bg-blue-50" iconFg="text-blue-600" icon={<CasesIcon />}
         tooltip={KPI.TOTAL_CASES} />
-      <KpiCard label="Assessments" value={data.totalAssessments.toLocaleString()}
+      <KpiCard label="Assessments" value={totalAssessments.toLocaleString()}
         sub="Assigned this period"
         iconBg="bg-violet-50" iconFg="text-violet-600" icon={<AssessmentIcon />}
         tooltip={KPI.ASSESSMENTS_ADDED} />
       <KpiCard
         label="Avg per Case"
-        value={data.totalCases > 0 ? avgAssessmentsPerCase.toFixed(1) : '—'}
-        sub={data.totalCases > 0 ? `${data.totalAssessments.toLocaleString()} ÷ ${data.totalCases.toLocaleString()} cases` : 'No cases in period'}
+        value={totalCases > 0 ? avgAssessmentsPerCase.toFixed(1) : '—'}
+        sub={totalCases > 0 ? `${totalAssessments.toLocaleString()} ÷ ${totalCases.toLocaleString()} cases` : 'No cases in period'}
         iconBg="bg-indigo-50" iconFg="text-indigo-600" icon={<AvgIcon />}
         tooltip={KPI.AVG_ASSESSMENTS_PER_CASE}
       />
@@ -209,14 +212,14 @@ export default function MetricCards({ data, loading, error, onOpenMultipleAssess
         onClick={multiClickable ? onOpenMultipleAssessments : undefined}
         tooltip={KPI.MULTIPLE_ASSESSMENT_CASES}
       />
-      <KpiCard label="Report PDFs Created" value={data.totalResults.toLocaleString()}
+      <KpiCard label="Report PDFs Created" value={totalResults.toLocaleString()}
         sub={`${scoringComplete.toLocaleString()} scored · ${completionPct.toFixed(1)}% of assigned assessments`}
         pct={completionPct} ringColor="#059669"
         iconBg="bg-emerald-50" iconFg="text-emerald-600" icon={<ResultsIcon />}
         tooltip={KPI.RESULTS_GENERATED}
         clickable={!!onOpenReportPdfs}
         onClick={onOpenReportPdfs}
-        ariaLabel={`Report PDFs Created: ${data.totalResults.toLocaleString()}. ${DRILL_DOWN_HINT}`} />
+        ariaLabel={`Report PDFs Created: ${totalResults.toLocaleString()}. ${DRILL_DOWN_HINT}`} />
       <KpiCard label="Active Centres" value={`${activeCentres} / ${totalCentres}`}
         sub={idleCentres === 0 ? 'All centres engaged' : `${idleCentres} idle`}
         pct={centrePct} ringColor="#0284C7"

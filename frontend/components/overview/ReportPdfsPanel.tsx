@@ -35,7 +35,7 @@ function RecordRow({ record, variant }: { record: ReportPdfRecord; variant: 'pdf
     <div className="py-2.5 border-b border-gray-100 last:border-0">
       {/* Case name + assessment badge + date */}
       <div className="flex flex-wrap items-center gap-2 mb-1.5">
-        <span className="text-sm font-semibold text-gray-900">
+        <span className="text-[14px] font-medium text-gray-900">
           {record.patientName || `Case #${record.patientId}`}
         </span>
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ring-inset flex-shrink-0 ${badgeCls(record.assessmentType)}`}>
@@ -47,11 +47,11 @@ function RecordRow({ record, variant }: { record: ReportPdfRecord; variant: 'pdf
       {/* Meta row */}
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Performed by</span>
+          <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Performed by</span>
           <span className="font-medium text-gray-700">{record.clinicianName || '—'}</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+          <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
             {variant === 'pdf' ? 'PDF by' : 'Draft by'}
           </span>
           <span className="font-medium text-gray-700">{record.actorName || '—'}</span>
@@ -135,7 +135,7 @@ function CentreCard({ centre, defaultOpen }: { centre: ReportPdfCentre; defaultO
           )}
 
           {pdfCount === 0 && draftCount === 0 && (
-            <p className="text-xs text-gray-400 py-2">No records.</p>
+            <p className="text-[12px] text-gray-500 py-2">No records.</p>
           )}
         </div>
       )}
@@ -223,7 +223,7 @@ export default function ReportPdfsPanel({ open, filters, totalReports, onClose }
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Drill-down</p>
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Drill-down</p>
             <h2 id="report-pdfs-title" className="text-base font-semibold text-gray-900">
               Report PDFs Created
             </h2>
@@ -312,7 +312,7 @@ export default function ReportPdfsPanel({ open, filters, totalReports, onClose }
               <p className="text-sm font-medium text-gray-700">
                 {data.length === 0 ? 'No reports in this period' : 'No results match your search'}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-[12px] text-gray-500">
                 {data.length === 0 ? 'Try adjusting the date range or centre filter.' : 'Try a different search term.'}
               </p>
             </div>

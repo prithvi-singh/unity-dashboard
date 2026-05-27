@@ -64,7 +64,7 @@ function StatCard({ label, value, sub, accent = 'blue' }: {
   };
   return (
     <div className="bg-gray-50 rounded-xl p-3.5 flex flex-col gap-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">{label}</p>
+      <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">{label}</p>
       <p className={`text-2xl font-bold leading-none tabular-nums ${accentMap[accent]}`}>{value}</p>
       {sub && <p className="text-[11px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
@@ -280,7 +280,7 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
               {clinician && (
                 <>
                   <section aria-label="Caseload summary">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-3">Caseload</p>
+                    <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-3">Caseload</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <StatCard label="Active Cases" value={data.activeCaseload ?? 0} accent="blue" />
                       <StatCard label="All-time Cases" value={data.totalCasesAllTime ?? 0} accent="violet" />
@@ -290,11 +290,11 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
 
                   {data.assessmentBreakdown && data.assessmentBreakdown.length > 0 && (
                     <section aria-label="Assessment breakdown">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-3">Assessment Breakdown</p>
+                      <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-3">Assessment Breakdown</p>
                       <div className="rounded-xl border border-gray-100 overflow-hidden">
                         <table className="w-full text-sm" role="table">
                           <thead className="bg-gray-50 border-b border-gray-100">
-                            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+                            <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                               <th className="py-2.5 pl-4 pr-3 text-left">Type</th>
                               <th className="py-2.5 px-3 text-left">Assigned</th>
                               <th className="py-2.5 px-3 text-left">Done</th>
@@ -317,7 +317,7 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
               {/* ── Manager / Admin stats ── */}
               {!clinician && (
                 <section aria-label="Activity summary">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-3">Activity Summary</p>
+                  <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-3">Activity Summary</p>
                   <div className="grid grid-cols-2 gap-3">
                     <StatCard label="Cases Registered" value={data.casesRegistered ?? 0} accent="blue" />
                     <StatCard label="Assessments Assigned" value={data.assessmentsAssigned ?? 0} accent="violet" />
@@ -343,7 +343,7 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
 
               {/* ── Recent activity ── */}
               <section aria-label="Recent activity">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-3">
+                <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-3">
                   Recent Activity
                   <span className="ml-1.5 font-normal normal-case text-gray-400">last 20 events</span>
                 </p>

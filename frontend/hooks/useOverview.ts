@@ -19,21 +19,26 @@ export function useOverview(filters: FilterParams): UseOverviewResult {
   const filtersRef = useRef(filters);
   useEffect(() => { filtersRef.current = filters; });
 
-  const doFetch = useCallback(async () => {
+  const doFetch = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchOverview(filtersRef.current);
+      const result = await fetchOverview(filtersRef.current, signal);
       setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load overview data');
+      if (e instanceof Error && e.name === 'AbortError') return;
+      const msg = e instanceof Error ? e.message : 'Failed to load overview data';
+      console.error('[useOverview] error:', msg, e);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    doFetch();
+    const controller = new AbortController();
+    doFetch(controller.signal);
+    return () => controller.abort();
   }, [doFetch, filters.centreId, filters.dateFrom, filters.dateTo]);
 
   return { data, loading, error, refetch: doFetch };

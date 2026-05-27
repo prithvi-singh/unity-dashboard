@@ -2,7 +2,7 @@
 
 import type { BottleneckData } from '@/lib/types';
 import type { BottleneckDrillDownType, OnBottleneckDrillDown } from '@/lib/bottleneckDrillDown';
-import RoleFunnel, { pctOf } from '@/components/shared/RoleFunnel';
+import RoleFunnel from '@/components/shared/RoleFunnel';
 
 interface Props {
   data: BottleneckData | null;
@@ -23,7 +23,7 @@ const FUNNEL_STAGES: {
   { key: 'scoringComplete', label: 'Scoring complete', ownerHint: 'Clinician', barColor: 'bg-teal-500', type: 'funnel-scoring', drillLabel: 'Scoring complete' },
   { key: 'reportPdfCreated', label: 'Report PDF created', ownerHint: 'Clinician', barColor: 'bg-emerald-500', type: 'funnel-report-pdf', drillLabel: 'Report PDF created' },
   { key: 'reportShared', label: 'Report shared', ownerHint: 'Manager', barColor: 'bg-indigo-500', type: 'funnel-report-shared', drillLabel: 'Report shared with family' },
-  { key: 'goalsAdded', label: 'Goals added', ownerHint: 'Clinician', barColor: 'bg-purple-500', type: 'funnel-goals-added', drillLabel: 'Goals added' },
+  { key: 'goalsAdded', label: 'Cases with goals added', ownerHint: 'Clinician', barColor: 'bg-purple-500', type: 'funnel-goals-added', drillLabel: 'Cases with goals added' },
   { key: 'goalsApproved', label: 'Goals approved', ownerHint: 'Manager', barColor: 'bg-sky-500', type: 'funnel-goals-approved', drillLabel: 'Goals approved' },
 ];
 
@@ -53,25 +53,24 @@ export default function BottleneckFunnel({ data, loading, onDrillDown }: Props) 
           : undefined}
         steps={FUNNEL_STAGES.map((stage) => {
           const value = Number(funnel[stage.key] ?? 0);
-          const pctLabel = stage.key === 'assigned'
-            ? (funnel.registered > 0 ? `${Math.round((value / funnel.registered) * 100)}% of registered cases` : undefined)
-            : pctOf(value, funnel.assigned);
+          const pctBase = stage.key === 'assigned' ? funnel.registered : funnel.assigned;
+          const pct = pctBase > 0 ? Math.round((value / pctBase) * 100) : undefined;
           return {
             label: stage.label,
             value,
             barColor: stage.barColor,
             ownerHint: stage.ownerHint,
-            pctLabel,
+            pct,
             drillType: stage.type,
             drillLabel: stage.drillLabel,
           };
         })}
       />
       {data && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] px-5 py-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] px-5 py-4">
           {opsFlags > 0 ? (
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] mr-1">Operational</span>
+              <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mr-1">Operational</span>
               {data.statusChangeCount > 0 && (
                 <button
                   type="button"

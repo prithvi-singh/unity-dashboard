@@ -85,13 +85,6 @@ function RoleRow({
       </td>
       <td className="py-2.5 px-2 text-right">
         <FilterButton
-          count={row.loggedIn}
-          label={`${row.label} signed in`}
-          onClick={() => apply({ kind: 'role', roleGroup: row.roleGroup, tier: 'logged-in' })}
-        />
-      </td>
-      <td className="py-2.5 px-2 text-right">
-        <FilterButton
           count={row.active}
           label={`${row.label} active`}
           tone="good"
@@ -112,7 +105,7 @@ function RoleRow({
 
 function Skeleton() {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 animate-pulse">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
       <div className="h-4 w-48 bg-gray-100 rounded mb-2" />
       <div className="h-3 w-64 bg-gray-100 rounded mb-6" />
       <div className="space-y-3">
@@ -147,13 +140,13 @@ export default function MonitoringEngagementFunnel({
     : 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-5 h-full">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-5 h-full">
       <div>
         <div className="flex items-center gap-1.5">
-          <h2 className="text-sm font-semibold text-gray-900">Who worked today?</h2>
+          <h2 className="text-[14px] font-medium text-gray-900">Who worked today?</h2>
           <KpiTooltip {...KPI.MONITORING_ENGAGEMENT} />
         </div>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-[12px] text-gray-500 mt-0.5">
           {selectedDate} · {stats.total.toLocaleString()} Unity accounts tracked
           {stats.byRole.some((r) => r.roleGroup === 'other') && (
             <span> (includes legacy or unassigned roles)</span>
@@ -161,7 +154,7 @@ export default function MonitoringEngagementFunnel({
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => apply({ kind: 'active' })}
@@ -170,15 +163,6 @@ export default function MonitoringEngagementFunnel({
           <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-[0.08em]">Did case work</p>
           <p className="text-xl font-bold text-gray-900 tabular-nums mt-1">{stats.active}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">{pct(stats.active, stats.total)} of all accounts</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => apply({ kind: 'logged-in' })}
-          className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2.5 text-left hover:bg-sky-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-        >
-          <p className="text-[10px] font-bold text-sky-700 uppercase tracking-[0.08em]">Signed in</p>
-          <p className="text-xl font-bold text-gray-900 tabular-nums mt-1">{stats.loggedIn}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">New login session today</p>
         </button>
         <button
           type="button"
@@ -199,7 +183,7 @@ export default function MonitoringEngagementFunnel({
 
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+          <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
             Breakdown by role
           </p>
           <p className="text-[11px] text-gray-400">
@@ -207,12 +191,11 @@ export default function MonitoringEngagementFunnel({
           </p>
         </div>
         <div className="overflow-x-auto -mx-1">
-          <table className="w-full min-w-[420px]">
+          <table className="w-full min-w-[340px]">
             <thead>
-              <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+              <tr className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                 <th className="text-left py-2 pr-3">Role</th>
                 <th className="text-right py-2 px-2">Accounts</th>
-                <th className="text-right py-2 px-2">Signed in</th>
                 <th className="text-right py-2 px-2">Active</th>
                 <th className="text-right py-2 px-2">Needs nudge</th>
               </tr>

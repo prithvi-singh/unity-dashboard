@@ -94,6 +94,26 @@ export const KPI = {
 
   // ─── CLINICIAN PROFILE ───────────────────────────────────────────────────────
 
+  CLINICIAN_ASSESSMENTS_SCORED: {
+    title: 'Assessments Scored',
+    description: 'Assessments where this clinician completed scoring in the selected period.',
+  },
+
+  CLINICIAN_REPORTS_DRAFTED: {
+    title: 'Reports Drafted',
+    description: 'Reports added or edited by this clinician. Core clinical output.',
+  },
+
+  CLINICIAN_GOALS_ADDED: {
+    title: 'Goals Added',
+    description: 'Intervention goals this clinician documented for their cases.',
+  },
+
+  CLINICIAN_CASE_HISTORY: {
+    title: 'Case History',
+    description: 'Case history entries recorded — notes, progress, and baseline observations.',
+  },
+
   CLINICIAN_RESULTS: {
     title: 'Report PDFs Created',
     description: 'Assessments where this clinician generated the report PDF. Counts each assessment separately.',
@@ -101,7 +121,12 @@ export const KPI = {
 
   CLINICIAN_ACTIVE_CASELOAD: {
     title: 'Active Caseload',
-    description: 'Open cases assigned to this clinician. Heavy load raises delay risk.',
+    description: 'Open cases assigned to this clinician right now. Heavy load raises delay risk.',
+  },
+
+  CLINICIAN_COMPLETION_RATE: {
+    title: 'Completion Rate',
+    description: 'Completed assessments ÷ total (completed + active). High = efficient throughput.',
   },
 
   CLINICIAN_YIELD: {
@@ -116,27 +141,101 @@ export const KPI = {
 
   CLINICIAN_ACTIVE_DAYS: {
     title: 'Active Days',
-    description: 'Days with at least one action. Low count may mean absence or disengagement.',
+    description: 'Days where this clinician performed at least one core job action (scored, drafted, added goals, or recorded case history).',
   },
 
   CLINICIAN_AVG_TIME_TO_RESULT: {
-    title: 'Avg Time to Result',
-    description: 'Assignment to result. Shorter is better; long times suggest overload or complexity.',
+    title: 'Avg Days to Result',
+    description: 'Average days from assignment to scoring. Shorter is better; long times suggest overload or complexity.',
   },
 
   CLINICIAN_STUCK_CASES: {
     title: 'Stuck Cases',
-    description: 'Assigned 14+ days with no result. Clinical progress has stalled.',
+    description: 'Cases assigned 14+ days with no result. Clinical progress has stalled — each needs a review.',
+  },
+
+  // ─── MANAGER PROFILE (new metrics) ───────────────────────────────────────────
+
+  MANAGER_REPORTS_APPROVED: {
+    title: 'Reports Approved',
+    description: 'Report PDFs signed off by this manager in the selected period.',
+  },
+
+  MANAGER_GOALS_APPROVED: {
+    title: 'Goals Approved',
+    description: 'Intervention goals reviewed and approved. Pending approvals block clinicians.',
+  },
+
+  MANAGER_AVG_DAYS_APPROVE_REPORT: {
+    title: 'Avg Days to Approve Report',
+    description: 'Average days from report drafted to report approved. Long times delay clinical delivery.',
+  },
+
+  MANAGER_AVG_DAYS_APPROVE_GOAL: {
+    title: 'Avg Days to Approve Goal',
+    description: 'Average days from goal submission to manager approval. Delays block clinicians.',
+  },
+
+  MANAGER_PENDING_APPROVALS: {
+    title: 'Pending Approvals',
+    description: 'Goal approval requests awaiting manager review right now.',
+  },
+
+  MANAGER_ACTIVE_DAYS: {
+    title: 'Active Days',
+    description: 'Days where this manager performed at least one core job action (approved report/goal, case history, or registered case).',
+  },
+
+  // ─── OPS ADMIN PROFILE (new metrics) ─────────────────────────────────────────
+
+  ADMIN_CLINICIANS_ASSIGNED: {
+    title: 'Clinicians Assigned',
+    description: 'Cases this admin routed to a clinician in the selected period.',
+  },
+
+  ADMIN_AVG_DAYS_TO_ASSIGN: {
+    title: 'Avg Days to Assign',
+    description: 'Average days from registration to clinician assignment. Target: under 2 days.',
+  },
+
+  ADMIN_STUCK_ONBOARDING: {
+    title: 'Stuck Onboarding',
+    description: 'Cases registered 48h+ ago with no clinician assigned. Each needs immediate action.',
+  },
+
+  ADMIN_ACTIVE_DAYS: {
+    title: 'Active Days',
+    description: 'Days where this admin performed at least one core job action (registered a case or assigned a clinician).',
   },
 
   CLINICIAN_IDLE: {
     title: 'Idle Clinicians',
-    description: 'Clinicians with open caseload and no Unity activity today. Login is not used as a signal — only real audit actions count.',
+    description: 'Clinicians with active cases who performed no clinical actions in the selected period. Login is not used as a signal — only real audit actions count.',
   },
 
   CLINICIAN_ACTIVE_STAFF: {
-    title: 'Active Staff',
-    description: 'Clinicians who logged at least one case action in the selected period.',
+    title: 'Active Clinicians',
+    description: 'Clinicians who scored an assessment, drafted a report, added a goal, or completed case history in the selected period.',
+  },
+
+  CLINICIAN_TEAM_CASELOAD: {
+    title: 'Active Caseload',
+    description: 'Total non-closed cases currently assigned to clinicians across all centres.',
+  },
+
+  CLINICIAN_TEAM_REPORTS_DRAFTED: {
+    title: 'Reports Drafted',
+    description: 'Reports drafted by clinicians in the selected period. Initial drafts only.',
+  },
+
+  CLINICIAN_TEAM_REPORTS_APPROVED: {
+    title: 'Reports Approved',
+    description: 'Reports approved by managers and PDF generated.',
+  },
+
+  CLINICIAN_TEAM_OVERDUE: {
+    title: 'Overdue Assessments',
+    description: 'Assessments assigned more than 14 days ago with no result generated. Requires follow-up.',
   },
 
   CLINICIAN_CENTRE_QUEUE: {
@@ -236,13 +335,8 @@ export const KPI = {
   // ─── MONITORING ──────────────────────────────────────────────────────────────
 
   ENGAGEMENT_RATE: {
-    title: 'Engagement Rate',
-    description: 'Clinicians, managers, and centre admins who logged at least one case action today, out of all accounts in those roles. The subtitle also shows totals across every Unity login.',
-  },
-
-  ACTIONS_TODAY: {
-    title: 'Actions Today',
-    description: 'All audit actions today. Avg per active user shown below.',
+    title: 'Active Today',
+    description: 'Unity accounts with at least one clinical action today, out of all tracked accounts. Clinical actions include case work, scoring, reports, and goals — login sessions are not counted.',
   },
 
   CENTRES_ACTIVE: {

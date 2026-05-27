@@ -68,7 +68,7 @@ export default function PipelineStuckCases({ cases, loading, highlightStage }: P
 
   if (loading && !cases.length) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="h-4 w-40 bg-gray-100 rounded animate-pulse mb-5" />
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -80,7 +80,7 @@ export default function PipelineStuckCases({ cases, loading, highlightStage }: P
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -125,13 +125,13 @@ export default function PipelineStuckCases({ cases, loading, highlightStage }: P
           <table className="w-full text-sm" role="table" aria-label="Stuck cases requiring attention">
             <thead>
               <tr className="border-t border-gray-50">
-                <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Patient</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Centre</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Assessment</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Current Stage</th>
-                <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Days Stuck</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Clinician</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.07em]">Manager</th>
+                <th className="px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Patient</th>
+                <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</th>
+                <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Assessment</th>
+                <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Current Stage</th>
+                <th className="px-4 py-3 text-center text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Days Stuck</th>
+                <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Clinician</th>
+                <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">Manager</th>
               </tr>
             </thead>
             <tbody>

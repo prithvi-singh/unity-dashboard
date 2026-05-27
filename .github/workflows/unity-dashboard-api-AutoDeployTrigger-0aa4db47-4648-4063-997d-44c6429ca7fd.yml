@@ -44,4 +44,20 @@ jobs:
           containerAppEnvironment: unity-dashboard-env
           imageToBuild: parivaremindersacr.azurecr.io/unity-dashboard-api:${{ github.sha }}
 
+      # Warm up API cache after deploy so the first real user hits warm cache.
+      # 45s sleep: Container Apps typically takes 30–40s to become healthy after image swap.
+      - name: Warm up API cache after deploy
+        run: |
+          echo "Waiting 45s for container to become ready..."
+          sleep 45
+          echo "Pinging health endpoint..."
+          curl -sf "${{ secrets.API_URL }}/api/health" || echo "Health ping failed (non-fatal)"
+          echo "Warming overview cache..."
+          curl -sf "${{ secrets.API_URL }}/api/overview" || echo "Overview warm failed (non-fatal)"
+          echo "Warming issues cache..."
+          curl -sf "${{ secrets.API_URL }}/api/issues" || echo "Issues warm failed (non-fatal)"
+          echo "Warming monitoring cache..."
+          curl -sf "${{ secrets.API_URL }}/api/monitoring" || echo "Monitoring warm failed (non-fatal)"
+          echo "Cache warm complete."
+
 

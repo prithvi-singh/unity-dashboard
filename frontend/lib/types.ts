@@ -4,6 +4,109 @@ export interface FilterParams {
   dateTo?: string;
 }
 
+// ── Core Metrics (from /api/metrics — single source of truth) ─────────────────
+
+export interface MetricsCentreCases {
+  centreId: number;
+  centreName: string;
+  count: number;
+}
+
+export interface MetricsCentreAssessments {
+  centreId: number;
+  centreName: string;
+  assigned: number;
+  scored: number;
+}
+
+export interface MetricsCentreReports {
+  centreId: number;
+  centreName: string;
+  drafted: number;
+  edits: number;
+  approved: number;
+}
+
+export interface MetricsCentreGoals {
+  centreId: number;
+  centreName: string;
+  added: number;
+  approved: number;
+}
+
+export interface MetricsCentreUsers {
+  centreId: number;
+  centreName: string;
+  total: number;
+  active: number;
+  quiet: number;
+  clinicians: number;
+  managers: number;
+  ops: number;
+}
+
+export interface MetricsRoleUsers {
+  roleName: string;
+  total: number;
+  active: number;
+  quiet: number;
+}
+
+export interface MetricsUserPerson {
+  userId: number;
+  name: string | null;
+  count: number;
+}
+
+export interface CoreMetrics {
+  period: { dateFrom: string | null; dateTo: string | null };
+  pipeline: ClinicalPipelineCounts;
+  cases: {
+    total: number;
+    byCentre: MetricsCentreCases[];
+    byClinician: MetricsUserPerson[];
+    byManager: MetricsUserPerson[];
+    byOps: MetricsUserPerson[];
+  };
+  assessments: {
+    assigned: number;
+    scored: number;
+    completionRate: number;
+    byCentre: MetricsCentreAssessments[];
+    byType: Array<{ type: string; assigned: number; scored: number; completionRate: number }>;
+    byClinician: Array<{ userId: number; name: string | null; assigned: number; scored: number }>;
+  };
+  reports: {
+    drafted: number;
+    edits: number;
+    approved: number;
+    byCentre: MetricsCentreReports[];
+    byClinician: Array<{ userId: number; name: string | null; drafted: number; edits: number }>;
+    byManager: Array<{ userId: number; name: string | null; approved: number }>;
+  };
+  goals: {
+    added: number;
+    approved: number;
+    byCentre: MetricsCentreGoals[];
+    byClinician: Array<{ userId: number; name: string | null; added: number }>;
+    byManager: Array<{ userId: number; name: string | null; approved: number }>;
+  };
+  users: {
+    total: number;
+    active: number;
+    quiet: number;
+    neverActive: number;
+    byRole: MetricsRoleUsers[];
+    byCentre: MetricsCentreUsers[];
+  };
+  centres: {
+    total: number;
+    active: number;
+    idle: number;
+    idleCentreNames: string[];
+  };
+}
+
 export interface Centre {
   id: number;
   name: string;
@@ -85,6 +188,101 @@ export interface IdleCentreDetail {
   lastActivityDate: string | null;
 }
 
+export interface DailyMetrics {
+  date: string;
+  casesRegistered: number;
+  assessmentsScored: number;
+  reportsDrafted: number;
+  reportsApproved: number;
+  goalsAdded: number;
+  goalsApproved: number;
+  activeUsers: number;
+  activeCentres: number;
+}
+
+export interface WeeklySparklines {
+  /** Last 7 dates YYYY-MM-DD oldest first */
+  labels: string[];
+  casesRegistered: number[];
+  assessmentsScored: number[];
+  reportsApproved: number[];
+  activeUsers: number[];
+}
+
+export interface UpcomingBottleneckItem {
+  patientName: string | null;
+  patientDisplayId: string | null;
+  assessmentType: string;
+  clinicianName: string | null;
+  clinicianId: number;
+  centreName: string | null;
+  daysAssigned: number;
+  daysUntilOverdue: number;
+}
+
+export interface UpcomingBottlenecks {
+  count: number;
+  items: UpcomingBottleneckItem[];
+}
+
+export type CentreHealthStatus = 'on-track' | 'needs-attention' | 'blocked';
+
+export interface CentreHealthSummaryItem {
+  centreId: number;
+  centreName: string;
+  status: CentreHealthStatus;
+  statusReasons: string[];
+  activeCaseload: number;
+  stuckCases: number;
+  completionRate: number;
+  activeStaff: number;
+  totalStaff: number;
+}
+
+// ── Pipeline stages (enriched overview pipeline) ──────────────────────────────
+
+export interface PipelineStageData {
+  id: string;
+  label: string;
+  responsibleRole: string;
+  count: number;
+  percentOfBase: number;
+  pendingCount: number;
+  avgDaysInStage: number | null;
+  stuckCount: number;
+  stuckThresholdDays: number;
+}
+
+export interface PipelineStagePendingCase {
+  patientName: string | null;
+  patientDisplayId: string | null;
+  assessmentType: string | null;
+  responsiblePersonName: string | null;
+  responsiblePersonId: number;
+  centreName: string | null;
+  daysWaiting: number;
+}
+
+/** Pipeline health signal for the Overview Needs Action banner */
+export interface NeedsActionCounts {
+  // Threshold-filtered counts (for Needs Action banner)
+  /** Assessments in not_started / in_progress state > 14 days since assignment */
+  stuckInScoring: number;
+  /** Assessments with result generated but no report drafted > 7 days */
+  reportsOverdue: number;
+  /** Reports pending manager approval OR goals pending approval > 5 days */
+  approvalsNeeded: number;
+  /** Report approved but goals not yet added > 7 days since PDF */
+  goalsNotAdded: number;
+  /** Sum of all four threshold-filtered counts */
+  total: number;
+  // Total state counts (for Period Summary pipeline cards — no threshold)
+  totalScoring?: number;
+  totalReportNotDrafted?: number;
+  totalAwaitingApproval?: number;
+  totalGoalsNotAdded?: number;
+}
+
 export interface OverviewData {
   totalCases: number;
   totalAssessments: number;
@@ -102,6 +300,90 @@ export interface OverviewData {
   multipleAssessmentCases: MultipleAssessmentCasesSummary;
   byCentre: CentreBreakdown[];
   centres: Centre[];
+  // ── Pipeline health signals ────────────────────────────────────────────────
+  needsAction?: NeedsActionCounts;
+  // ── Other fields ──────────────────────────────────────────────────────────
+  todayMetrics?: DailyMetrics;
+  yesterdayMetrics?: DailyMetrics;
+  weeklySparklines?: WeeklySparklines;
+  upcomingBottlenecks?: UpcomingBottlenecks;
+  centreHealthSummary?: CentreHealthSummaryItem[];
+  pipelineStages?: PipelineStageData[];
+  previousPeriodMetrics?: PreviousPeriodMetrics | null;
+  weeklyAverages?: WeeklyAverages;
+  yesterdayDrillDown?: YesterdayDrillDown;
+}
+
+export interface PreviousPeriodMetrics {
+  totalCases: number;
+  totalAssessments: number;
+  totalScored: number;
+  totalReportsDrafted: number;
+  totalReportsApproved: number;
+  totalGoalsAdded: number;
+  totalGoalsApproved: number;
+  activeUsers: number;
+  activeCentres: number;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface WeeklyAverages {
+  avgDailyCasesRegistered: number;
+  avgDailyAssessmentsScored: number;
+  avgDailyReportsDrafted: number;
+  avgDailyReportsApproved: number;
+  avgDailyGoalsAdded: number;
+  avgDailyActiveUsers: number;
+  periodDays: number;
+}
+
+export interface YesterdayTopClinician {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  centreName: string;
+  assessmentsScored: number;
+  reportsDrafted: number;
+  goalsAdded: number;
+  totalCoreActions: number;
+}
+
+export interface YesterdayTopCentre {
+  centreId: number;
+  centreName: string;
+  casesRegistered: number;
+  assessmentsScored: number;
+  reportsApproved: number;
+  totalActions: number;
+}
+
+export interface YesterdaySilentClinician {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  centreName: string;
+  activeCaseload: number;
+  lastActiveDate: string | null;
+}
+
+export interface YesterdayDrillDown {
+  topClinicians: YesterdayTopClinician[];
+  topCentres: YesterdayTopCentre[];
+  silentClinicians: YesterdaySilentClinician[];
+  zeroMetrics: string[];
+}
+
+/** Per-clinician pipeline state counts (point-in-time, not date-filtered) */
+export interface ClinicianPipelineBreakdown {
+  /** Cases in not_started or in_progress state */
+  scoring: number;
+  /** Cases in report_not_drafted state (result generated, report not written) */
+  reportsToWrite: number;
+  /** Cases in goals_not_added state (PDF approved, goals not submitted) */
+  goalsToAdd: number;
+  /** Cases in report_pending_approval or goals_pending_approval (manager-blocked) */
+  pendingApproval: number;
 }
 
 export interface Clinician {
@@ -120,6 +402,19 @@ export interface Clinician {
   reportEdits?: number;
   lastActivityDate: string | null;
   lastLoginDate: string | null;
+  // Consistency data
+  consistencyPercent?: number;
+  consistencyStatus?: ConsistencyStatus;
+  coreJobDays?: number;
+  totalWorkingDays?: number;
+  coreOutput?: { assessmentsScored: number; reportsDrafted: number };
+  lastActiveDate?: string | null;
+  lastActiveDaysAgo?: number | null;
+  // Pipeline breakdown (point-in-time)
+  stuckCases?: number;
+  reportsNotDrafted?: number;
+  goalsNotAdded?: number;
+  pipelineBreakdown?: ClinicianPipelineBreakdown;
 }
 
 export interface Manager {
@@ -132,9 +427,23 @@ export interface Manager {
   centreName: string | null;
   casesRegistered: number;
   assessmentsAssigned: number;
+  reportsApproved?: number;
+  goalsApproved?: number;
   totalActions: number;
   lastActivityDate: string | null;
   lastLoginDate: string | null;
+  // Consistency data
+  consistencyPercent?: number;
+  consistencyStatus?: ConsistencyStatus;
+  coreJobDays?: number;
+  totalWorkingDays?: number;
+  coreOutput?: { reportsApproved: number; goalsApproved: number };
+  lastActiveDate?: string | null;
+  lastActiveDaysAgo?: number | null;
+  // Pending approval counts (point-in-time)
+  reportsToApprove?: number;
+  goalsToApprove?: number;
+  pendingApprovals?: number;
 }
 
 export interface CentreAdmin {
@@ -144,6 +453,14 @@ export interface CentreAdmin {
   email: string;
   roleName: string | null;
   centreId: number | null;
+  // Consistency data
+  consistencyPercent?: number;
+  consistencyStatus?: ConsistencyStatus;
+  coreJobDays?: number;
+  totalWorkingDays?: number;
+  coreOutput?: { casesRegistered: number; cliniciansAssigned: number };
+  lastActiveDate?: string | null;
+  lastActiveDaysAgo?: number | null;
   centreName: string | null;
   casesRegistered: number;
   casesAssignedToClinical: number;
@@ -171,11 +488,19 @@ export interface HeatmapEntry {
   days: { date: string; count: number }[];
 }
 
+export interface ClinicalOutputToday {
+  cases: number;
+  assessmentsScored: number;
+  reports: number;
+  goals: number;
+}
+
 export interface MonitoringData {
   date: string;
   users: MonitoringUser[];
   heatmap: HeatmapEntry[];
   availableDates: string[];
+  clinicalOutput?: ClinicalOutputToday;
 }
 
 export interface TopPerformerBreakdown {
@@ -273,7 +598,145 @@ export interface UserProfileUser {
   roleName: string | null;
   lastLoginDate: string | null;
   centres: UserProfileCentre[];
+  centreName: string | null;
 }
+
+// ── Consistency ───────────────────────────────────────────────────────────────
+
+export type ConsistencyStatus = 'consistent' | 'irregular' | 'inactive' | 'silent';
+
+export interface ConsistencyScore {
+  totalWorkingDays: number;
+  coreJobDays: number;
+  consistencyPercent: number;
+  status: ConsistencyStatus;
+}
+
+// ── Core metrics per role ─────────────────────────────────────────────────────
+
+export interface ClinicianCoreMetrics {
+  assessmentsScored: number;
+  reportsDrafted: number;
+  goalsAdded: number;
+  caseHistoryCompleted: number;
+  activeCaseload: number;
+  avgDaysToResult: number | null;
+  stuckCases: number;
+  /** Point-in-time pipeline state breakdown — replaces completionRate */
+  pipelineBreakdown?: ClinicianPipelineBreakdown;
+}
+
+export interface ManagerCoreMetrics {
+  reportsApproved: number;
+  goalsApproved: number;
+  casesRegistered: number;
+  avgDaysToApproveReport: number | null;
+  avgDaysToApproveGoal: number | null;
+  pendingApprovals: number;
+  /** Point-in-time: reports currently awaiting this manager's approval */
+  reportsToApprove?: number;
+  /** Point-in-time: goal sets currently awaiting this manager's approval */
+  goalsToApprove?: number;
+}
+
+export interface OpsAdminCoreMetrics {
+  casesRegistered: number;
+  cliniciansAssigned: number;
+  avgDaysToAssign: number | null;
+  stuckOnboarding: number;
+}
+
+// ── Activity by day ───────────────────────────────────────────────────────────
+
+export interface ActivityDayBreakdown {
+  assessmentsScored: number;
+  reportsDrafted: number;
+  goalsAdded: number;
+  reportsApproved: number;
+  goalsApproved: number;
+  casesRegistered: number;
+  cliniciansAssigned: number;
+  caseHistory: number;
+}
+
+export interface ActivityByDay {
+  date: string;
+  didCoreJob: boolean;
+  coreJobCount: number;
+  totalActions: number;
+  breakdown: ActivityDayBreakdown;
+}
+
+// ── Recent action (enhanced) ──────────────────────────────────────────────────
+
+export interface UserProfileRecentAction {
+  /** Full ISO 8601 datetime string (UTC). Use formatActionDate() to display. */
+  isoDateTime: string | null;
+  /** YYYY-MM-DD date portion (UTC). */
+  date: string | null;
+  /** HH:MM time portion (UTC). */
+  time: string | null;
+  eventType: string;
+  rawType: string | null;
+  assessmentType: string | null;
+  patientName: string | null;
+  patientId: string | null;
+  centreName: string | null;
+  isCoreJob: boolean;
+}
+
+export type PipelineState =
+  | 'not_started'
+  | 'in_progress'
+  | 'report_not_drafted'
+  | 'report_pending_approval'
+  | 'goals_not_added'
+  | 'goals_pending_approval'
+  | 'completed'
+  | 'excluded';
+
+export interface UserProfileActiveCase {
+  patientId: number;
+  patientName: string | null;
+  assessmentType: string | null;
+  status: string;
+  pipelineState: PipelineState;
+  centreId: number;
+  centreName: string | null;
+  assignedAt: string | null;
+  daysSinceAssigned: number;
+  lastAction: string | null;
+}
+
+export interface UserProfileData {
+  user: UserProfileUser;
+  role: UserProfileRole;
+  coreJobDefinition: string;
+  consistencyScore: ConsistencyScore;
+  coreMetrics: ClinicianCoreMetrics | ManagerCoreMetrics | OpsAdminCoreMetrics;
+  activityByDay: ActivityByDay[];
+  recentActions: UserProfileRecentAction[];
+  activeCases: UserProfileActiveCase[];
+}
+
+// ── Consistency data row (for team sub-tab period consistency table) ──────────
+
+export interface ConsistencyDataRow {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  centreName: string | null;
+  consistencyPercent: number;
+  consistencyStatus: ConsistencyStatus;
+  coreJobDays: number;
+  totalWorkingDays: number;
+  coreOutput: Record<string, number>;
+  lastActiveDate: string | null;
+  lastActiveDaysAgo: number | null;
+}
+
+// ── Legacy summary types (kept for backward compatibility in drawer) ──────────
 
 export interface ClinicianSummary {
   resultsGenerated: number;
@@ -313,34 +776,6 @@ export interface UserProfileTrendPoint {
 export interface UserProfileActionBreakdown {
   type: string;
   count: number;
-}
-
-export interface UserProfileRecentAction {
-  time: string;
-  type: string;
-  description: string | null;
-  patientId: number | null;
-  centreName: string | null;
-}
-
-export interface UserProfileActiveCase {
-  patientId: number;
-  status: string;
-  centreId: number;
-  centreName: string | null;
-  assignedAt: string | null;
-  daysSinceAssigned: number;
-  lastAction: string | null;
-}
-
-export interface UserProfileData {
-  user: UserProfileUser;
-  role: UserProfileRole;
-  summary: ClinicianSummary | ManagerSummary | CentreAdminSummary;
-  trend: UserProfileTrendPoint[];
-  actionBreakdown: UserProfileActionBreakdown[];
-  recentActions: UserProfileRecentAction[];
-  activeCases: UserProfileActiveCase[];
 }
 
 export interface UserProfileParams extends FilterParams {
@@ -416,6 +851,100 @@ export interface UserBreakdownData {
   byCentre: UserBreakdownCentre[];
   recentlyInactive: UserBreakdownAttentionUser[];
   neverActive: UserBreakdownNeverActive[];
+}
+
+// ── Daily Ops Review ─────────────────────────────────────────────────────────
+
+export interface CaseAction {
+  patientId: number;
+  patientName: string;
+  count: number;
+}
+
+export interface DailyReviewCoreMetrics {
+  // Clinician
+  assessmentsScored: number;
+  assessmentCases: CaseAction[];
+  reportsDrafted: number;
+  reportCases: CaseAction[];
+  goalsAdded: number;
+  goalCases: CaseAction[];
+  caseHistoryComplete: number;
+  caseHistoryPartial: number;
+  // Manager
+  reportsApproved: number;
+  reportsApprovedCases: CaseAction[];
+  goalsApproved: number;
+  goalsApprovedCases: CaseAction[];
+  casesRegistered: number;
+  casesRegisteredCases: CaseAction[];
+  // Ops
+  cliniciansAssigned: number;
+  cliniciansAssignedCases: CaseAction[];
+}
+
+export interface DailyReviewActiveUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  centreName: string | null;
+  coreMetrics: DailyReviewCoreMetrics;
+}
+
+export interface DailyReviewIdleUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  centreName: string | null;
+  actionsCount: number;
+  lastActionDescription: string | null;
+  lastActionTime: string | null;
+}
+
+export interface DailyReviewSilentUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  centreName: string | null;
+  lastActivityDate: string | null;
+  lastActivityDaysAgo: number | null;
+}
+
+export interface DailyReviewRole {
+  key: string;
+  roleName: string;
+  coreJobDescription: string;
+  total: number;
+  didCoreJob: number;
+  presentButIdle: number;
+  silent: number;
+  users: {
+    active: DailyReviewActiveUser[];
+    idle: DailyReviewIdleUser[];
+    silent: DailyReviewSilentUser[];
+  };
+}
+
+export interface DailyReviewTrendDay {
+  date: string;
+  clinicianCoreActions: number;
+  managerCoreActions: number;
+  opsCoreActions: number;
+}
+
+export interface DailyReviewData {
+  date: string;
+  summary: {
+    didCoreJob: number;
+    presentButIdle: number;
+    silent: number;
+    totalUsers: number;
+  };
+  roles: DailyReviewRole[];
+  trend: { days: DailyReviewTrendDay[] };
 }
 
 // ── Assessment Analytics ──────────────────────────────────────────────────────
@@ -550,6 +1079,344 @@ export interface WorkloadCentreRow {
   managerReportsApproved: number;
   /** Approved goals at centres with a manager-role user assigned */
   managerGoalsApproved: number;
+}
+
+// ── Centres tab ───────────────────────────────────────────────────────────────
+
+export type CentreStatus = 'on-track' | 'needs-attention' | 'blocked';
+
+export interface CentrePipelineCounts {
+  scoring:           number;
+  stuckScoring14d:   number;
+  stuckScoring21d:   number;
+  reportNotDrafted:  number;
+  pendingApproval:   number;
+  pendingApproval5d: number;
+  pendingApproval7d: number;
+  goalsNotAdded:     number;
+  goalsNotAdded7d:   number;
+  goalsNotAdded14d:  number;
+}
+
+export interface CentreOverviewRow {
+  centreId:      number;
+  centreName:    string;
+  status:        CentreStatus;
+  statusReasons: string[];
+
+  intake: {
+    casesRegistered: number;
+    avgDaysToAssign: number | null;
+    stuckUnassigned: number;
+  };
+  throughput: {
+    activeCaseload:       number;
+    assessmentsScored:    number;
+    assessmentsAssigned:  number;
+  };
+  pipeline:    CentrePipelineCounts;
+  output: {
+    reportsDrafted:         number;
+    reportsApproved:        number;
+    avgDaysToApproveReport: number | null;
+    goalsAdded:             number;
+    goalsApproved:          number;
+    avgDaysToApproveGoal:   number | null;
+  };
+  staff: {
+    total:             number;
+    clinicians:        number;
+    managers:          number;
+    ops:               number;
+    activeThisPeriod:  number;
+    idle:              number;
+    neverActive:       number;
+    activePercent:     number;
+  };
+  lastActivityDate: string | null;
+}
+
+export interface CentrePipelineBreakdown {
+  inScoring:        number;
+  awaitingReport:   number;
+  awaitingApproval: number;
+  goalsNotAdded:    number;
+  completed:        number;
+}
+
+export interface CentresOverviewSummary {
+  totalCentres:   number;
+  onTrack:        number;
+  needsAttention: number;
+  blocked:        number;
+  idleCentres:    number;
+}
+
+export interface CentresOverviewData {
+  summary:  CentresOverviewSummary;
+  centres:  CentreOverviewRow[];
+}
+
+export interface CentreDetailStaff {
+  id:               number;
+  firstName:        string;
+  lastName:         string;
+  email:            string;
+  roleName:         string | null;
+  actionsInPeriod:  number;
+  lastActivityDate: string | null;
+  lastLoginDate:    string | null;
+  status:           'active' | 'idle' | 'silent' | 'never-active';
+}
+
+export interface CentreDetailActiveCase {
+  patientId:          number;
+  patientDisplayId:   string | null;
+  patientName:        string;
+  clinicianName:      string | null;
+  status:             string;
+  daysOpen:           number;
+  lastAssessmentType: string | null;
+}
+
+export interface CentreDetailOverdueAssessment {
+  patientId:        number;
+  patientDisplayId: string | null;
+  clinicianName:    string | null;
+  assessmentStatus: string;
+  daysPending:      number;
+}
+
+export interface CentreDetailAuditEvent {
+  id:               number;
+  type:             string;
+  createdAt:        string | null;
+  description:      string | null;
+  actorName:        string | null;
+  patientDisplayId: string | null;
+}
+
+export interface CentreDetailData {
+  staff:                CentreDetailStaff[];
+  activeCases:          CentreDetailActiveCase[];
+  overdueAssessments:   CentreDetailOverdueAssessment[];
+  recentAudit:          CentreDetailAuditEvent[];
+  pipelineBreakdown:    CentrePipelineBreakdown;
+}
+
+// ── Issues triage ─────────────────────────────────────────────────────────────
+
+/** Assessment that is still scoring-incomplete (not_started or in_progress state). */
+export interface IssueOverdueAssessment {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  /** AdminUser.Id for the assigned clinician — null if unassigned */
+  clinicianId: number | null;
+  clinicianName: string;
+  clinicianEmail: string;
+  centreName: string;
+  /** Days since assignment — primary sort key */
+  daysAssigned: number;
+  /** @deprecated Use daysAssigned */
+  daysPending: number;
+  assignedDate: string | null;
+}
+
+/**
+ * Scoring complete (AssessmentResultGenerated fired) but report not yet drafted.
+ * State: report_not_drafted.
+ */
+export interface IssueReportNotDrafted {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  clinicianId: number | null;
+  clinicianName: string;
+  clinicianEmail: string;
+  centreName: string;
+  /** Days since AssessmentResultGenerated — time in this state */
+  daysInCurrentState: number;
+  daysAssigned: number;
+  resultGeneratedDate: string | null;
+  assignedDate: string | null;
+}
+
+/**
+ * Report drafted (ReportAdded) but manager has not yet approved (no ReportPDFGenerated).
+ * State: report_pending_approval. Responsible: Manager.
+ */
+export interface IssueReportPendingApproval {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  clinicianId: number | null;
+  clinicianName: string;
+  clinicianEmail: string;
+  managerId: number | null;
+  managerName: string;
+  managerEmail: string;
+  centreName: string;
+  /** Days since ReportAdded — time waiting for approval */
+  daysInCurrentState: number;
+  /** @deprecated Use daysInCurrentState */
+  daysPending: number;
+  draftedDate: string | null;
+}
+
+/**
+ * Report approved (ReportPDFGenerated fired) but no goals added yet.
+ * State: goals_not_added. Responsible: Clinician.
+ * This is the correct state for Leo Arya DP3.
+ */
+export interface IssueGoalsNotAdded {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  clinicianId: number | null;
+  clinicianName: string;
+  clinicianEmail: string;
+  centreName: string;
+  /** Days since ReportPDFGenerated — time in this state */
+  daysInCurrentState: number;
+  daysAssigned: number;
+  pdfGeneratedDate: string | null;
+  assignedDate: string | null;
+}
+
+/**
+ * Goals submitted (PatientGoalApprovalRequest exists) but not yet approved.
+ * State: goals_pending_approval. Responsible: Manager.
+ */
+export interface IssueGoalPendingApproval {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  clinicianId: number | null;
+  clinicianName: string;
+  clinicianEmail: string;
+  managerId: number | null;
+  managerName: string;
+  managerEmail: string;
+  centreName: string;
+  /** Days since PatientGoalApprovalRequest.CreatedDateTimeUtc */
+  daysInCurrentState: number;
+  /** @deprecated Use daysInCurrentState */
+  daysPending: number;
+  submittedDate: string | null;
+}
+
+export interface IssueStuckOnboarding {
+  patientName: string;
+  patientId: number;
+  centreName: string;
+  registeredDate: string;
+  hoursUnassigned: number;
+  registeredBy: string;
+}
+
+export interface IssueDarkCentre {
+  centreName: string;
+  lastActivityDate: string | null;
+  daysInactive: number;
+  staffCount: number;
+  activeCaseload: number;
+}
+
+/** @deprecated Use IssueReportPendingApproval */
+export type IssuePendingReportApproval = IssueReportPendingApproval;
+
+/** @deprecated Use IssueGoalPendingApproval */
+export type IssuePendingGoalApproval = IssueGoalPendingApproval;
+
+export interface IssueEarlyOverdue {
+  patientName: string;
+  patientId: number;
+  assessmentType: string;
+  clinicianId: number | null;
+  clinicianName: string;
+  centreName: string;
+  daysPending: number;
+}
+
+export interface IssueLowCompletionClinician {
+  clinicianId: number;
+  clinicianName: string;
+  clinicianEmail: string;
+  centreName: string;
+  assigned: number;
+  completed: number;
+  completionRate: number;
+  assessmentType: string;
+}
+
+export interface IssueLowCompletionCentre {
+  centreName: string;
+  assigned: number;
+  completed: number;
+  completionRate: number;
+}
+
+export interface IssueTurnaroundWeek {
+  weekStart: string;
+  avgOnboardingHours: number | null;
+  avgReportApprovalHours: number | null;
+  avgGoalApprovalHours: number | null;
+}
+
+export interface IssueByType {
+  type: string;
+  total: number;
+  pending: number;
+  completionRate: number;
+  avgDays: number | null;
+  responsibleRole: string;
+}
+
+export interface IssuesData {
+  critical: {
+    total: number;
+    /** Scoring incomplete > 21 days — audit-log based, NOT IsResultGenerate */
+    overdueAssessments: IssueOverdueAssessment[];
+    /** Scoring done but report not drafted > 14 days */
+    reportsNotDrafted: IssueReportNotDrafted[];
+    /** Report drafted but not approved > 7 days */
+    reportsPendingApproval: IssueReportPendingApproval[];
+    /** Report approved but goals not added > 14 days */
+    goalsNotAdded: IssueGoalsNotAdded[];
+    /** Goals submitted but not approved > 7 days */
+    goalsPendingApproval: IssueGoalPendingApproval[];
+    stuckOnboarding: IssueStuckOnboarding[];
+    darkCentres: IssueDarkCentre[];
+  };
+  warning: {
+    total: number;
+    /** Scoring incomplete 14-21 days */
+    overdueAssessments: IssueOverdueAssessment[];
+    /** @deprecated Use overdueAssessments */
+    nudgeAssessments: IssueOverdueAssessment[];
+    /** Scoring done but report not drafted 7-14 days */
+    reportsNotDrafted: IssueReportNotDrafted[];
+    /** Report drafted but not approved 3-7 days */
+    reportsPendingApproval: IssueReportPendingApproval[];
+    /** @deprecated Use reportsPendingApproval */
+    pendingReportApprovals: IssueReportPendingApproval[];
+    /** Report approved but goals not added 7-14 days */
+    goalsNotAdded: IssueGoalsNotAdded[];
+    /** Goals submitted but not approved 3-7 days */
+    goalsPendingApproval: IssueGoalPendingApproval[];
+    /** @deprecated Use goalsPendingApproval */
+    pendingGoalApprovals: IssueGoalPendingApproval[];
+  };
+  watching: {
+    total: number;
+    earlyOverdue: IssueEarlyOverdue[];
+    lowCompletionClinicians: IssueLowCompletionClinician[];
+    lowCompletionCentres: IssueLowCompletionCentre[];
+  };
+  turnaroundTrend: { weeks: IssueTurnaroundWeek[] };
+  byType: IssueByType[];
+  generatedAt: string;
 }
 
 // ── User Summary Profile (drawer) ─────────────────────────────────────────────

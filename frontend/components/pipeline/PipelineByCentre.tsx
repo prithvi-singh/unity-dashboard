@@ -54,7 +54,7 @@ export default function PipelineByCentre({ centres, loading }: Props) {
 
   if (loading && !centres.length) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="h-5 w-48 bg-gray-100 rounded animate-pulse mb-6" />
         <div className="space-y-5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -73,7 +73,7 @@ export default function PipelineByCentre({ centres, loading }: Props) {
 
   if (!sorted.length) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <h2 className="text-[15px] font-bold text-gray-900 mb-2">Pipeline by Centre</h2>
         <p className="text-sm text-gray-400">No open caseload to display.</p>
       </div>
@@ -81,7 +81,7 @@ export default function PipelineByCentre({ centres, loading }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>

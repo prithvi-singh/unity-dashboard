@@ -132,11 +132,12 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
   const maxActions      = Math.max(...rows.map((a) => a.totalActions), 1);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Centre Admin Detail</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Sort by column</p>
+          <h2 className="text-[14px] font-medium text-gray-900">Centre Admin Detail</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">Sort by column</p>
+          <p className="section-click-hint">Click any name to view their full profile</p>
         </div>
         <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
           {rows.length} centre assignment{rows.length !== 1 ? 's' : ''}
@@ -146,7 +147,7 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
         <table className="w-full text-sm" role="table" aria-label="Centre admin detail table">
           <thead>
-            <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em]">
+            <tr className="border-b border-gray-100 text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
               <th className="px-6 py-3 text-left w-6">#</th>
               <SortTh col="name"        label="Admin"                sort={sort} onSort={handleSort} isText />
               <SortTh col="centreName"  label="Centre"               sort={sort} onSort={handleSort} isText />
@@ -196,7 +197,7 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
                         userId={a.id}
                         role="centre-admin"
                         params={{ ...linkParams, centreId: a.centreId }}
-                        className="text-gray-800 hover:text-blue-600 hover:underline underline-offset-2 transition-colors"
+                        firstName={a.firstName}
                       >
                         {a.firstName} {a.lastName}
                       </UserProfileLink>

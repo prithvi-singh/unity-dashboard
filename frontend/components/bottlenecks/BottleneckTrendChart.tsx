@@ -184,10 +184,10 @@ export default function BottleneckTrendChart({ data, loading, onDrillDown }: Pro
   const hasTrend = (data?.weeklyTrend?.length ?? 0) > 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-gray-900">Turnaround Trend</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Weekly avg hours · dashed = SLA · click to drill in</p>
+        <h2 className="text-[14px] font-medium text-gray-900">Turnaround Trend</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">Weekly avg hours · dashed = SLA · click to drill in</p>
       </div>
       <div className="relative h-48 sm:h-64 md:h-[260px]">
         {loading && !data ? (

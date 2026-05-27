@@ -4,7 +4,7 @@ const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
 const { abbreviateCentre } = require('../lib/formatters');
-const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
+const { getCoreMetrics } = require('../services/metricsService');
 
 const router = Router();
 
@@ -61,18 +61,20 @@ router.get('/', async (req, res, next) => {
     }
 
     const [
+      metrics,
       onboardingResult,
       stuckResult,
       pendingGoalsResult,
       goalApprovalResult,
-      assessmentResult,
       resetTransferResult,
       pendingAssessmentsResult,
-      funnelResult,
       byCentreResult,
       weeklyOnboardingResult,
       weeklyGoalResult,
     ] = await Promise.all([
+
+      // Shared metrics — pipeline funnel + counts match Overview exactly
+      getCoreMetrics({ dateFrom, dateTo, centreId }),
 
       // Q1: avg onboarding turnaround (CaseRegistered → first CaseAssigned) in hours
       bindAll(pool.request()).query(`
@@ -154,28 +156,6 @@ router.get('/', async (req, res, next) => {
           AND ${goalDateFilter}
       `),
 
-      // Q5: assessment completion rate from AllocatePatient
-      bindAll(pool.request()).query(`
-        SELECT
-          COUNT(*)                                                        AS total,
-          SUM(CASE WHEN ap.IsResultGenerate = 1 THEN 1 ELSE 0 END)       AS completed
-        FROM AllocatePatient ap
-        LEFT JOIN Patient pt ON pt.Id = ap.PatientId
-        LEFT JOIN Centre c   ON c.Id  = pt.CentreId
-        WHERE (@centreId IS NULL OR c.Id = @centreId)
-          AND (@centreId IS NOT NULL OR (
-            LOWER(c.CentreName) NOT LIKE '%test%'
-            AND LOWER(c.CentreName) NOT LIKE '%delete%'
-          ))
-          AND (pt.Id IS NULL OR (${patientExclusion}))
-          AND (
-            @dateFrom IS NULL OR ap.CreatedDateTimeUtc >= @dateFrom
-          )
-          AND (
-            @dateTo IS NULL OR ap.CreatedDateTimeUtc <= @dateTo
-          )
-      `),
-
       // Q6: transfer and status-change counts from PatientAuditLog
       bindAll(pool.request()).query(`
         SELECT pal.Type, COUNT(*) AS cnt
@@ -203,9 +183,6 @@ router.get('/', async (req, res, next) => {
           ))
           AND ${patientExclusion}
       `),
-
-      // Q8: assessment-level clinical pipeline funnel
-      bindAll(pool.request()).query(buildClinicalPipelineQuery()),
 
       // Q9: per-centre bottleneck breakdown
       bindAll(pool.request()).query(`
@@ -332,23 +309,22 @@ router.get('/', async (req, res, next) => {
       `),
     ]);
 
-    const avgOnboardingHours = onboardingResult.recordset[0]?.avgHours ?? null;
-    const casesStuckInOnboarding = stuckResult.recordset[0]?.stuckCount ?? 0;
-    const pendingGoalApprovals = pendingGoalsResult.recordset[0]?.pendingCount ?? 0;
-    const avgGoalApprovalHours = goalApprovalResult.recordset[0]?.avgHours ?? null;
-    const pendingAssessments = pendingAssessmentsResult.recordset[0]?.pendingCount ?? 0;
+    const avgOnboardingHours     = onboardingResult.recordset[0]?.avgHours   ?? null;
+    const casesStuckInOnboarding = stuckResult.recordset[0]?.stuckCount      ?? 0;
+    const pendingGoalApprovals   = pendingGoalsResult.recordset[0]?.pendingCount ?? 0;
+    const avgGoalApprovalHours   = goalApprovalResult.recordset[0]?.avgHours  ?? null;
+    const pendingAssessments     = pendingAssessmentsResult.recordset[0]?.pendingCount ?? 0;
 
-    const { total = 0, completed = 0 } = assessmentResult.recordset[0] || {};
-    const assessmentCompletionRate = total > 0
-      ? parseFloat(((completed / total) * 100).toFixed(2))
+    // Assessment completion rate — use shared service counts so they match Overview
+    const { pipeline } = metrics;
+    const assessmentCompletionRate = pipeline.assigned > 0
+      ? parseFloat(((pipeline.scoringComplete / pipeline.assigned) * 100).toFixed(2))
       : 0;
 
     const rtMap = {};
     for (const row of resetTransferResult.recordset) {
       rtMap[row.Type] = row.cnt;
     }
-
-    const pipeline = mapPipelineRow(funnelResult.recordset[0] || {});
 
     const weekMap = new Map();
     const formatWeekKey = (value) => {

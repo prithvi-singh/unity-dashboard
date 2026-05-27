@@ -134,10 +134,10 @@ export default function AssessmentCompletionChart({ data, loading }: Props) {
   const isEmpty = data?.byType.every((t) => t.total === 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-gray-900">Completion Rate Comparison</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Assigned vs completed</p>
+        <h2 className="text-[14px] font-medium text-gray-900">Completion Rate Comparison</h2>
+        <p className="text-[12px] text-gray-500 mt-0.5">Assigned vs completed</p>
       </div>
       <div className="relative h-48 sm:h-64 md:h-[260px]">
         {loading && !data ? (
@@ -147,7 +147,7 @@ export default function AssessmentCompletionChart({ data, loading }: Props) {
         ) : isEmpty ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6">
             <p className="text-sm font-medium text-gray-600">No assessment data in this range</p>
-            <p className="text-xs text-gray-400">Adjust the date filter or centre selection</p>
+            <p className="text-[12px] text-gray-500">Adjust the date filter or centre selection</p>
           </div>
         ) : (
           <canvas

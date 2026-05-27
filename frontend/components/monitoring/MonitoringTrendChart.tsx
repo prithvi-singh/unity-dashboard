@@ -101,11 +101,11 @@ export default function MonitoringTrendChart({ data, loading, selectedDate }: Pr
   }, [data, selectedDate]);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] p-5 flex flex-col">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
       <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">14-Day Activity Trend</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Actions per day</p>
+          <h2 className="text-[14px] font-medium text-gray-900">14-Day Activity Trend</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">Clinical actions per day — cases, assessments, reports and goals only</p>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-gray-500">
           <span className="inline-flex items-center gap-1">

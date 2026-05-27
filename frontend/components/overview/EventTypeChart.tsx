@@ -66,7 +66,7 @@ export default function EventTypeChart({ data, loading }: Props) {
             pctLabel: pctOf(pipe.reportShared, pipe.assigned),
           },
           {
-            label: 'Goals added',
+            label: 'Cases with goals added',
             value: pipe.goalsAdded,
             barColor: 'bg-purple-500',
             ownerHint: 'Clinician',
@@ -82,10 +82,10 @@ export default function EventTypeChart({ data, loading }: Props) {
         ]}
       />
       {data && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] px-5 py-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] px-5 py-4">
           {alerts > 0 ? (
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.08em] mr-1">Operational</span>
+              <span className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mr-1">Operational</span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 rounded-lg">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" />
                 <span className="text-xs font-semibold text-rose-700">{data.totalStatusChanges} Resets</span>
@@ -98,7 +98,7 @@ export default function EventTypeChart({ data, loading }: Props) {
           ) : (
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-              <span className="text-xs text-gray-400">No operational flags in this period</span>
+              <span className="text-[12px] text-gray-500">No operational flags in this period</span>
             </div>
           )}
         </div>

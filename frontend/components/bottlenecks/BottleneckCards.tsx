@@ -100,11 +100,9 @@ function KpiCard({ label, value, sub, pct, ringColor, iconBg, iconFg, icon, hasA
       onClick={clickable ? onClick : undefined}
       data-focus-target={focusTarget}
       title={clickable ? DRILL_DOWN_HINT : undefined}
-      className={`bg-white rounded-2xl p-5 flex flex-col justify-between gap-3 text-left w-full ${
-        hasAlert
-          ? 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] ring-1 ring-rose-200/80'
-          : 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_6px_24px_rgba(0,0,0,0.04)] border border-gray-100'
-      } ${clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : ''}`}
+      className={`bg-gray-50 rounded-xl p-4 flex flex-col justify-between gap-3 text-left w-full ${
+        hasAlert ? 'ring-1 ring-rose-200/80' : ''
+      } ${clickable ? 'cursor-pointer hover:bg-gray-100 hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : ''}`}
     >
       <div className="flex items-start justify-between">
         <div className={`${iconBg} ${iconFg} p-2.5 rounded-xl`} aria-hidden="true">{icon}</div>
@@ -112,7 +110,7 @@ function KpiCard({ label, value, sub, pct, ringColor, iconBg, iconFg, icon, hasA
       </div>
       <div>
         <div className="flex items-center mb-1">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] leading-snug">{label}</p>
+          <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] leading-snug">{label}</p>
           {tooltip && <KpiTooltip {...tooltip} />}
         </div>
         <p className="text-[2rem] font-bold text-gray-900 leading-none tracking-tight tabular-nums">{value}</p>
@@ -125,7 +123,7 @@ function KpiCard({ label, value, sub, pct, ringColor, iconBg, iconFg, icon, hasA
 
 function Skeleton() {
   return (
-    <div className="bg-white rounded-2xl p-5 animate-pulse border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+    <div className="bg-gray-50 rounded-xl p-4 animate-pulse">
       <div className="flex justify-between mb-4">
         <div className="h-9 w-9 bg-gray-100 rounded-xl" />
         <div className="h-[52px] w-[52px] bg-gray-100 rounded-full" />

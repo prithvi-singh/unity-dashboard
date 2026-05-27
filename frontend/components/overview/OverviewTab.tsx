@@ -628,7 +628,7 @@ function PipelineHealth({ stages, loading, dateFrom, dateTo, centreId }: Pipelin
               <button
                 type="button"
                 onClick={() => setDrawer({ stageIdx: globalIdx, type: 'pending' })}
-                title={`${stage.pendingCount} cases completed ${stage.label} but have not progressed to ${stages[globalIdx + 1]?.label ?? 'the next stage'} yet`}
+                title={`${stage.pendingCount} cases completed ${stage.label} but have not progressed to ${stages![globalIdx + 1]?.label ?? 'the next stage'} yet`}
                 className="text-[11px] font-medium text-amber-600 hover:underline focus:outline-none"
               >
                 {stage.pendingCount} pending

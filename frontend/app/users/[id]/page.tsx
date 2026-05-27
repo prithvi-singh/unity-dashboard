@@ -83,7 +83,7 @@ const CONSISTENCY_BADGE: Record<ConsistencyStatus, { label: string; cls: string 
 
 const EMPTY_CLINICIAN_METRICS: ClinicianCoreMetrics = {
   assessmentsScored: 0, reportsDrafted: 0, goalsAdded: 0, caseHistoryCompleted: 0,
-  activeCaseload: 0, completionRate: null, avgDaysToResult: null, stuckCases: 0,
+  activeCaseload: 0, avgDaysToResult: null, stuckCases: 0,
 };
 const EMPTY_MANAGER_METRICS: ManagerCoreMetrics = {
   reportsApproved: 0, goalsApproved: 0, casesRegistered: 0,

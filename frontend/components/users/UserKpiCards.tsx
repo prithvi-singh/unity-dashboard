@@ -138,13 +138,13 @@ export default function UserKpiCards({ role, coreMetrics, consistencyScore, load
           label="Reports to Approve"
           value={reportsToApprove}
           color={reportsToApprove > 0 ? 'text-rose-600' : 'text-gray-800'}
-          tooltip="Reports currently awaiting this manager's approval (point-in-time)"
+          tooltip={{ title: 'Reports to Approve', description: "Reports currently awaiting this manager's approval (point-in-time snapshot, not date-filtered)" }}
         />
         <KpiCard
           label="Goals to Approve"
           value={goalsToApprove}
           color={goalsToApprove > 0 ? 'text-rose-600' : 'text-gray-800'}
-          tooltip="Goal sets currently awaiting this manager's approval (point-in-time)"
+          tooltip={{ title: 'Goals to Approve', description: "Goal sets currently awaiting this manager's approval (point-in-time snapshot, not date-filtered)" }}
         />
         <KpiCard
           label="Reports Approved"

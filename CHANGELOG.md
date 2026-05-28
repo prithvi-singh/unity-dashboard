@@ -6,6 +6,88 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0] - 2026-05-28
+
+### Backend — New Routes
+
+- `GET /api/goal-progress` — goal progress coverage summary across all approved goals; returns total approved goals, goals-with-notes count, coverage percentage, per-assessment-type breakdown (SPM / ISA / REELS), per-user note counts, and a "recently undocumented" list of assessments with approved goals but no progress notes
+- `GET /api/goal-progress/assessment/:id` — per-assessment goal progress with full note content, fetched from the three dedicated progress tables (`PatientSPMAssessmentFNPGoalProgress`, `PatientISAAssessmentFnpGoalProgress`, `PatientReelsAssessmentFnpGoalProgress`); FSP goals explicitly excluded (no progress table exists)
+
+### Backend — Data Layer
+
+- **`utils/goalProgress.js`** — new goal progress data layer; five exported functions:
+  - `getGoalProgressSummary` — parallel query batch for overall coverage metrics, per-type breakdown, per-user note counts, and undocumented assessment detection
+  - `getGoalProgressForAssessment` — fetches goal list and note content from type-specific progress tables; gracefully handles schema mismatches (logs warning, returns empty notes)
+  - `getGoalProgressForClinician` — per-clinician note counts and per-goal breakdown for enriching clinician profiles
+  - `getProgressNoteCountsByUser` — lightweight `userId → {notesAdded, goalsDocumented, lastNoteDate}` map for enriching `/api/clinicians` and `/api/managers` responses
+  - `getGoalCoverageForOverview` — minimal `{approvedGoals, goalsWithNotes, coveragePercent}` summary for `/api/overview`
+- `goal-progress` router registered at `/api/goal-progress` in `server.js`
+
+### Backend — Route Improvements
+
+- **`routes/managers.js`** — data fixes following investigation: corrected join logic, added `progressNotes` and `goalsDocumented` fields sourced from `getProgressNoteCountsByUser`; `@mailinator.com` domain added to user exclusion filter
+- **`routes/users.js`** — major overhaul; new `attentionUsers` list (users with caseload but no recent activity), `neverActive` users list, enriched per-user fields; `@mailinator.com` exclusion added
+- **`routes/workload.js`** — query accuracy improvements; consistent use of shared filter helpers
+- **`routes/roleDrillDown.js`** — refactored to use shared query helpers; period-scoped queries made consistent with other routes
+- **`routes/clinicians.js`** — `progressNotes` and `goalsDocumented` enrichment added
+- **`routes/centre-admins.js`** — minor filter alignment
+- **`routes/issues.js`** — filter alignment
+- **`routes/centres.js`** — 130-line restructure for accuracy and consistency
+- **`services/metricsService.js`** — 86-line rework; additional fields surfaced; cache key refinements
+
+### Backend — Data Integrity
+
+- `@mailinator.com` email domain added to `userExclusionStrict` and `createdByExclusion` helpers in `utils/goalProgress.js` and across all updated routes — previously only `@webority.com` was excluded
+
+### Frontend — New Components
+
+- **`ErrorBoundary`** (`components/shared/ErrorBoundary.tsx`) — React class error boundary; wraps each sub-tab in `TeamTab`; shows labelled error message with inline "Try again" reset button; prevents a single failing tab from crashing the whole page
+- **`ActiveManagersPanel`** (`components/managers/ActiveManagersPanel.tsx`) — slide-over panel listing active managers with key metrics for the selected period
+- **`ManagerCentreActivityTable`** — exported from `ManagerChart.tsx`; reusable table of per-centre manager activity used both in the chart component and in `TeamTab` CSV export logic
+- **`GoalProgressDrawer`** (`components/shared/GoalProgressDrawer.tsx`) — slide-over panel showing goal progress coverage across approved goals; accessible from the Progress Notes card on Clinicians and Managers tabs, the Goal Coverage card on Centres tab, and individual clinician profile pages; per-type breakdown (SPM / ISA / REELS) with mini-stat cards, per-user note counts, and an "undocumented goals" list; FSP goals explicitly excluded (no progress table)
+
+### Frontend — Managers Tab Overhaul
+
+- **`ManagerChart.tsx`** — complete redesign (721 lines); new `buildManagerCentreRows` helper for centre-level aggregation; `ManagerCentreActivityTable` now a named export; data no longer fetched inside the component — callers pass data down
+- **`ManagerTable.tsx`** — significant redesign (301 lines); `goalsDisplay` helper integrated for consistent goals-approved / goals-items display; centre multi-value cell with `+X more` expand pattern; sortable columns; `UserProfileLink` on every manager name
+- Goals-approved and goals-items columns surfaced in the manager table using the new `goalsDisplay` helper from `lib/roleStats.ts`
+
+### Frontend — Team Tab Enhancements
+
+- **`TeamTab.tsx`** — major enhancement (559 lines added); each sub-tab (Clinicians, Managers, Ops Admins, Users, Centres) now wrapped in `ErrorBoundary` to prevent cascading failures; CSV export helpers added for all role types including Managers; `buildManagerCentreRows` import added from `ManagerChart`; `fmtDateCsv` and `groupClinicianRowsForExport` helpers extracted at module level
+
+### Frontend — Users Tab Improvements
+
+- **`UsersTab.tsx`** — significant rework (1316 lines); new `attentionUsers` section (active caseload but no recent activity in period) rendered as amber-highlighted callout; `neverActive` users highlighted in red and separated visually; `fmtDaysAgo` helper for relative last-seen timestamps; `formatPeriodLabel` for readable period descriptions; `pctOf` helper for percentage display; improved CSV export with all new fields
+- New types in `lib/types.ts`: `UserBreakdownNeverActive`, `UserBreakdownAttentionUser` with `userId`, `userName`, `email`, `role`, `activeCaseload`, `lastActivityDate`, and `lastLoginDate` fields
+
+### Frontend — Centre Admin Tab Visual Adjustments
+
+- **`CentreAdminChart.tsx`** — visual redesign (217 lines); chart layout and colour palette updated for consistency with Clinician and Manager charts
+- **`CentreAdminTable.tsx`** — detail table restructured (156 lines); column order and label alignment updated to match the other role tabs
+
+### Frontend — Bug Fixes and Polish
+
+- **`UserProfileDrawer.tsx`** — status badge logic corrected; "Active" / "Quiet" / "Never Active" badge now derived from `lastActivityDate` relative to the selected period rather than a hardcoded threshold
+- **`ActivityHeatmap.tsx`** — removed day-of-week suppression that was hiding Saturday and Sunday columns from the top-performers heatmap; all 7 days now shown
+- **`IdleCentresDrawer.tsx`** — minor fix to prevent stale centre list when the global centre filter changes
+- **`IssuesTab.tsx`** — 8-line filter alignment fix for `@mailinator.com` exclusion consistency
+- **`DrillDownTable.tsx`** — 44-line refactor; consistent column widths and row spacing across all drill-down contexts
+- **`RoleDrillDownPanel.tsx`** — 132-line refactor; metric labels and layout unified across Clinician, Manager, and Ops Admin drill-downs
+- **`PeriodConsistencyTable.tsx`** — 39-line fix; period label now reflects global date range filter
+- **`UserKpiCards.tsx`** — converted point-in-time tooltip values from plain strings to `KpiDefinition` objects (`{ title, description }`) to match the `KpiCard.tooltip` prop type
+- **`OverviewTab.tsx`** — non-null assertion added on `stages` prop inside the `renderRow` closure; TypeScript cannot narrow the outer prop inside the closure without it
+- **`app/users/[id]/page.tsx`** — removed stale `completionRate` from the `ClinicianCoreMetrics` empty-state constant; field was removed from the interface in favour of `pipelineBreakdown` but the empty-state initialiser had not been updated
+
+### Frontend — Type and Library Updates
+
+- **`lib/types.ts`** — 157 lines changed; new interfaces: `UserBreakdownNeverActive`, `UserBreakdownAttentionUser`; `Clinician` and `Manager` interfaces extended with `progressNotes: number` and `goalsDocumented: number`
+- **`lib/roleStats.ts`** — 101 lines; new `goalsDisplay(manager)` helper returning a formatted `"N goals (N items)"` string; new `centreRowTotal` helper; `aggregateManagersByCentre` now excludes Super Admin rows before aggregation
+- **`lib/kpiDefinitions.ts`** — 94 lines; new KPI definitions for `PROGRESS_NOTES`, `GOALS_DOCUMENTED`, and `ATTENTION_USERS`; existing definitions updated with refined tooltip copy
+- **`lib/roleDrillDown.ts`** — minor: `DRILL_DOWN_HINT` constant exported for reuse across manager and clinician table components
+
+---
+
 ## [1.1.0] - 2026-05-27
 
 ### Backend — New Routes
@@ -223,5 +305,6 @@ Applied at SQL level across all routes — no application-layer filtering:
 
 ---
 
+[1.2.0]: https://github.com/momsbelief/unity-dashboard/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/momsbelief/unity-dashboard/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/momsbelief/unity-dashboard/releases/tag/v1.0.0

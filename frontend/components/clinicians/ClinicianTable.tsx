@@ -222,27 +222,23 @@ export default function ClinicianTable({ clinicians, loading, error, linkParams,
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="text-[14px] font-medium text-gray-900">Clinician Detail</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Scroll horizontally for more columns · metrics summed across all centres</p>
-        <p className="section-click-hint">Click any name to view their full profile</p>
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-            {rows.length} clinician{rows.length !== 1 ? 's' : ''}
+      <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+          {rows.length} clinician{rows.length !== 1 ? 's' : ''}
+        </span>
+        {multiCentreCount > 0 && (
+          <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-full">
+            {multiCentreCount} across multiple centres
           </span>
-          {multiCentreCount > 0 && (
-            <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-full">
-              {multiCentreCount} across multiple centres
-            </span>
-          )}
-        </div>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">Scroll horizontally for more columns</span>
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
         <table className="w-full min-w-[1040px] text-sm" role="table" aria-label="Clinician detail table">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="px-6 py-3 text-left w-6 text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">#</th>
+          <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
+            <tr>
+              <th className="px-6 py-[10px] text-left w-6 text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">#</th>
               <SortableTh col="name" label="Clinician" sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} defaultDir="asc" />
               <SortableTh col="centreName" label="Centre" sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} defaultDir="asc" />
               <SortableTh

@@ -155,7 +155,9 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       GROUP BY pt.CentreId, c.CentreName
     `),
 
-    // ── Q3: Cases registered per user (used to split byManager / byOps) ─────
+    // ── Q3: Cases registered + assessments assigned per user ────────────────
+    // Counts both CaseRegistered (cases) and CaseAssigned (assessments) in a
+    // single pass so managers.js can show both metrics without a second query.
     _bind(pool.request(), p).query(`
       SELECT
         au.Id                   AS userId,
@@ -164,14 +166,17 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
         ar.Name                 AS roleName,
         CASE WHEN au.FirstName LIKE '%(Ops)%'
               OR  au.LastName  LIKE '%(Ops)%' THEN 1 ELSE 0 END AS isOps,
-        COUNT(DISTINCT pal.PatientId) AS count
+        COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered'
+              THEN pal.PatientId END)           AS count,
+        COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'
+              THEN pal.AllocatePatientId END)   AS assigned
       FROM PatientAuditLog pal
       JOIN Patient pt ON pt.Id = pal.PatientId
       JOIN Centre  c  ON c.Id  = pt.CentreId
       JOIN AdminUser au ON au.Id = pal.AdminUserId
       LEFT JOIN AdminUserRole aur ON aur.UserId = au.Id
       LEFT JOIN AdminRole     ar  ON ar.Id = aur.RoleId
-      WHERE pal.Type = 'CaseRegistered'
+      WHERE pal.Type IN ('CaseRegistered', 'CaseAssigned')
         AND ${CF}
         AND ${CE}
         AND ${PE}
@@ -275,7 +280,10 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       rep AS (
         SELECT
           pt.CentreId,
-          COUNT(CASE WHEN pal.Type = 'ReportAdded'  THEN 1 END) AS drafted,
+          -- Deduplicate by AllocatePatientId so this matches the drill-down drawer
+          -- which groups by AllocatePatient.Id (one row per unique assessment).
+          COUNT(DISTINCT CASE WHEN pal.Type = 'ReportAdded' AND pal.AllocatePatientId IS NOT NULL
+                THEN pal.AllocatePatientId END) AS drafted,
           COUNT(CASE WHEN pal.Type = 'UpdateReport' THEN 1 END) AS edits,
           COUNT(DISTINCT CASE WHEN pal.Type = 'ReportPDFGenerated'
                 THEN pal.AllocatePatientId END) AS approved
@@ -302,7 +310,9 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
         au.Id AS userId,
         au.FirstName,
         au.LastName,
-        COUNT(CASE WHEN pal.Type = 'ReportAdded'  THEN 1 END) AS drafted,
+        -- Deduplicate by AllocatePatientId so per-clinician counts match the drawer.
+        COUNT(DISTINCT CASE WHEN pal.Type = 'ReportAdded' AND pal.AllocatePatientId IS NOT NULL
+              THEN pal.AllocatePatientId END) AS drafted,
         COUNT(CASE WHEN pal.Type = 'UpdateReport' THEN 1 END) AS edits
       FROM PatientAuditLog pal
       JOIN Patient  pt ON pt.Id = pal.PatientId
@@ -339,7 +349,7 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       ORDER BY approved DESC
     `),
 
-    // ── Q10: Goals per centre (added, approved) ──────────────────────────────
+    // ── Q10: Goals per centre (added + approved, both assessment count and item count) ──
     _bind(pool.request(), p).query(`
       WITH cl AS (
         SELECT c.Id AS centreId, c.CentreName
@@ -349,9 +359,11 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       gls AS (
         SELECT
           pt.CentreId,
-          COUNT(DISTINCT pgar.AllocatePatientId) AS added,
+          COUNT(DISTINCT pgar.AllocatePatientId)                                   AS added,
+          COUNT(*)                                                                   AS addedItems,
           COUNT(DISTINCT CASE WHEN pgarg.Status = 'Approved'
-                THEN pgar.AllocatePatientId END) AS approved
+                THEN pgar.AllocatePatientId END)                                    AS approved,
+          COUNT(CASE WHEN pgarg.Status = 'Approved' THEN 1 END)                    AS approvedItems
         FROM PatientGoalApprovalRequestGoal pgarg
         JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
         JOIN AllocatePatient ap ON ap.Id = pgar.AllocatePatientId
@@ -364,19 +376,22 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       SELECT
         cl.centreId,
         cl.CentreName,
-        ISNULL(g.added,    0) AS added,
-        ISNULL(g.approved, 0) AS approved
+        ISNULL(g.added,         0) AS added,
+        ISNULL(g.addedItems,    0) AS addedItems,
+        ISNULL(g.approved,      0) AS approved,
+        ISNULL(g.approvedItems, 0) AS approvedItems
       FROM cl
       LEFT JOIN gls g ON g.CentreId = cl.centreId
     `),
 
-    // ── Q11: Goals per clinician ─────────────────────────────────────────────
+    // ── Q11: Goals per clinician (assessment count + item count) ────────────
     _bind(pool.request(), p).query(`
       SELECT
         au.Id AS userId,
         au.FirstName,
         au.LastName,
-        COUNT(DISTINCT pgar.AllocatePatientId) AS added
+        COUNT(DISTINCT pgar.AllocatePatientId) AS added,
+        COUNT(*)                               AS addedItems
       FROM PatientGoalApprovalRequestGoal pgarg
       JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
       JOIN AllocatePatient ap ON ap.Id = pgar.AllocatePatientId
@@ -390,21 +405,25 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       ORDER BY added DESC
     `),
 
-    // ── Q12: Goals approved per manager ─────────────────────────────────────
-    // PatientGoalApprovalRequestGoal has an UpdatedBy string (name), not a FK.
-    // We match by CONCAT to identify the approving AdminUser.
+    // ── Q12: Goals approved per manager (assessment count + item count) ─────
+    // UpdatedBy is a display-name string; match by email first (catches email-format
+    // values) then by CONCAT name (catches "First Last" format).
     _bind(pool.request(), p).query(`
       SELECT
         au.Id AS userId,
         au.FirstName,
         au.LastName,
-        COUNT(DISTINCT pgar.AllocatePatientId) AS approved
+        COUNT(DISTINCT pgar.AllocatePatientId) AS approved,
+        COUNT(*)                               AS approvedItems
       FROM PatientGoalApprovalRequestGoal pgarg
       JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
       JOIN AllocatePatient ap ON ap.Id = pgar.AllocatePatientId
       JOIN Patient  pt ON pt.Id = ap.PatientId
       JOIN Centre    c ON c.Id  = pt.CentreId
-      JOIN AdminUser au ON CONCAT(au.FirstName, ' ', au.LastName) = pgarg.UpdatedBy
+      JOIN AdminUser au ON (
+        LOWER(au.Email) = LOWER(LTRIM(RTRIM(pgarg.UpdatedBy)))
+        OR CONCAT(au.FirstName, ' ', au.LastName) = LTRIM(RTRIM(pgarg.UpdatedBy))
+      )
       WHERE pgarg.Status = 'Approved'
         AND ${CF} AND ${CE} AND ${FILTERS.patientExclusion('pt')}
         AND ${df('pgarg.UpdatedDateTimeUtc')}
@@ -529,18 +548,20 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
   }));
   const casesTotal = casesByCentre.reduce((s, r) => s + r.count, 0);
 
-  const casesByManager = [];
-  const casesByOps     = [];
+  const casesByManager   = [];
+  const casesByOps       = [];
   const casesByClinician = [];
+  const assessByManager  = [];
 
   for (const r of casesByActorRes.recordset) {
-    const entry = { userId: r.userId, name: _name(r.FirstName, r.LastName), count: r.count };
+    const entry = { userId: r.userId, name: _name(r.FirstName, r.LastName), count: r.count, assigned: r.assigned ?? 0 };
     if (r.isOps) {
       casesByOps.push(entry);
     } else if ((r.roleName || '').toLowerCase().includes('clinician')) {
       casesByClinician.push(entry);
     } else {
       casesByManager.push(entry);
+      assessByManager.push({ userId: r.userId, name: entry.name, assigned: entry.assigned });
     }
   }
 
@@ -597,24 +618,28 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
 
   // ── Assemble goals ───────────────────────────────────────────────────────────
   const goalsByCentre = goalsByCentreRes.recordset.map((r) => ({
-    centreId:   r.centreId,
-    centreName: r.CentreName,
-    added:      r.added,
-    approved:   r.approved,
+    centreId:      r.centreId,
+    centreName:    r.CentreName,
+    added:         r.added,
+    addedItems:    r.addedItems,
+    approved:      r.approved,
+    approvedItems: r.approvedItems,
   }));
   const goalsAdded    = pipeline.goalsAdded;
   const goalsApproved = pipeline.goalsApproved;
 
   const goalsByClinician = goalsByClinicianRes.recordset.map((r) => ({
-    userId: r.userId,
-    name:   _name(r.FirstName, r.LastName),
-    added:  r.added,
+    userId:     r.userId,
+    name:       _name(r.FirstName, r.LastName),
+    added:      r.added,
+    addedItems: r.addedItems,
   }));
 
   const goalsByManager = goalsByManagerRes.recordset.map((r) => ({
-    userId:   r.userId,
-    name:     _name(r.FirstName, r.LastName),
-    approved: r.approved,
+    userId:        r.userId,
+    name:          _name(r.FirstName, r.LastName),
+    approved:      r.approved,
+    approvedItems: r.approvedItems,
   }));
 
   // ── Assemble users ───────────────────────────────────────────────────────────
@@ -681,6 +706,7 @@ async function getCoreMetrics({ dateFrom = null, dateTo = null, centreId = null 
       byCentre:     assessByCentre,
       byType:       assessByType,
       byClinician:  assessByClinician,
+      byManager:    assessByManager,
     },
 
     reports: {

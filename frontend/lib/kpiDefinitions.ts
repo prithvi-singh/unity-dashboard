@@ -285,6 +285,33 @@ export const KPI = {
     description: 'Registered vs assigned by centre. Unassigned = waiting for a clinician. Click to drill in.',
   },
 
+  // ─── MANAGER TEAM TAB ────────────────────────────────────────────────────────
+
+  MANAGER_TEAM_CASES_REGISTERED: {
+    title: 'Cases Registered',
+    description: 'Cases registered directly by managers. Managers register cases when ops admins are unavailable.',
+  },
+
+  MANAGER_TEAM_ASSESSMENTS_ASSIGNED: {
+    title: 'Assessments Assigned',
+    description: 'Assessments assigned by managers to clinicians in the selected period.',
+  },
+
+  MANAGER_TEAM_REPORTS_APPROVED: {
+    title: 'Reports Approved',
+    description: 'Reports reviewed and approved by managers. PDF generated on approval.',
+  },
+
+  MANAGER_TEAM_GOALS_APPROVED: {
+    title: 'Goals Approved',
+    description: 'Goals submitted by clinicians that managers have reviewed and approved.',
+  },
+
+  MANAGER_TEAM_ACTIVE: {
+    title: 'Active Managers',
+    description: 'Managers who approved a report, approved a goal, completed case history, or registered a case in the selected period.',
+  },
+
   MANAGER_TRANSFERS: {
     title: 'Transfers',
     description: 'Assessments moved between clinicians. High volume may signal staffing gaps.',
@@ -332,6 +359,21 @@ export const KPI = {
     description: 'Registered vs routed by centre. Backlog = still in ops, not yet with a clinician.',
   },
 
+  ADMIN_ASSIGNED: {
+    title: 'Clinicians Assigned',
+    description: 'Cases routed to a clinician by ops admins.',
+  },
+
+  ADMIN_UNASSIGNED: {
+    title: 'Awaiting Assignment',
+    description: 'Cases registered but not yet assigned to a clinician. Red if any are waiting.',
+  },
+
+  ADMIN_ACTIVE_STAFF: {
+    title: 'Active Ops Admins',
+    description: 'Ops admins who performed at least one core routing action in the selected period.',
+  },
+
   // ─── MONITORING ──────────────────────────────────────────────────────────────
 
   ENGAGEMENT_RATE: {
@@ -366,13 +408,19 @@ export const KPI = {
   USER_ACTIVE_IN_PERIOD: {
     title: 'Active in Period',
     description:
-      'Users with at least one audit-log action (case work, scoring, routing, etc.) in the selected date range.',
+      'Users who performed at least one audit action (case work, scoring, routing, etc.) in the selected date range. Login alone does not count.',
+  },
+
+  USER_IDLE_IN_PERIOD: {
+    title: 'Idle in Period',
+    description:
+      'Logged in during the period but recorded zero audit actions. These users accessed Unity but did not perform any clinical or admin work.',
   },
 
   USER_QUIET_IN_PERIOD: {
     title: 'Quiet in Period',
     description:
-      'In roster but no audit activity in the selected range. Different from a disabled Unity account — these users simply did not record any actions.',
+      'No audit actions AND no login detected in the selected range. In roster but completely dormant this period. Does not include idle users.',
   },
 
   USER_NEVER_ACTIVE: {
@@ -441,6 +489,38 @@ export const KPI = {
   CENTRE_COMPLETION: {
     title: 'Completion Rate',
     description: 'Cases with at least one result. Healthy centres sit above 75%.',
+  },
+
+  // ─── GOAL PROGRESS ───────────────────────────────────────────────────────────
+
+  CLINICIAN_PROGRESS_NOTES: {
+    title: 'Progress Notes',
+    description:
+      'Therapy progress notes added by clinicians in the selected period. Counts total notes — clinicians often document multiple observations per session.',
+  },
+
+  CLINICIAN_GOALS_TO_ADD: {
+    title: 'Goals to Add',
+    description:
+      'Cases where the report is approved but no goals have been added yet. Clinicians need to submit goals for manager review.',
+  },
+
+  MANAGER_PROGRESS_NOTES: {
+    title: 'Progress Notes',
+    description:
+      'Progress notes added by managers. Managers can also document therapy observations.',
+  },
+
+  CENTRE_GOAL_COVERAGE: {
+    title: 'Goal Coverage',
+    description:
+      'Percentage of approved goals that have at least one progress note. FSP goals excluded — no progress table available.',
+  },
+
+  GOAL_COVERAGE_COLUMN: {
+    title: 'Goal Coverage %',
+    description:
+      'Approved goals with at least one progress note at this centre. Grey if no approved goals yet.',
   },
 
 } satisfies Record<string, KpiDefinition>;

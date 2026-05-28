@@ -88,7 +88,7 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
         role="dialog"
         aria-modal="true"
         aria-labelledby="idle-centres-title"
-        className="relative w-full sm:max-w-lg h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none"
+        className="relative w-full sm:max-w-[640px] h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none border-l border-gray-200/60"
       >
         {/* Mobile drag handle */}
         <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
@@ -98,11 +98,11 @@ export default function IdleCentresDrawer({ open, idleCentres, dateFrom, dateTo,
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Overview · Active Centres</p>
-            <h2 id="idle-centres-title" className="text-base font-semibold text-gray-900">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-gray-400 mb-1">Drill-down</p>
+            <h2 id="idle-centres-title" className="text-[18px] font-medium text-gray-900 leading-tight">
               Idle centres — {dateRangeLabel}
             </h2>
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+            <p className="text-[13px] text-gray-500 mt-0.5 leading-snug">
               These centres had no recorded clinical activity in Unity during this period.
             </p>
             <div className="mt-2 flex items-center gap-2">

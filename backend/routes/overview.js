@@ -6,6 +6,7 @@ const { parseDateParam, buildDateFilter, buildPatientExclusion } = require('../l
 const { abbreviateCentre } = require('../lib/formatters');
 const { getCoreMetrics } = require('../services/metricsService');
 const { FILTERS } = require('../utils/metrics');
+const { getGoalCoverageForOverview } = require('../utils/goalProgress');
 
 const router = Router();
 
@@ -635,6 +636,15 @@ router.get('/', async (req, res, next) => {
         id:   r.Id,
         name: abbreviateCentre(r.name),
       })),
+      // ── Goal coverage — async, non-critical ──────────────────────────────────
+      goalCoverage: await (async () => {
+        try {
+          return await getGoalCoverageForOverview(centreId);
+        } catch (e) {
+          console.warn('[overview] goalCoverage error', e.message);
+          return null;
+        }
+      })(),
     });
   } catch (err) {
     next(err);

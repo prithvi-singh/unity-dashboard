@@ -74,6 +74,46 @@ function CentreDisplay({ centres }: { centres: Array<{ id: number; name: string 
   );
 }
 
+// ── Canonical activity badge ───────────────────────────────────────────────────
+// Driven solely by core job activity in the selected period.
+// NEVER derived from consistency % or account-level status fields.
+
+type ActivityStatus = 'active' | 'idle' | 'inactive' | 'never-active';
+
+/** Returns the canonical activity status for the profile header badge. */
+function deriveActivityStatus(
+  coreJobDays: number,
+  allTimeCoreJobCount: number,
+  lastLoginDate: string | null,
+  dateFrom: string,
+  dateTo: string,
+): ActivityStatus {
+  // NEVER ACTIVE: no core job actions of any kind, ever.
+  if (allTimeCoreJobCount === 0) return 'never-active';
+
+  // ACTIVE: at least one core job action in the selected period.
+  if (coreJobDays > 0) return 'active';
+
+  // IDLE: logged in during the period but zero core job actions.
+  if (lastLoginDate) {
+    const loginMs  = new Date(lastLoginDate).getTime();
+    const now      = Date.now();
+    const fromMs   = dateFrom ? new Date(dateFrom).getTime()                  : now - 30 * 24 * 60 * 60 * 1000;
+    const toMs     = dateTo   ? new Date(dateTo + 'T23:59:59.999Z').getTime() : now;
+    if (loginMs >= fromMs && loginMs <= toMs) return 'idle';
+  }
+
+  // INACTIVE: no login and no core job actions in the selected period.
+  return 'inactive';
+}
+
+const ACTIVITY_BADGE: Record<ActivityStatus, { label: string; style: React.CSSProperties; dotStyle: React.CSSProperties }> = {
+  'active':       { label: 'Active',       style: { background: '#E1F5EE', color: '#0F6E56' }, dotStyle: { background: '#0F6E56' } },
+  'idle':         { label: 'Idle',         style: { background: '#FAEEDA', color: '#854F0B' }, dotStyle: { background: '#854F0B' } },
+  'inactive':     { label: 'Inactive',     style: { background: '#F3F4F6', color: '#6B7280' }, dotStyle: { background: '#9CA3AF' } },
+  'never-active': { label: 'Never active', style: { background: '#FCEBEB', color: '#A32D2D' }, dotStyle: { background: '#A32D2D' } },
+};
+
 const CONSISTENCY_BADGE: Record<ConsistencyStatus, { label: string; cls: string }> = {
   consistent: { label: 'Consistent', cls: 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200' },
   irregular:  { label: 'Irregular',  cls: 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'       },
@@ -239,14 +279,34 @@ function UserProfileContent({ id }: { id: string }) {
                     {user.firstName} {user.lastName}
                   </h1>
                   <RoleBadge role={role} />
-                  {!profile.loading && (
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${consistencyBadge.cls}`}
-                      title={`${consistency.coreJobDays} of ${consistency.totalWorkingDays} working days with core job activity in the selected period`}
-                    >
-                      {consistencyBadge.label}
-                    </span>
-                  )}
+                  {!profile.loading && (() => {
+                    const activityStatus = deriveActivityStatus(
+                      consistency.coreJobDays,
+                      profile.data?.allTimeCoreJobCount ?? 0,
+                      user.lastLoginDate,
+                      dateFrom,
+                      dateTo,
+                    );
+                    const badge = ACTIVITY_BADGE[activityStatus];
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                        style={badge.style}
+                        title={
+                          activityStatus === 'active'       ? `${consistency.coreJobDays} core job day(s) in the selected period` :
+                          activityStatus === 'idle'         ? 'Logged in during the period — no core job actions' :
+                          activityStatus === 'inactive'     ? 'No login or core job actions in the selected period' :
+                          /* never-active */                  'No core job actions recorded ever'
+                        }
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={badge.dotStyle}
+                        />
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
                   {user.roleName && user.roleName !== ROLE_LABELS[role] && (
                     <span className="text-xs text-gray-400">({user.roleName})</span>
                   )}

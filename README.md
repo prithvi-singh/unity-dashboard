@@ -1,6 +1,6 @@
 # Unity Clinical Ops Dashboard
 
-A secure, internal operations dashboard for the Mom's Belief clinical network. It surfaces real-time metrics from the Unity patient management system — case throughput, assessment completion, report PDF generation, manager approval queues, pipeline bottlenecks, issues by state, and team activity — giving clinical leads and ops managers a single view of how centres are performing without exposing the underlying Unity application or write-access credentials.
+A secure, internal operations dashboard for the Mom's Belief clinical network. It surfaces real-time metrics from the Unity patient management system — case throughput, assessment completion, report PDF generation, manager approval queues, goal progress tracking, pipeline bottlenecks, issues by state, and team activity — giving clinical leads and ops managers a single view of how centres are performing without exposing the underlying Unity application or write-access credentials.
 
 ---
 
@@ -121,7 +121,9 @@ All endpoints are read-only `GET` requests. Every query applies the four standar
 | `GET /api/daily-review` | Daily operational review data |
 | `GET /api/bottlenecks` | Turnaround times, pending approval queues, manager queue depth |
 | `GET /api/role` | Role-level drill-down metrics |
-| `GET /api/users` | Full user roster with active/quiet split |
+| `GET /api/users` | Full user roster with active/quiet split, attention users, and never-active users |
 | `GET /api/users/:id` | Individual user profile with full activity history |
+| `GET /api/goal-progress` | Goal progress coverage across approved goals — totals, per-type (SPM / ISA / REELS), per-user note counts, undocumented goals list |
+| `GET /api/goal-progress/assessment/:id` | Per-assessment goal progress with full note content from dedicated progress tables |
 
 **Common query parameters** (all optional): `centreId`, `dateFrom` (ISO date), `dateTo` (ISO date).

@@ -50,6 +50,14 @@ function fmtTime(iso: string | null | undefined): string {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function unityFilename(slug: string): string {
+  return `unity-${slug}-${todayStr()}.csv`;
+}
+
 function exportCsv(filename: string, headers: string[], rows: string[][]): void {
   const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines  = [headers, ...rows].map((r) => r.map(escape).join(','));

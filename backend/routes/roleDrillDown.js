@@ -5,6 +5,7 @@ const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
 const { abbreviateCentre } = require('../lib/formatters');
 const { activeCaseloadWhere } = require('../utils/queries');
+const { terminalStatusExclusion } = require('../utils/assessmentState');
 const {
   pipelineAuditDetailExpr,
   caseRegisteredDetailExpr,
@@ -18,10 +19,12 @@ const router = Router();
 const VALID_TYPES = new Set([
   'clinician-caseload',
   'clinician-stuck',
+  'clinician-goals-to-add',
   'clinician-results',
   'clinician-inactive',
   'clinician-pipeline-assigned',
   'clinician-pipeline-scoring',
+  'clinician-pipeline-report-drafted',
   'clinician-pipeline-report-pdf',
   'clinician-pipeline-report-shared',
   'clinician-pipeline-goals-added',
@@ -37,10 +40,12 @@ const VALID_TYPES = new Set([
 const TYPE_LABELS = {
   'clinician-caseload': 'Active caseload',
   'clinician-stuck': 'Stuck cases (>14d, no result)',
+  'clinician-goals-to-add': 'Goals to add (report approved, no goals yet)',
   'clinician-results': 'Results generated',
   'clinician-inactive': 'Idle clinicians (no activity today, open caseload)',
   'clinician-pipeline-assigned': 'Assessments assigned',
   'clinician-pipeline-scoring': 'Scoring complete',
+  'clinician-pipeline-report-drafted': 'Reports drafted',
   'clinician-pipeline-report-pdf': 'Report PDF created',
   'clinician-pipeline-report-shared': 'Report shared with family',
   'clinician-pipeline-goals-added': 'Goals added',
@@ -370,6 +375,58 @@ async function queryClinicianStuck(ctx) {
   return result.recordset.map(mapPatientRow);
 }
 
+async function queryClinicianGoalsToAdd(ctx) {
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, clinicianFilter } = ctx;
+  const pool = await poolPromise;
+  const apNotTerminal = terminalStatusExclusion('ap');
+  const result = await bindAll(pool.request()).query(`
+    WITH pdf_gen AS (
+      SELECT AllocatePatientId, MIN(CreatedDateTime) AS pdfGeneratedAt
+      FROM PatientAuditLog
+      WHERE Type = 'ReportPDFGenerated' AND AllocatePatientId IS NOT NULL
+      GROUP BY AllocatePatientId
+    )
+    SELECT TOP (${MAX_ITEMS})
+      'Goals to add' AS category,
+      pt.Id AS patientId,
+      pt.PatientID AS patientCode,
+      ${patientNameExpr} AS patientName,
+      c.Id AS centreId,
+      c.CentreName AS centreName,
+      pg.pdfGeneratedAt AS eventAt,
+      CAST(DATEDIFF(day, pg.pdfGeneratedAt, SYSDATETIMEOFFSET()) AS FLOAT) * 24.0 AS waitingHours,
+      'Goals needed' AS status,
+      CONCAT(ap.Assessment, ' · ', ISNULL(au.FirstName, ''), ' ', ISNULL(au.LastName, '')) AS detail
+    FROM pdf_gen pg
+    JOIN AllocatePatient ap ON ap.Id = pg.AllocatePatientId
+    JOIN Patient pt ON pt.Id = ap.PatientId
+    JOIN Centre c ON c.Id = pt.CentreId
+    LEFT JOIN AdminUser au ON au.Id = ap.ClinicianUserId
+    WHERE NOT EXISTS (
+      SELECT 1 FROM PatientGoalApprovalRequest pgar
+      WHERE pgar.AllocatePatientId = ap.Id
+    )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM PatientGoalApprovalRequest pgar2
+        JOIN PatientGoalApprovalRequestGoal pgarg2
+          ON pgarg2.PatientGoalApprovalRequestId = pgar2.Id
+        JOIN AllocatePatient ap2 ON ap2.Id = pgar2.AllocatePatientId
+        WHERE ap2.PatientId = ap.PatientId
+          AND pgarg2.Status = 'Approved'
+          AND pgar2.CreatedDateTimeUtc >= pg.pdfGeneratedAt
+      )
+      AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
+      AND ${apNotTerminal}
+      AND (@centreId IS NULL OR c.Id = @centreId)
+      AND ${centreExclusion}
+      AND ${patientExclusion}
+      AND ${clinicianFilter}
+    ORDER BY pg.pdfGeneratedAt ASC
+  `);
+  return result.recordset.map(mapPatientRow);
+}
+
 async function queryClinicianResults(ctx) {
   return queryPipelineAuditStage(ctx, 'ReportPDFGenerated', 'Report PDF created', 'PDF created');
 }
@@ -510,6 +567,8 @@ async function queryManagerRegistered(ctx) {
 async function queryManagerAssigned(ctx) {
   const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
+  // Group by ap.Id (AllocatePatientId) so each assessment assignment appears as a
+  // separate row. A patient can have multiple assessment types assigned separately.
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
       'Assessment assigned' AS category,
@@ -520,15 +579,22 @@ async function queryManagerAssigned(ctx) {
       c.CentreName AS centreName,
       MIN(pal.CreatedDateTime) AS eventAt,
       NULL AS waitingHours,
-      'Assigned' AS status,
-      CONCAT('By: ', ISNULL(au.FirstName, ''), ' ', ISNULL(au.LastName, '')) AS detail
+      ISNULL(ap.Assessment, 'Assigned') AS status,
+      CONCAT(
+        ISNULL(ap.Assessment, 'Assessment'),
+        ' · Assigned by: ', ISNULL(au.FirstName, ''), ' ', ISNULL(au.LastName, ''),
+        ' · Clinician: ', ISNULL(clin.FirstName, ''), ' ', ISNULL(clin.LastName, '')
+      ) AS detail
     FROM PatientAuditLog pal
+    JOIN AllocatePatient ap ON ap.Id = pal.AllocatePatientId
     JOIN Patient pt ON pt.Id = pal.PatientId
     JOIN Centre c ON c.Id = pt.CentreId
     JOIN AdminUser au ON au.Id = pal.AdminUserId
     JOIN AdminUserRole aur ON aur.UserId = au.Id
     JOIN AdminRole ar ON ar.Id = aur.RoleId AND ar.Name NOT IN ('Clinician', 'Super Admin')
+    LEFT JOIN AdminUser clin ON clin.Id = ap.ClinicianUserId
     WHERE pal.Type = 'CaseAssigned'
+      AND pal.AllocatePatientId IS NOT NULL
       AND ${dateFilterPal}
       AND (@centreId IS NULL OR c.Id = @centreId)
       AND ${centreExclusion}
@@ -537,14 +603,15 @@ async function queryManagerAssigned(ctx) {
       AND au.FirstName NOT LIKE '%(Ops)%'
       AND au.LastName NOT LIKE '%(Ops)%'
       AND au.Email NOT LIKE '%(Ops)%'
-    GROUP BY pt.Id, pt.PatientID, pt.FirstName, pt.LastName, c.Id, c.CentreName, au.FirstName, au.LastName
+    GROUP BY ap.Id, ap.Assessment, pt.Id, pt.PatientID, pt.FirstName, pt.LastName,
+             c.Id, c.CentreName, au.FirstName, au.LastName, clin.FirstName, clin.LastName
     ORDER BY eventAt DESC
   `);
   return result.recordset.map(mapPatientRow);
 }
 
 async function queryManagerStuckOnboarding(ctx) {
-  const { bindAll, centreExclusion, patientExclusion, patientNameExpr } = ctx;
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, dateFilterPal } = ctx;
   const pool = await poolPromise;
   const result = await bindAll(pool.request()).query(`
     SELECT TOP (${MAX_ITEMS})
@@ -567,6 +634,7 @@ async function queryManagerStuckOnboarding(ctx) {
       JOIN AdminUserRole aur2 ON aur2.UserId = au2.Id
       JOIN AdminRole ar2 ON ar2.Id = aur2.RoleId AND ar2.Name NOT IN ('Clinician', 'Super Admin')
       WHERE pal.Type = 'CaseRegistered'
+        AND ${dateFilterPal}
         AND (@centreId IS NULL OR c2.Id = @centreId)
         AND ${centreExclusion.replace(/\bc\b/g, 'c2')}
         AND pt2.FirstName NOT LIKE '%test%'
@@ -700,10 +768,12 @@ async function queryAdminUnassigned(ctx) {
 const QUERY_HANDLERS = {
   'clinician-caseload': queryClinicianCaseload,
   'clinician-stuck': queryClinicianStuck,
+  'clinician-goals-to-add': queryClinicianGoalsToAdd,
   'clinician-results': queryClinicianResults,
   'clinician-inactive': queryClinicianInactive,
   'clinician-pipeline-assigned': (ctx) => queryPipelineAuditStage(ctx, 'CaseAssigned', 'Assessment assigned', 'Assigned', 'Assigned by'),
   'clinician-pipeline-scoring': (ctx) => queryPipelineAuditStage(ctx, 'AssessmentResultGenerated', 'Scoring complete', 'Scored', 'Scored by'),
+  'clinician-pipeline-report-drafted': (ctx) => queryPipelineAuditStage(ctx, 'ReportAdded', 'Reports drafted', 'Drafted', 'Drafted by'),
   'clinician-pipeline-report-pdf': (ctx) => queryPipelineAuditStage(ctx, 'ReportPDFGenerated', 'Report PDF created', 'PDF created', 'Created by'),
   'clinician-pipeline-report-shared': queryPipelineReportShared,
   'clinician-pipeline-goals-added': queryPipelineGoalsAdded,

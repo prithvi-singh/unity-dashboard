@@ -8,6 +8,7 @@ const { getCoreMetrics } = require('../services/metricsService');
 const { activeCaseloadWhere } = require('../utils/queries');
 const { EVENT_TYPES, toSqlIn } = require('../utils/metrics');
 const { TERMINAL_STATUSES } = require('../utils/assessmentState');
+const { getProgressNoteCountsByUser } = require('../utils/goalProgress');
 
 // SQL fragment for excluding terminal (completed) AllocatePatient rows
 const AP_ACTIVE = TERMINAL_STATUSES.map((s) => `'${s}'`).join(', ');
@@ -81,8 +82,9 @@ router.get('/', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
     const dateFilterPal   = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
-    // Run the shared service, clinician roster, consistency data and pipeline breakdown in parallel
-    const [metrics, rosterResult, consistencyResult, pipelineResult] = await Promise.all([
+    // Run the shared service, clinician roster, consistency data, pipeline breakdown,
+    // and progress note counts in parallel
+    const [metrics, rosterResult, consistencyResult, pipelineResult, progressMap] = await Promise.all([
       getCoreMetrics({ dateFrom, dateTo, centreId }),
 
       // Clinician-specific data: roster, active caseload, audit activity totals
@@ -209,6 +211,9 @@ router.get('/', async (req, res, next) => {
             AND (@centreId IS NULL OR c.Id = @centreId)
           GROUP BY ap.ClinicianUserId
         `),
+
+      // Progress note counts per clinician in the selected period
+      getProgressNoteCountsByUser(dateFrom, dateTo, centreId),
     ]);
 
     // Build lookup maps from the shared service's per-clinician arrays
@@ -217,6 +222,7 @@ router.get('/', async (req, res, next) => {
     const goalsMap     = new Map(metrics.goals.byClinician.map((r) => [r.userId, r]));
     const consistencyMap = new Map(consistencyResult.recordset.map((r) => [r.userId, r]));
     const pipelineMap  = new Map(pipelineResult.recordset.map((r) => [r.userId, r]));
+    // progressMap is already a Map<userId, { notesAdded, goalsDocumented, lastNoteDate }>
 
     const totalWorkingDays = countWorkingDays(dateFrom, dateTo);
 
@@ -226,6 +232,7 @@ router.get('/', async (req, res, next) => {
       const goal    = goalsMap.get(r.Id)      || {};
       const cons    = consistencyMap.get(r.Id) || {};
       const pl      = pipelineMap.get(r.Id)   || {};
+      const prog    = progressMap.get(r.Id)   || { notesAdded: 0, goalsDocumented: 0, lastNoteDate: null };
       const coreJobDays        = cons.coreJobDays ?? 0;
       const consistencyPercent = totalWorkingDays > 0
         ? Math.round((coreJobDays / totalWorkingDays) * 100)
@@ -248,7 +255,8 @@ router.get('/', async (req, res, next) => {
         resultsGenerated:  assess.scored  ?? 0,
         reportsDrafted:    rep.drafted    ?? 0,
         reportEdits:       rep.edits      ?? 0,
-        goalsAdded:        goal.added     ?? 0,
+        goalsAdded:        goal.added      ?? 0,
+        goalsAddedItems:   goal.addedItems ?? 0,
         // ── Clinician-specific data ────────────────────────────────────────────
         activeCaseload:    r.activeCaseload    ?? 0,
         totalAuditActions: r.totalAuditActions ?? 0,
@@ -275,6 +283,10 @@ router.get('/', async (req, res, next) => {
           goalsToAdd:     pl.goalsToAdd    ?? 0,
           pendingApproval: pl.pendingApproval ?? 0,
         },
+        // ── Goal progress (period-scoped) ─────────────────────────────────────
+        progressNotes:    prog.notesAdded      ?? 0,
+        goalsDocumented:  prog.goalsDocumented ?? 0,
+        lastNoteDate:     prog.lastNoteDate    ?? null,
       };
     });
 

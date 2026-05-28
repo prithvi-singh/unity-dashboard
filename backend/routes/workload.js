@@ -47,8 +47,9 @@ router.get('/', async (req, res, next) => {
     const centreExcl      = buildCentreExclusion('c');
     const patExclP        = buildPatientExclusion('p');
     const patExclPt       = buildPatientExclusion('pt');
-    const dateFilterPal   = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
-    const dateFilterGoals = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
+    const dateFilterPal        = buildDateFilter('pal.CreatedDateTime',    '@dateFrom', '@dateTo');
+    const dateFilterGoalsAdded = buildDateFilter('pgarg.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
+    const dateFilterGoals      = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
 
     const result = await pool.request()
       .input('centreId', sql.BigInt, centreId)
@@ -73,13 +74,17 @@ router.get('/', async (req, res, next) => {
             AND ${centreFilterPt}
           GROUP BY pt.CentreId
         ),
-        -- Reports Drafted: ReportAdded events only (UpdateReport intentionally excluded)
+        -- Reports Drafted: distinct AllocatePatientId per centre so the card
+        -- matches the drill-down drawer which groups by AllocatePatient.Id.
+        -- Multiple ReportAdded events for the same assessment (re-drafts) are
+        -- deduped; NULL AllocatePatientId rows are excluded by COUNT DISTINCT.
         drafted_cte AS (
-          SELECT p.CentreId, COUNT(*) AS reportsDrafted
+          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS reportsDrafted
           FROM PatientAuditLog pal
           JOIN Patient p ON p.Id = pal.PatientId
           JOIN Centre  c ON c.Id = p.CentreId
           WHERE pal.Type = 'ReportAdded'
+            AND pal.AllocatePatientId IS NOT NULL
             AND ${centreExcl}
             AND ${patExclP}
             AND ${centreFilter}
@@ -126,9 +131,29 @@ router.get('/', async (req, res, next) => {
             AND ${dateFilterPal}
           GROUP BY p.CentreId
         ),
-        -- Goals Approved: PatientGoalApprovalRequestGoal rows approved in the period
+        -- Goals Added: distinct assessments + individual item count (by submission date).
+        goals_added_cte AS (
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS goalsAdded,
+            COUNT(*)                               AS goalsAddedItems
+          FROM PatientGoalApprovalRequestGoal pgarg
+          JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+          JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
+          JOIN Patient pt                      ON pt.Id   = ap.PatientId
+          JOIN Centre  c                       ON c.Id    = pt.CentreId
+          WHERE ${centreExcl}
+            AND ${patExclPt}
+            AND ${centreFilterPt}
+            AND ${dateFilterGoalsAdded}
+          GROUP BY pt.CentreId
+        ),
+        -- Goals Approved: distinct assessments + individual item count (by approval date).
         goals_approved_cte AS (
-          SELECT pt.CentreId, COUNT(*) AS goalsApproved
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS goalsApproved,
+            COUNT(*)                               AS goalsApprovedItems
           FROM PatientGoalApprovalRequestGoal pgarg
           JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
           JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
@@ -160,11 +185,12 @@ router.get('/', async (req, res, next) => {
             AND ${dateFilterPal}
           GROUP BY p.CentreId
         ),
-        -- Manager Goals Approved: goal approvals at centres assigned to manager-role users.
-        -- PatientGoalApprovalRequestGoal does not store the approver UserId directly;
-        -- all Status='Approved' rows are managerial actions by workflow design.
+        -- Manager Goals Approved: distinct assessments + item count at manager-assigned centres.
         mgr_goals_cte AS (
-          SELECT pt.CentreId, COUNT(*) AS managerGoalsApproved
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS managerGoalsApproved,
+            COUNT(*)                               AS managerGoalsApprovedItems
           FROM PatientGoalApprovalRequestGoal pgarg
           JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
           JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
@@ -175,7 +201,31 @@ router.get('/', async (req, res, next) => {
             AND ${patExclPt}
             AND ${centreFilterPt}
             AND ${dateFilterGoals}
-            -- Confirm at least one manager-role user is assigned to this centre
+            AND EXISTS (
+              SELECT 1
+              FROM AdminUserCentre auc2
+              JOIN AdminUserRole aur2  ON aur2.UserId = auc2.AdminUserId
+              JOIN AdminRole ar2       ON ar2.Id      = aur2.RoleId
+                AND ar2.Name NOT IN ('Clinician', 'Super Admin')
+              WHERE auc2.CentreId = pt.CentreId
+            )
+          GROUP BY pt.CentreId
+        ),
+        -- Manager Goals Added: distinct assessments + item count at manager-assigned centres.
+        mgr_goals_added_cte AS (
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS managerGoalsAdded,
+            COUNT(*)                               AS managerGoalsAddedItems
+          FROM PatientGoalApprovalRequestGoal pgarg
+          JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+          JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
+          JOIN Patient pt                      ON pt.Id   = ap.PatientId
+          JOIN Centre  c                       ON c.Id    = pt.CentreId
+          WHERE ${centreExcl}
+            AND ${patExclPt}
+            AND ${centreFilterPt}
+            AND ${dateFilterGoalsAdded}
             AND EXISTS (
               SELECT 1
               FROM AdminUserCentre auc2
@@ -189,37 +239,48 @@ router.get('/', async (req, res, next) => {
         SELECT
           cb.centreId,
           cb.CentreName,
-          ISNULL(cl.caseload,                  0) AS caseload,
-          ISNULL(d.reportsDrafted,             0) AS reportsDrafted,
-          ISNULL(e.reportEdits,                0) AS reportEdits,
-          ISNULL(a.reportsApproved,            0) AS reportsApproved,
-          ISNULL(ga.goalsAdded,               0) AS goalsAdded,
-          ISNULL(gap.goalsApproved,            0) AS goalsApproved,
-          ISNULL(mr.managerReportsApproved,    0) AS managerReportsApproved,
-          ISNULL(mg.managerGoalsApproved,      0) AS managerGoalsApproved
+          ISNULL(cl.caseload,                       0) AS caseload,
+          ISNULL(d.reportsDrafted,                  0) AS reportsDrafted,
+          ISNULL(e.reportEdits,                     0) AS reportEdits,
+          ISNULL(a.reportsApproved,                 0) AS reportsApproved,
+          ISNULL(ga.goalsAdded,                     0) AS goalsAdded,
+          ISNULL(ga.goalsAddedItems,                0) AS goalsAddedItems,
+          ISNULL(gap.goalsApproved,                 0) AS goalsApproved,
+          ISNULL(gap.goalsApprovedItems,            0) AS goalsApprovedItems,
+          ISNULL(mr.managerReportsApproved,         0) AS managerReportsApproved,
+          ISNULL(mg.managerGoalsApproved,           0) AS managerGoalsApproved,
+          ISNULL(mg.managerGoalsApprovedItems,      0) AS managerGoalsApprovedItems,
+          ISNULL(mga.managerGoalsAdded,             0) AS managerGoalsAdded,
+          ISNULL(mga.managerGoalsAddedItems,        0) AS managerGoalsAddedItems
         FROM centre_base cb
-        LEFT JOIN caseload_cte       cl  ON cl.CentreId  = cb.centreId
-        LEFT JOIN drafted_cte        d   ON d.CentreId   = cb.centreId
-        LEFT JOIN edits_cte          e   ON e.CentreId   = cb.centreId
-        LEFT JOIN approved_cte       a   ON a.CentreId   = cb.centreId
-        LEFT JOIN goals_added_cte    ga  ON ga.CentreId  = cb.centreId
-        LEFT JOIN goals_approved_cte gap ON gap.CentreId = cb.centreId
-        LEFT JOIN mgr_reports_cte    mr  ON mr.CentreId  = cb.centreId
-        LEFT JOIN mgr_goals_cte      mg  ON mg.CentreId  = cb.centreId
+        LEFT JOIN caseload_cte          cl  ON cl.CentreId  = cb.centreId
+        LEFT JOIN drafted_cte           d   ON d.CentreId   = cb.centreId
+        LEFT JOIN edits_cte             e   ON e.CentreId   = cb.centreId
+        LEFT JOIN approved_cte          a   ON a.CentreId   = cb.centreId
+        LEFT JOIN goals_added_cte       ga  ON ga.CentreId  = cb.centreId
+        LEFT JOIN goals_approved_cte    gap ON gap.CentreId = cb.centreId
+        LEFT JOIN mgr_reports_cte       mr  ON mr.CentreId  = cb.centreId
+        LEFT JOIN mgr_goals_cte         mg  ON mg.CentreId  = cb.centreId
+        LEFT JOIN mgr_goals_added_cte   mga ON mga.CentreId = cb.centreId
         ORDER BY ISNULL(cl.caseload, 0) DESC, cb.CentreName
       `);
 
     res.json(result.recordset.map((r) => ({
-      centreId:                r.centreId,
-      centreName:              abbreviateCentre(r.CentreName),
-      caseload:                r.caseload,
-      reportsDrafted:          r.reportsDrafted,
-      reportEdits:             r.reportEdits,
-      reportsApproved:         r.reportsApproved,
-      goalsAdded:              r.goalsAdded,
-      goalsApproved:           r.goalsApproved,
-      managerReportsApproved:  r.managerReportsApproved,
-      managerGoalsApproved:    r.managerGoalsApproved,
+      centreId:                    r.centreId,
+      centreName:                  abbreviateCentre(r.CentreName),
+      caseload:                    r.caseload,
+      reportsDrafted:              r.reportsDrafted,
+      reportEdits:                 r.reportEdits,
+      reportsApproved:             r.reportsApproved,
+      goalsAdded:                  r.goalsAdded,
+      goalsAddedItems:             r.goalsAddedItems,
+      goalsApproved:               r.goalsApproved,
+      goalsApprovedItems:          r.goalsApprovedItems,
+      managerReportsApproved:      r.managerReportsApproved,
+      managerGoalsApproved:        r.managerGoalsApproved,
+      managerGoalsApprovedItems:   r.managerGoalsApprovedItems,
+      managerGoalsAdded:           r.managerGoalsAdded,
+      managerGoalsAddedItems:      r.managerGoalsAddedItems,
     })));
   } catch (err) {
     next(err);

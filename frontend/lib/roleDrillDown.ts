@@ -3,6 +3,7 @@ import type { FilterParams } from './types';
 export type RoleDrillDownType =
   | 'clinician-caseload'
   | 'clinician-stuck'
+  | 'clinician-goals-to-add'
   | 'clinician-results'
   | 'clinician-inactive'
   | 'clinician-pipeline-assigned'
@@ -63,6 +64,7 @@ export type RoleKind = 'clinician' | 'manager' | 'admin';
 export interface RoleSummary {
   role: RoleKind;
   stuckCases?: number;
+  goalsToAdd?: number;
   inactiveCount?: number;
   stuckOnboarding?: number;
   unassignedCases?: number;

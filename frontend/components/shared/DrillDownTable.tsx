@@ -98,23 +98,23 @@ function CompactPipelineTable({
           const { assessment, clinician, actionBy } = parseStructuredDetail(item.detail);
           const unityUrl = unityPatientUrl(item.patientId);
           return (
-            <tr key={`${item.patientId}-${item.eventAt}-${idx}`} className="hover:bg-gray-50/70">
-              <td className="pl-4 pr-2 py-2 max-w-[11rem]">
+            <tr key={`${item.patientId}-${item.eventAt}-${idx}`} className="hover:bg-gray-50/70 h-[44px]" style={{ verticalAlign: 'middle' }}>
+              <td className="pl-4 pr-2 py-0 max-w-[11rem] overflow-hidden" style={{ verticalAlign: 'middle' }}>
                 <PatientCell item={item} isUserList={isUserList} />
               </td>
-              <td className="px-2 py-2 text-gray-700 text-xs whitespace-nowrap" title={item.centreName}>
-                {shortCentreName(item.centreName)}
+              <td className="px-2 py-0 text-gray-700 text-xs whitespace-nowrap overflow-hidden" title={item.centreName} style={{ verticalAlign: 'middle' }}>
+                <span className="block truncate">{shortCentreName(item.centreName)}</span>
               </td>
-              <td className="px-2 py-2 text-xs font-semibold text-gray-800 whitespace-nowrap">
+              <td className="px-2 py-0 text-xs font-semibold text-gray-800 whitespace-nowrap" style={{ verticalAlign: 'middle' }}>
                 {assessment ?? '—'}
               </td>
-              <td className="px-2 py-2 text-xs text-gray-800 whitespace-nowrap" title={clinician ?? ''}>
-                {clinician ?? '—'}
+              <td className="px-2 py-0 text-xs text-gray-800 whitespace-nowrap overflow-hidden" title={clinician ?? ''} style={{ verticalAlign: 'middle', maxWidth: '120px' }}>
+                <span className="block truncate">{clinician ?? '—'}</span>
               </td>
-              <td className="px-2 py-2 text-xs text-gray-800 whitespace-nowrap" title={actionBy ?? ''}>
-                {actionBy ?? '—'}
+              <td className="px-2 py-0 text-xs text-gray-800 whitespace-nowrap overflow-hidden" title={actionBy ?? ''} style={{ verticalAlign: 'middle', maxWidth: '120px' }}>
+                <span className="block truncate">{actionBy ?? '—'}</span>
               </td>
-              <td className="pl-2 pr-4 py-2 text-gray-600 text-xs whitespace-nowrap">
+              <td className="pl-2 pr-4 py-0 text-gray-600 text-xs whitespace-nowrap" style={{ verticalAlign: 'middle' }}>
                 {formatEventAt(item.eventAt)}
               </td>
               {showOpen && (
@@ -251,34 +251,36 @@ export default function DrillDownTable({ items, isUserList = false, showUnityLin
           const unityUrl = unityPatientUrl(item.patientId);
           const { note } = parseStructuredDetail(item.detail);
           return (
-            <tr key={`${item.patientId}-${item.eventAt}-${idx}`} className="hover:bg-gray-50/70 align-top">
-              <td className="pl-4 pr-2 py-2 max-w-[11rem]">
+            <tr key={`${item.patientId}-${item.eventAt}-${idx}`} className="hover:bg-gray-50/70 h-[44px]" style={{ verticalAlign: 'middle' }}>
+              <td className="pl-4 pr-2 py-0 max-w-[11rem] overflow-hidden" style={{ verticalAlign: 'middle' }}>
                 <PatientCell item={item} isUserList={false} />
               </td>
-              <td className="px-2 py-2 text-gray-700 text-xs whitespace-nowrap" title={item.centreName}>
-                {shortCentreName(item.centreName)}
+              <td className="px-2 py-0 text-gray-700 text-xs whitespace-nowrap overflow-hidden" title={item.centreName} style={{ verticalAlign: 'middle' }}>
+                <span className="block truncate">{shortCentreName(item.centreName)}</span>
               </td>
               {showCategory && (
-                <td className="px-2 py-2">
+                <td className="px-2 py-0 whitespace-nowrap" style={{ verticalAlign: 'middle' }}>
                   <CategoryBadge category={item.category} />
                   {item.status && (
-                    <p className="text-[11px] text-gray-400 mt-1">{item.status}</p>
+                    <span className="ml-1 text-[11px] text-gray-400">{item.status}</span>
                   )}
                 </td>
               )}
-              <td className="px-2 py-2 text-xs text-gray-700">
-                {note ? note : <DrillDownDetailLines detail={item.detail} />}
+              <td className="px-2 py-0 text-xs text-gray-700 max-w-[160px] overflow-hidden" style={{ verticalAlign: 'middle' }}>
+                <span className="block truncate whitespace-nowrap" title={note ?? item.detail ?? undefined}>
+                  {note ? note : (item.detail ? item.detail.split(' · ')[0] : '—')}
+                </span>
               </td>
-              <td className="px-2 py-2 text-gray-600 text-xs whitespace-nowrap">
+              <td className="px-2 py-0 text-gray-600 text-xs whitespace-nowrap" style={{ verticalAlign: 'middle' }}>
                 {formatEventAt(item.eventAt)}
               </td>
               {showWaiting && (
-                <td className="px-2 py-2 text-right text-xs">
+                <td className="px-2 py-0 text-right text-xs" style={{ verticalAlign: 'middle' }}>
                   <span className="tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatWaitingHours(item.waitingHours)}</span>
                 </td>
               )}
               {showOpen && (
-                <td className="pl-2 pr-4 py-2 text-right">
+                <td className="pl-2 pr-4 py-0 text-right" style={{ verticalAlign: 'middle' }}>
                   {unityUrl ? (
                     <a
                       href={unityUrl}

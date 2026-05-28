@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-05-27T14:19:15.479Z",
+  "generatedAt": "2026-05-28T14:20:48.464Z",
   "allocatePatientStatuses": [
     {
       "Status": "NotStarted",
-      "cnt": 292
+      "cnt": 300
     },
     {
       "Status": "InProgress",
-      "cnt": 211
+      "cnt": 219
     },
     {
       "Status": "Completed",
@@ -21,7 +21,7 @@
   "patientGoalApprovalStatuses": [
     {
       "Status": "Approved",
-      "cnt": 24
+      "cnt": 36
     },
     {
       "Status": "Rejected",
@@ -45,35 +45,35 @@
   "patientAuditLogTypes": [
     {
       "Type": "CaseAssigned",
-      "cnt": 498
+      "cnt": 513
     },
     {
       "Type": "CaseRegistered",
-      "cnt": 355
+      "cnt": 371
     },
     {
       "Type": "GoalAdded",
-      "cnt": 296
+      "cnt": 302
     },
     {
       "Type": "AssessmentResultGenerated",
-      "cnt": 278
+      "cnt": 284
     },
     {
       "Type": "ReportAdded",
-      "cnt": 198
+      "cnt": 203
     },
     {
       "Type": "BaselineAdded",
-      "cnt": 191
+      "cnt": 196
     },
     {
       "Type": "ReportPDFGenerated",
-      "cnt": 151
+      "cnt": 154
     },
     {
       "Type": "UpdateReport",
-      "cnt": 139
+      "cnt": 141
     },
     {
       "Type": "ActivityAdded",
@@ -85,7 +85,7 @@
     },
     {
       "Type": "AssessmentAdd",
-      "cnt": 52
+      "cnt": 53
     },
     {
       "Type": "BaselineDeleted",

@@ -14,14 +14,6 @@ interface Props {
   title?: string;
 }
 
-function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
-  return (
-    <span className={`ml-1 text-[10px] ${active ? 'text-gray-600' : 'text-gray-400'}`}>
-      {active ? (dir === 'asc' ? '↑' : '↓') : '⇅'}
-    </span>
-  );
-}
-
 export default function SortableTh({
   col,
   label,
@@ -37,23 +29,40 @@ export default function SortableTh({
   const alignClass = align === 'right' ? 'text-right' : 'text-left';
 
   return (
-    <th scope="col" className={`px-5 py-3 ${alignClass} ${className}`} aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th
+      scope="col"
+      className={[
+        'px-3 py-[10px]',
+        alignClass,
+        active ? 'text-gray-900' : 'text-gray-500',
+        className,
+      ].join(' ')}
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
       <button
         type="button"
         onClick={() => onSort(col, defaultDir)}
-        className={`inline-flex items-center w-full ${align === 'right' ? 'justify-end' : 'justify-start'} text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em] hover:text-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded`}
+        className={[
+          'inline-flex items-center gap-0.5 w-full',
+          align === 'right' ? 'justify-end' : 'justify-start',
+          'text-[11px] font-medium uppercase tracking-[0.03em]',
+          active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700',
+          'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded',
+        ].join(' ')}
       >
         {label}
         {title && (
           <span
             title={title}
             aria-label={title}
-            className="ml-0.5 text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal"
+            className="text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal"
           >
             ⓘ
           </span>
         )}
-        <SortIcon active={active} dir={sortDir} />
+        {active && (
+          <span className="text-[10px] text-gray-600">{sortDir === 'asc' ? '↑' : '↓'}</span>
+        )}
       </button>
     </th>
   );

@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { sql, poolPromise } = require('../db');
 const { parseDateParam, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { terminalStatusExclusion } = require('../utils/assessmentState');
 const { buildClinicalPipelineQuery, mapPipelineRow } = require('../lib/clinicalPipelineQueries');
 
 const router = Router();
@@ -62,6 +63,7 @@ router.get('/summary', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
 
     if (role === 'clinician') {
+      const apNotTerminal = terminalStatusExclusion('ap');
       const result = await pool.request()
         .input('centreId', sql.BigInt, centreId)
         .query(`
@@ -82,6 +84,41 @@ router.get('/summary', async (req, res, next) => {
                 AND ${centreExclusion}
                 AND ${buildPatientExclusion('pt')}
             ) AS stuckCases,
+            (
+              -- Identical to queryClinicianGoalsToAdd in roleDrillDown.js (COUNT only)
+              SELECT COUNT(*)
+              FROM (
+                SELECT pg.AllocatePatientId
+                FROM (
+                  SELECT AllocatePatientId, MIN(CreatedDateTime) AS pdfGeneratedAt
+                  FROM PatientAuditLog
+                  WHERE Type = 'ReportPDFGenerated' AND AllocatePatientId IS NOT NULL
+                  GROUP BY AllocatePatientId
+                ) pg
+                JOIN AllocatePatient ap ON ap.Id = pg.AllocatePatientId
+                JOIN Patient pt ON pt.Id = ap.PatientId
+                JOIN Centre c ON c.Id = pt.CentreId
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM PatientGoalApprovalRequest pgar
+                  WHERE pgar.AllocatePatientId = ap.Id
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM PatientGoalApprovalRequest pgar2
+                    JOIN PatientGoalApprovalRequestGoal pgarg2
+                      ON pgarg2.PatientGoalApprovalRequestId = pgar2.Id
+                    JOIN AllocatePatient ap2 ON ap2.Id = pgar2.AllocatePatientId
+                    WHERE ap2.PatientId = ap.PatientId
+                      AND pgarg2.Status = 'Approved'
+                      AND pgar2.CreatedDateTimeUtc >= pg.pdfGeneratedAt
+                  )
+                  AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
+                  AND ${apNotTerminal}
+                  AND (@centreId IS NULL OR c.Id = @centreId)
+                  AND ${centreExclusion}
+                  AND ${buildPatientExclusion('pt')}
+              ) g
+            ) AS goalsToAdd,
             (
               SELECT COUNT(*) FROM (
                 SELECT au.Id
@@ -112,7 +149,8 @@ router.get('/summary', async (req, res, next) => {
       const row = result.recordset[0] || {};
       return res.json({
         role,
-        stuckCases: row.stuckCases ?? 0,
+        stuckCases:   row.stuckCases   ?? 0,
+        goalsToAdd:   row.goalsToAdd   ?? 0,
         inactiveCount: row.inactiveCount ?? 0,
       });
     }

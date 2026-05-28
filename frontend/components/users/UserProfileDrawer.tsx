@@ -49,6 +49,33 @@ function roleBadgeStyle(roleName: string | null): string {
   return 'bg-gray-50 text-gray-500 ring-1 ring-gray-200';
 }
 
+// ── Audit-based activity status ───────────────────────────────────────────────
+// Derives a canonical activity state from profile data (no period context here;
+// uses all-time audit count + recency heuristic).
+type ActivityStatus = 'active' | 'idle' | 'quiet' | 'never-active';
+
+function deriveActivityStatus(
+  totalAuditActions: number,
+  lastActivityDate: string | null,
+  lastLoginDate: string | null,
+): ActivityStatus {
+  if (totalAuditActions === 0) return 'never-active';
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const lastActivity = lastActivityDate ? new Date(lastActivityDate).getTime() : 0;
+  const lastLogin    = lastLoginDate    ? new Date(lastLoginDate).getTime()    : 0;
+  if (lastActivity > now - THIRTY_DAYS_MS) return 'active';
+  if (lastLogin    > now - THIRTY_DAYS_MS) return 'idle';
+  return 'quiet';
+}
+
+const ACTIVITY_BADGE: Record<ActivityStatus, { label: string; ring: string; dot: string }> = {
+  'active':       { label: 'Active',        ring: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot: 'bg-emerald-500' },
+  'idle':         { label: 'Idle',          ring: 'bg-amber-50   text-amber-700   ring-1 ring-amber-200',   dot: 'bg-amber-500'   },
+  'quiet':        { label: 'Quiet',         ring: 'bg-gray-50    text-gray-500    ring-1 ring-gray-200',    dot: 'bg-gray-400'    },
+  'never-active': { label: 'Never active',  ring: 'bg-rose-50    text-rose-700    ring-1 ring-rose-200',    dot: 'bg-rose-500'    },
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, accent = 'blue' }: {
@@ -197,8 +224,8 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-drawer-title"
-        className="relative w-full max-w-xl h-full bg-white shadow-2xl flex flex-col
-                   animate-[slideInRight_220ms_cubic-bezier(0.22,1,0.36,1)]"
+        className="relative w-full max-w-[640px] h-full bg-white shadow-2xl flex flex-col
+                   border-l border-gray-200/60 animate-[slideInRight_220ms_cubic-bezier(0.22,1,0.36,1)]"
         style={{ willChange: 'transform' }}
       >
         {/* Header */}
@@ -216,26 +243,32 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
                     {data.firstName} {data.lastName}
                   </h2>
                   <p className="text-sm text-gray-400 mt-0.5 truncate">{data.email}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                    {data.roleName && (
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadgeStyle(data.roleName)}`}>
-                        {data.roleName}
-                      </span>
-                    )}
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      data.status === 'Active'
-                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                        : 'bg-gray-50 text-gray-500 ring-1 ring-gray-200'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${data.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                      {data.status || 'Unknown'}
-                    </span>
-                    {data.centreName && (
-                      <span className="text-xs text-gray-500 bg-gray-50 px-2.5 py-0.5 rounded-full ring-1 ring-gray-200">
-                        {data.centreName}
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    const activityStatus = deriveActivityStatus(
+                      data.totalAuditActions,
+                      data.lastActivityDate,
+                      data.lastLoginDate,
+                    );
+                    const badge = ACTIVITY_BADGE[activityStatus];
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                        {data.roleName && (
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadgeStyle(data.roleName)}`}>
+                            {data.roleName}
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.ring}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                          {badge.label}
+                        </span>
+                        {data.centreName && (
+                          <span className="text-xs text-gray-500 bg-gray-50 px-2.5 py-0.5 rounded-full ring-1 ring-gray-200">
+                            {data.centreName}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>

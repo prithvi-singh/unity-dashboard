@@ -8,6 +8,7 @@ const { abbreviateCentre } = require('../lib/formatters');
 const router = Router();
 
 const { getCoreMetrics } = require('../services/metricsService');
+const { getGoalProgressForClinician } = require('../utils/goalProgress');
 
 const VALID_ROLES = new Set(['clinician', 'manager', 'centre-admin']);
 
@@ -23,13 +24,14 @@ const USER_EXCLUSION = `
 // ── Core job definitions ──────────────────────────────────────────────────────
 const CORE_JOB_EVENTS = {
   clinician:      new Set(['AssessmentResultGenerated', 'ReportAdded', 'UpdateReport', 'GoalAdded', 'ActivityAdded']),
-  manager:        new Set(['ReportPDFGenerated', 'GoalAdded', 'GoalUpdated', 'ActivityAdded', 'CaseRegistered']),
+  manager:        new Set(['ReportPDFGenerated', 'CaseAssigned', 'CaseRegistered',
+                           'AssessmentResultGenerated', 'ReportAdded', 'UpdateReport', 'GoalAdded', 'ActivityAdded']),
   'centre-admin': new Set(['CaseRegistered', 'CaseAssigned']),
 };
 
 const CORE_JOB_DEFINITION = {
   clinician:      'Score assessments · draft reports · add goals · case history',
-  manager:        'Approve reports · approve goals · case history · register cases',
+  manager:        'Approve reports · assign clinicians · register cases · all clinician tasks',
   'centre-admin': 'Register cases · assign clinicians',
 };
 
@@ -56,7 +58,8 @@ function translateEvent(type) {
 }
 
 /**
- * Count Mon–Fri working days between two Date boundaries (inclusive).
+ * Count working days (Mon–Sat) between two Date boundaries (inclusive).
+ * Sundays are excluded; Saturdays are working days for this organisation.
  *
  * Uses UTC noon for all comparisons so the function is robust to any timezone
  * stored in the Date objects (parseDateParam now returns IST midnight, which is
@@ -75,7 +78,7 @@ function countWorkingDays(from, to) {
   endNoon.setUTCHours(12, 0, 0, 0);
   while (d <= endNoon) {
     const dow = d.getUTCDay();
-    if (dow !== 0 && dow !== 6) count++;
+    if (dow !== 0) count++; // exclude Sundays only — Saturdays are working days
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return count;
@@ -289,95 +292,229 @@ router.get('/breakdown', async (req, res, next) => {
     // Use shared metrics for totals and breakdowns
     const { users: mu } = metrics;
 
-    // Build role → user lists map
+    // ── Ops identification: pure name-pattern check (no role requirement) ──────
+    // Convention used throughout the codebase: any user whose firstName OR
+    // lastName contains "(ops)" (case-insensitive) is a Centre Admin (Ops).
+    const OPS_RE = /\(ops\)/i;
+    function isOpsUser(u) {
+      return OPS_RE.test(u.firstName || '') || OPS_RE.test(u.lastName || '');
+    }
+
+    // ── Idle detection: logged in during the period but zero audit actions ─────
+    function loggedInDuringPeriod(lastLoginDate) {
+      if (!lastLoginDate) return false;
+      const d = new Date(lastLoginDate);
+      if (isNaN(d.getTime())) return false;
+      if (dateFrom && d < dateFrom) return false;
+      if (dateTo) {
+        // dateTo is midnight of the boundary day; add one full day so the
+        // boundary date itself is included.
+        const endInclusive = new Date(dateTo);
+        endInclusive.setUTCDate(endInclusive.getUTCDate() + 1);
+        if (d >= endInclusive) return false;
+      }
+      return true;
+    }
+
+    // ── Build role → user lists map ───────────────────────────────────────────
+    // Ops users (pure name check, any DB role) get their own 'Centre Admin (Ops)' key.
+    // Each bucket holds active / idle / quiet lists.
+    // Also track which DB roles had ops users extracted so we can subtract correctly.
     const roleUsersMap = new Map();
+    const opsDbRoles   = new Set(); // DB role names that contained ops users
     for (const u of usersForRolesResult.recordset) {
-      const key = u.roleName;
-      if (!roleUsersMap.has(key)) roleUsersMap.set(key, { active: [], quiet: [] });
+      const isOps = isOpsUser(u);
+      const key   = isOps ? 'Centre Admin (Ops)' : u.roleName;
+      if (isOps) opsDbRoles.add(u.roleName);
+      if (!roleUsersMap.has(key)) roleUsersMap.set(key, { active: [], idle: [], quiet: [] });
       const user = {
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        email: u.email,
-        centreName: abbreviateCentre(u.centreName) || null,
-        actionsInPeriod: u.actionsInPeriod,
+        id:               u.id,
+        firstName:        u.firstName,
+        lastName:         u.lastName,
+        email:            u.email,
+        centreName:       abbreviateCentre(u.centreName) || null,
+        roleName:         isOps ? 'Centre Admin (Ops)' : u.roleName,
+        actionsInPeriod:  u.actionsInPeriod,
         lastActivityDate: u.lastActivityDate || null,
-        lastLoginDate: u.lastLoginDate || null,
+        lastLoginDate:    u.lastLoginDate    || null,
       };
-      if (u.actionsInPeriod > 0) roleUsersMap.get(key).active.push(user);
-      else roleUsersMap.get(key).quiet.push(user);
+      if (u.actionsInPeriod > 0) {
+        roleUsersMap.get(key).active.push(user);
+      } else if (loggedInDuringPeriod(u.lastLoginDate)) {
+        roleUsersMap.get(key).idle.push(user);
+      } else {
+        roleUsersMap.get(key).quiet.push(user);
+      }
     }
 
     // Sort role user lists
     for (const lists of roleUsersMap.values()) {
       lists.active.sort((a, b) => b.actionsInPeriod - a.actionsInPeriod);
-      lists.quiet.sort((a, b) => {
+      const byLastActivity = (a, b) => {
         const ta = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
         const tb = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
         return tb - ta;
-      });
+      };
+      lists.idle.sort(byLastActivity);
+      lists.quiet.sort(byLastActivity);
     }
 
-    // Build centreId → user lists map
+    // ── Build centreId → user lists map ──────────────────────────────────────
     const centreUsersMap = new Map();
     for (const u of usersForCentresResult.recordset) {
       const key = u.centreId;
-      if (!centreUsersMap.has(key)) centreUsersMap.set(key, { active: [], quiet: [] });
+      if (!centreUsersMap.has(key)) centreUsersMap.set(key, { active: [], idle: [], quiet: [] });
       const user = {
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        email: u.email,
-        roleName: u.roleName,
-        actionsInPeriod: u.actionsInPeriod,
+        id:               u.id,
+        firstName:        u.firstName,
+        lastName:         u.lastName,
+        email:            u.email,
+        roleName:         u.roleName,
+        actionsInPeriod:  u.actionsInPeriod,
         lastActivityDate: u.lastActivityDate || null,
-        lastLoginDate: u.lastLoginDate || null,
-        neverActive: u.neverActive === 1,
+        lastLoginDate:    u.lastLoginDate    || null,
+        neverActive:      u.neverActive === 1,
       };
-      if (u.actionsInPeriod > 0) centreUsersMap.get(key).active.push(user);
-      else centreUsersMap.get(key).quiet.push(user);
+      if (u.actionsInPeriod > 0) {
+        centreUsersMap.get(key).active.push(user);
+      } else if (loggedInDuringPeriod(u.lastLoginDate)) {
+        centreUsersMap.get(key).idle.push(user);
+      } else {
+        centreUsersMap.get(key).quiet.push(user);
+      }
     }
 
     // Sort centre user lists
     for (const lists of centreUsersMap.values()) {
       lists.active.sort((a, b) => b.actionsInPeriod - a.actionsInPeriod);
-      lists.quiet.sort((a, b) => {
+      const byLastActivity = (a, b) => {
         const ta = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
         const tb = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
         return tb - ta;
+      };
+      lists.idle.sort(byLastActivity);
+      lists.quiet.sort(byLastActivity);
+    }
+
+    // ── Build byRole array ────────────────────────────────────────────────────
+    // Rules:
+    //   • Ops users (pure name check) are extracted from their DB role and shown
+    //     as a dedicated "Centre Admin (Ops)" row.
+    //   • A role that lost ops users has its counts rebuilt from the user list
+    //     (more accurate than mu.byRole numbers minus ops approximation).
+    //   • The ops row is always appended at the end if ops users exist and the
+    //     loop did not already inject it.
+    const opsUsersData = roleUsersMap.get('Centre Admin (Ops)') || { active: [], idle: [], quiet: [] };
+    const opsActive    = opsUsersData.active.length;
+    const opsIdle      = opsUsersData.idle.length;
+    const opsQuiet     = opsUsersData.quiet.length;
+    const opsTotal     = opsActive + opsIdle + opsQuiet;
+
+    const byRoleResult = [];
+    let   opsRowAdded  = false;
+
+    for (const r of mu.byRole) {
+      if (opsDbRoles.has(r.roleName)) {
+        // This DB role had ops users extracted — rebuild counts from user list
+        const nonOps       = roleUsersMap.get(r.roleName) || { active: [], idle: [], quiet: [] };
+        const adjActive    = nonOps.active.length;
+        const adjIdle      = nonOps.idle.length;
+        const adjQuiet     = nonOps.quiet.length;
+        const adjTotal     = adjActive + adjIdle + adjQuiet;
+        if (adjTotal > 0) {
+          byRoleResult.push({
+            roleName:     r.roleName,
+            total:        adjTotal,
+            active:       adjActive,
+            idle:         adjIdle,
+            quiet:        adjQuiet,
+            activePercent: Math.round((adjActive / adjTotal) * 100),
+            activeUsers:  nonOps.active,
+            idleUsers:    nonOps.idle,
+            quietUsers:   nonOps.quiet,
+          });
+        }
+        // Inject the ops row right after its parent role (only once)
+        if (!opsRowAdded && opsTotal > 0) {
+          byRoleResult.push({
+            roleName:     'Centre Admin (Ops)',
+            total:        opsTotal,
+            active:       opsActive,
+            idle:         opsIdle,
+            quiet:        opsQuiet,
+            activePercent: Math.round((opsActive / opsTotal) * 100),
+            activeUsers:  opsUsersData.active,
+            idleUsers:    opsUsersData.idle,
+            quietUsers:   opsUsersData.quiet,
+          });
+          opsRowAdded = true;
+        }
+      } else {
+        const users = roleUsersMap.get(r.roleName) || { active: [], idle: [], quiet: [] };
+        byRoleResult.push({
+          roleName:     r.roleName,
+          total:        r.total,
+          active:       users.active.length,
+          idle:         users.idle.length,
+          quiet:        users.quiet.length,
+          activePercent: r.total > 0 ? Math.round((users.active.length / r.total) * 100) : 0,
+          activeUsers:  users.active,
+          idleUsers:    users.idle,
+          quietUsers:   users.quiet,
+        });
+      }
+    }
+
+    // Fallback: ops users exist but none of their DB roles appeared in mu.byRole
+    if (!opsRowAdded && opsTotal > 0) {
+      byRoleResult.push({
+        roleName:     'Centre Admin (Ops)',
+        total:        opsTotal,
+        active:       opsActive,
+        idle:         opsIdle,
+        quiet:        opsQuiet,
+        activePercent: Math.round((opsActive / opsTotal) * 100),
+        activeUsers:  opsUsersData.active,
+        idleUsers:    opsUsersData.idle,
+        quietUsers:   opsUsersData.quiet,
       });
+    }
+
+    // ── Global idle / quiet counts (for summary cards) ────────────────────────
+    let globalIdle  = 0;
+    let globalQuiet = 0;
+    for (const lists of roleUsersMap.values()) {
+      globalIdle  += lists.idle.length;
+      globalQuiet += lists.quiet.length;
     }
 
     res.json({
       // ── Totals + byRole + byCentre from shared metrics service ─────────────
-      total:   mu.total,
+      total:    mu.total,
       dateFrom: req.query.dateFrom ?? null,
       dateTo:   req.query.dateTo   ?? null,
-      byRole: mu.byRole.map((r) => {
-        const users = roleUsersMap.get(r.roleName) || { active: [], quiet: [] };
-        return {
-          roleName:     r.roleName,
-          total:        r.total,
-          active:       r.active,
-          quiet:        r.quiet,
-          activePercent: r.total > 0 ? Math.round((r.active / r.total) * 100) : 0,
-          activeUsers:  users.active,
-          quietUsers:   users.quiet,
-        };
-      }),
-      byStatus: { active: mu.active, inactive: mu.quiet },
+      byRole:   byRoleResult,
+      byStatus: {
+        active:   mu.active,
+        idle:     globalIdle,
+        inactive: globalQuiet,   // true Quiet: no login + no actions in period
+      },
       byCentre: mu.byCentre.map((r) => {
-        const users = centreUsersMap.get(r.centreId) || { active: [], quiet: [] };
+        const users = centreUsersMap.get(r.centreId) || { active: [], idle: [], quiet: [] };
+        const centreIdle  = users.idle.length;
+        const centreQuiet = users.quiet.length;
         return {
           centreId:     r.centreId,
           centreName:   abbreviateCentre(r.centreName),
           total:        r.total,
           clinicians:   r.clinicians,
           managers:     r.managers,
-          active:       r.active,
-          quiet:        r.quiet,
-          activePercent: r.total > 0 ? Math.round((r.active / r.total) * 100) : 0,
+          active:       users.active.length,
+          idle:         centreIdle,
+          quiet:        centreQuiet,
+          activePercent: r.total > 0 ? Math.round((users.active.length / r.total) * 100) : 0,
           activeUsers:  users.active,
+          idleUsers:    users.idle,
           quietUsers:   users.quiet,
         };
       }),
@@ -631,6 +768,15 @@ router.get('/:id', async (req, res, next) => {
     };
 
     if (isClinician) {
+      const dateFrom = parseDateParam(req.query.dateFrom);
+      const dateTo   = parseDateParam(req.query.dateTo);
+      let goalProgress = null;
+      try {
+        goalProgress = await getGoalProgressForClinician(userId, dateFrom, dateTo);
+      } catch (e) {
+        // Goal progress is non-critical — log and continue
+        console.warn('[users/:id] goalProgress error', e.message);
+      }
       Object.assign(payload, {
         activeCaseload: cs.activeCaseload ?? 0,
         totalCasesAllTime: cs.totalCasesAllTime ?? 0,
@@ -643,6 +789,7 @@ router.get('/:id', async (req, res, next) => {
             ? Math.round(r.avgDaysToComplete * 10) / 10
             : null,
         })),
+        goalProgress,
       });
     } else {
       Object.assign(payload, {
@@ -755,6 +902,7 @@ router.get('/:id/profile', async (req, res, next) => {
       summaryResult,
       activeCasesResult,
       activityCountResult,
+      allTimeCoreJobResult,
     ] = await Promise.all([
       // Per-day activity with core-job indicators (replaces raw trend)
       bindCommon(pool.request(), { userId, centreId, dateFrom, dateTo }).query(`
@@ -774,7 +922,6 @@ router.get('/:id/profile', async (req, res, next) => {
         LEFT JOIN Centre c  ON c.Id = p.CentreId
         WHERE pal.AdminUserId = @userId
           AND ${dateFrom || dateTo ? dateFilterPal : 'pal.CreatedDateTime >= DATEADD(day, -30, GETDATE())'}
-          AND (@centreId IS NULL OR p.Id IS NULL OR p.CentreId = @centreId)
           AND (p.Id IS NULL OR ${buildCentreExclusion('c')})
         GROUP BY CAST(pal.CreatedDateTime AS DATE)
         ORDER BY date
@@ -891,6 +1038,15 @@ router.get('/:id/profile', async (req, res, next) => {
           AND ${dateFilterPal}
           AND (@centreId IS NULL OR p.Id IS NULL OR p.CentreId = @centreId)
       `),
+
+      // All-time core job count — no date filter, no centre filter.
+      // Used for the NEVER ACTIVE badge: zero core job actions ever, all time.
+      pool.request().input('userId', sql.Int, userId).query(`
+        SELECT COUNT(*) AS allTimeCoreJobCount
+        FROM PatientAuditLog pal
+        WHERE pal.AdminUserId = @userId
+          AND pal.Type IN (${coreJobSqlIn})
+      `),
     ]);
 
     const coreMetrics = mapCoreMetrics(role, summaryResult.recordset[0] || {}, activityCountResult.recordset[0] || {});
@@ -946,6 +1102,7 @@ router.get('/:id/profile', async (req, res, next) => {
       coreJobDefinition: CORE_JOB_DEFINITION[role] || '',
       consistencyScore,
       coreMetrics,
+      allTimeCoreJobCount: allTimeCoreJobResult.recordset[0]?.allTimeCoreJobCount ?? 0,
       activityByDay,
       recentActions: recentResult.recordset.map((r) => {
         const dt  = r.time instanceof Date ? r.time : new Date(r.time);
@@ -1072,55 +1229,28 @@ async function buildSummaryQuery(pool, role, ctx) {
       OUTER APPLY (
         SELECT
           -- scoring: assigned but no AssessmentResultGenerated, not completed
-          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
-            AND NOT EXISTS (
-              SELECT 1 FROM PatientAuditLog pal4
-              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'AssessmentResultGenerated'
-            )
-            THEN 1 END) AS plScoring,
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed') AND plScored.apId IS NULL    THEN 1 END) AS plScoring,
           -- reportsToWrite: result generated but no ReportAdded
-          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
-            AND EXISTS (
-              SELECT 1 FROM PatientAuditLog pal4
-              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'AssessmentResultGenerated'
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM PatientAuditLog pal4
-              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportAdded'
-            )
-            THEN 1 END) AS plReportsToWrite,
-          -- goalsToAdd: ReportPDFGenerated but no goal request (and no approved goal)
-          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
-            AND EXISTS (
-              SELECT 1 FROM PatientAuditLog pal4
-              WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportPDFGenerated'
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM PatientGoalApprovalRequest pgar6
-              WHERE pgar6.AllocatePatientId = ap.Id
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM PatientGoalApprovalRequest pgar7
-              JOIN PatientGoalApprovalRequestGoal pgarg7 ON pgarg7.PatientGoalApprovalRequestId = pgar7.Id
-              WHERE pgar7.AllocatePatientId = ap.Id AND pgarg7.Status = 'Approved'
-            )
-            THEN 1 END) AS plGoalsToAdd,
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed') AND plScored.apId IS NOT NULL AND plReported.apId IS NULL THEN 1 END) AS plReportsToWrite,
+          -- goalsToAdd: ReportPDFGenerated but no goal request and no approved goal
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed') AND plPDF.apId IS NOT NULL    AND plGoalReq.apId IS NULL AND plApprGoal.apId IS NULL THEN 1 END) AS plGoalsToAdd,
           -- pendingApproval: report or goals awaiting manager action
-          COUNT(CASE WHEN ap.Status NOT IN ('Completed')
-            AND (
-              (EXISTS (SELECT 1 FROM PatientAuditLog pal4 WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportAdded')
-               AND NOT EXISTS (SELECT 1 FROM PatientAuditLog pal4 WHERE pal4.AllocatePatientId = ap.Id AND pal4.Type = 'ReportPDFGenerated'))
-              OR
-              (EXISTS (SELECT 1 FROM PatientGoalApprovalRequest pgar8 WHERE pgar8.AllocatePatientId = ap.Id)
-               AND NOT EXISTS (
-                  SELECT 1 FROM PatientGoalApprovalRequest pgar9
-                  JOIN PatientGoalApprovalRequestGoal pgarg9 ON pgarg9.PatientGoalApprovalRequestId = pgar9.Id
-                  WHERE pgar9.AllocatePatientId = ap.Id AND pgarg9.Status = 'Approved'
-               ))
-            )
-            THEN 1 END) AS plPendingApproval
+          COUNT(CASE WHEN ap.Status NOT IN ('Completed') AND (
+              (plReported.apId IS NOT NULL AND plPDF.apId IS NULL)
+           OR (plGoalReq.apId  IS NOT NULL AND plApprGoal.apId IS NULL)
+          ) THEN 1 END) AS plPendingApproval
         FROM AllocatePatient ap
         JOIN Patient pt ON pt.Id = ap.PatientId
+        LEFT JOIN (SELECT DISTINCT AllocatePatientId AS apId FROM PatientAuditLog WHERE Type = 'AssessmentResultGenerated' AND AllocatePatientId IS NOT NULL) plScored    ON plScored.apId    = ap.Id
+        LEFT JOIN (SELECT DISTINCT AllocatePatientId AS apId FROM PatientAuditLog WHERE Type = 'ReportAdded'               AND AllocatePatientId IS NOT NULL) plReported  ON plReported.apId  = ap.Id
+        LEFT JOIN (SELECT DISTINCT AllocatePatientId AS apId FROM PatientAuditLog WHERE Type = 'ReportPDFGenerated'        AND AllocatePatientId IS NOT NULL) plPDF       ON plPDF.apId       = ap.Id
+        LEFT JOIN (SELECT DISTINCT AllocatePatientId AS apId FROM PatientGoalApprovalRequest WHERE AllocatePatientId IS NOT NULL)                             plGoalReq   ON plGoalReq.apId   = ap.Id
+        LEFT JOIN (
+          SELECT DISTINCT pgar_pl.AllocatePatientId AS apId
+          FROM PatientGoalApprovalRequest pgar_pl
+          JOIN PatientGoalApprovalRequestGoal pgarg_pl ON pgarg_pl.PatientGoalApprovalRequestId = pgar_pl.Id
+          WHERE pgarg_pl.Status = 'Approved'
+        ) plApprGoal ON plApprGoal.apId = ap.Id
         WHERE ap.ClinicianUserId = au.Id
           AND ${cpfPt}
       ) pl
@@ -1184,12 +1314,8 @@ async function buildSummaryQuery(pool, role, ctx) {
         SELECT
           -- reports currently awaiting approval (drafted but not yet PDF-generated)
           SUM(CASE WHEN rptDrafted.apId IS NOT NULL AND rptApproved.apId IS NULL THEN 1 ELSE 0 END) AS reportsToApprove,
-          -- goal sets currently awaiting approval
-          SUM(CASE WHEN pgar2.Id IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM PatientGoalApprovalRequestGoal g2
-            WHERE g2.PatientGoalApprovalRequestId = pgar2.Id
-              AND g2.Status = 'Approved'
-          ) THEN 1 ELSE 0 END) AS goalsToApprove
+          -- goal sets currently awaiting approval (no approved goal line on the request)
+          SUM(CASE WHEN pgar2.Id IS NOT NULL AND approvedGoals.PatientGoalApprovalRequestId IS NULL THEN 1 ELSE 0 END) AS goalsToApprove
         FROM AdminUserCentre auc2
         JOIN Patient pt2   ON pt2.CentreId = auc2.CentreId
         JOIN AllocatePatient ap2 ON ap2.PatientId = pt2.Id
@@ -1205,6 +1331,11 @@ async function buildSummaryQuery(pool, role, ctx) {
           WHERE pal4.Type = 'ReportPDFGenerated'
         ) rptApproved ON rptApproved.apId = ap2.Id
         LEFT JOIN PatientGoalApprovalRequest pgar2 ON pgar2.AllocatePatientId = ap2.Id
+        LEFT JOIN (
+          SELECT DISTINCT PatientGoalApprovalRequestId
+          FROM PatientGoalApprovalRequestGoal
+          WHERE Status = 'Approved'
+        ) approvedGoals ON approvedGoals.PatientGoalApprovalRequestId = pgar2.Id
         WHERE auc2.AdminUserId = au.Id
       ) ptApproval
       WHERE au.Id = @userId

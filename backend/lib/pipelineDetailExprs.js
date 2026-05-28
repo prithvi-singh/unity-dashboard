@@ -56,10 +56,21 @@ function pipelineGoalsAddedDetailExpr() {
 }
 
 function pipelineGoalsApprovedDetailExpr() {
+  // pgarg.UpdatedBy can be stored as either "First Last" or "email@domain.com".
+  // Resolve to a display name by looking up AdminUser by email match first,
+  // then by full-name match, before falling back to the raw stored value.
   return `CONCAT(
     ISNULL(ap.Assessment, 'Assessment'),
     ' · Clinician: ', ${staffName('clin')},
-    ' · Approved by: ', ISNULL(NULLIF(LTRIM(RTRIM(pgarg.UpdatedBy)), ''), 'Unknown')
+    ' · Approved by: ', ISNULL(
+      NULLIF(LTRIM(RTRIM((
+        SELECT TOP 1 LTRIM(RTRIM(CONCAT(ISNULL(au_app.FirstName, ''), ' ', ISNULL(au_app.LastName, ''))))
+        FROM AdminUser au_app
+        WHERE LOWER(au_app.Email) = LOWER(LTRIM(RTRIM(pgarg.UpdatedBy)))
+           OR CONCAT(au_app.FirstName, ' ', au_app.LastName) = LTRIM(RTRIM(pgarg.UpdatedBy))
+      ))), ''),
+      ISNULL(NULLIF(LTRIM(RTRIM(pgarg.UpdatedBy)), ''), 'Unknown')
+    )
   )`;
 }
 

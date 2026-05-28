@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { WorkloadCentreRow } from '@/lib/types';
 import { shortCentreName } from '@/lib/centreNames';
+import { goalsDisplay } from '@/lib/roleStats';
 
 const DEFAULT_VISIBLE = 10;
 
@@ -14,7 +15,8 @@ type ColKey =
   | 'reportEdits'
   | 'reportsApproved'
   | 'goalsAdded'
-  | 'goalsApproved';
+  | 'goalsApproved'
+  | 'progressNotes';
 
 interface ColConfig {
   key: ColKey;
@@ -25,18 +27,20 @@ interface ColConfig {
 }
 
 const COLS: ColConfig[] = [
-  { key: 'centreName',      label: 'Centre',           tip: '',                                                                                      isText: true },
-  { key: 'caseload',        label: 'Caseload',         tip: 'Active non-closed cases currently assigned at this centre (live snapshot)' },
+  { key: 'centreName',      label: 'Centre',           tip: '',                                                                                                  isText: true },
+  { key: 'caseload',        label: 'Active Cases',     tip: 'Active non-closed cases currently assigned at this centre (live snapshot)' },
   { key: 'reportsDrafted',  label: 'Reports Drafted',  tip: 'ReportAdded events in the selected period (UpdateReport excluded)' },
-  { key: 'reportEdits',     label: 'Report Edits',     tip: 'UpdateReport events — informational only, not a performance metric. High count vs Drafted may indicate padding.', secondary: true },
+  { key: 'reportEdits',     label: 'Report Edits',     tip: 'UpdateReport events — informational only, not a performance metric.', secondary: true },
   { key: 'reportsApproved', label: 'Reports Approved', tip: 'ReportPDFGenerated events in the selected period (distinct per assessment)' },
-  { key: 'goalsAdded',      label: 'Cases w/ Goals',    tip: 'Number of cases where at least one intervention goal was added in the selected period. Counts cases not individual goals to prevent inflation.' },
-  { key: 'goalsApproved',   label: 'Goals Approved',   tip: 'PatientGoalApprovalRequestGoal rows approved in the selected period' },
+  { key: 'goalsAdded',      label: 'Cases w/ Goals',   tip: 'N assessments (individual goal items) — goals submitted in the selected period.' },
+  { key: 'goalsApproved',   label: 'Goals Approved',   tip: 'N assessments (individual goal items) — goals approved in the selected period.' },
+  { key: 'progressNotes',   label: 'Progress Notes',   tip: 'Total ProgressAdded audit events for clinicians at this centre in the selected period.' },
 ];
 
 function getVal(row: WorkloadCentreRow, col: ColKey): number | string {
   if (col === 'centreName') return row.centreName;
-  return row[col];
+  if (col === 'progressNotes') return row.progressNotes ?? 0;
+  return row[col as Exclude<ColKey, 'centreName' | 'progressNotes'>] as number;
 }
 
 function sortRows(rows: WorkloadCentreRow[], col: ColKey, dir: SortDir): WorkloadCentreRow[] {
@@ -103,9 +107,9 @@ function WorkloadByCentreTableInner({ rows, loading }: Props) {
     <div className={cardClass}>
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-[14px] font-medium text-gray-900">Workload by Centre</h2>
+        <h2 className="text-[15px] font-medium text-gray-900">Centre activity — clinician output</h2>
         <p className="text-[12px] text-gray-500 mt-0.5">
-          Sorted by caseload · Report Edits is informational only — not a performance metric
+          Clinician-specific KPIs per centre · Report Edits is informational only
         </p>
       </div>
 
@@ -227,10 +231,20 @@ function WorkloadByCentreTableInner({ rows, loading }: Props) {
                   </td>
                   {/* Reports Approved */}
                   <Num value={row.reportsApproved} />
-                  {/* Goals Added */}
-                  <Num value={row.goalsAdded} />
-                  {/* Goals Approved */}
-                  <Num value={row.goalsApproved} />
+                  {/* Goals Added — N (total items) */}
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-gray-900">
+                    {row.goalsAdded > 0
+                      ? goalsDisplay(row.goalsAdded, row.goalsAddedItems ?? 0)
+                      : <span className="text-gray-300 font-normal">—</span>}
+                  </td>
+                  {/* Goals Approved — N (total items) */}
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-gray-900">
+                    {row.goalsApproved > 0
+                      ? goalsDisplay(row.goalsApproved, row.goalsApprovedItems ?? 0)
+                      : <span className="text-gray-300 font-normal">—</span>}
+                  </td>
+                  {/* Progress Notes */}
+                  <Num value={row.progressNotes ?? 0} />
                 </tr>
               ))
             )}

@@ -44,14 +44,15 @@ const ROLE_BADGE_STYLES: Record<RoleGroup, { bg: string; fg: string }> = {
   other:     { bg: '#F3F4F6', fg: '#6B7280' },
 };
 
-// ─── Cell colour (4-level gradient + Sunday override) ─────────────────────────
+// ─── Cell colour (4-level gradient) ───────────────────────────────────────────
 //
 //  Level 0 – no activity  → secondary bg, no number
 //  Level 1 – 1–3 actions  → #B5D4F4  text #0C447C
 //  Level 2 – 4–8 actions  → #378ADD  text white
 //  Level 3 – 9+ actions   → #7F77DD  text white
-//  Sunday + activity      → keep intensity bg, date text #C0545A (header-level)
-//  Sunday + no activity   → #FFF5F5  no number
+//  Sunday + no activity   → #FFF5F5  (visual week separator, no number)
+//  Sunday + activity      → normal intensity colours (data always shown)
+//  Saturday               → normal intensity colours (no special treatment)
 
 function intensityStyle(count: number): { bg: string; fg: string } {
   if (count <= 0) return { bg: 'var(--color-background-secondary)', fg: 'transparent' };
@@ -61,17 +62,11 @@ function intensityStyle(count: number): { bg: string; fg: string } {
 }
 
 function cellStyle(count: number, date: string): CSSProperties {
-  if (isSunday(date)) {
-    if (count > 0) {
-      const { bg } = intensityStyle(count);
-      // Keep intensity background, override text to Sunday red
-      return { backgroundColor: bg, color: '#C0545A' };
-    }
+  // Empty Sunday cell: pink tint as visual week separator only
+  if (isSunday(date) && count === 0) {
     return { backgroundColor: '#FFF5F5', color: 'transparent' };
   }
-  if (isSaturday(date)) {
-    return { backgroundColor: 'var(--color-background-tertiary)', color: 'transparent' };
-  }
+  // All other cases (including Saturday and Sunday with activity): normal intensity
   const { bg, fg } = intensityStyle(count);
   return { backgroundColor: bg, color: fg };
 }

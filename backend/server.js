@@ -24,6 +24,7 @@ const topPerformersRouter  = require('./routes/topPerformers');
 const dailyReviewRouter    = require('./routes/dailyReview');
 const centresRouter        = require('./routes/centres');
 const issuesRouter         = require('./routes/issues');
+const goalProgressRouter   = require('./routes/goal-progress');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -145,6 +146,7 @@ app.use('/api/pipeline', pipelineRouter);
 app.use('/api/workload', workloadRouter);
 app.use('/api/centres', centresRouter);
 app.use('/api/issues',  issuesRouter);
+app.use('/api/goal-progress', goalProgressRouter);
 
 // 404 for unknown routes
 app.use((_req, res) => {

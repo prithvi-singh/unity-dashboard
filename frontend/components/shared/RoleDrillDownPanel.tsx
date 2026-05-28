@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DrillDownTable from '@/components/shared/DrillDownTable';
 import ExportExcelButton from '@/components/shared/ExportExcelButton';
 import type { RoleDrillDownRequest } from '@/lib/roleDrillDown';
@@ -17,18 +17,57 @@ interface Props {
   onClose: () => void;
 }
 
+function extractEmail(detail: string | null): string | null {
+  if (!detail) return null;
+  const m = detail.match(/Email:\s*([^\s·]+)/);
+  return m ? m[1] : null;
+}
+
 export default function RoleDrillDownPanel({ request, filters, centres, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { data, loading, error } = useRoleDrillDown(request, filters);
   const isUserList = request?.type === 'clinician-inactive';
   const open = !!request;
 
+  const [search, setSearch] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { if (!open) setSearch(''); }, [open]);
+
   useSlideOverPanel(open, onClose, panelRef);
+
+  const filteredItems = useMemo(() => {
+    if (!data) return [];
+    const q = search.toLowerCase().trim();
+    if (!q) return data.items;
+    return data.items.filter((item) => {
+      if (item.patientName.toLowerCase().includes(q)) return true;
+      if (item.centreName.toLowerCase().includes(q)) return true;
+      if (isUserList) {
+        const email = extractEmail(item.detail);
+        if (email && email.toLowerCase().includes(q)) return true;
+      }
+      return false;
+    });
+  }, [data, search, isUserList]);
+
+  const handleCopyEmails = useCallback(() => {
+    if (!data) return;
+    const emails = data.items
+      .map((item) => extractEmail(item.detail))
+      .filter((e): e is string => !!e);
+    if (emails.length === 0) return;
+    navigator.clipboard.writeText(emails.join(', ')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [data]);
 
   if (!request) return null;
 
   const title = request.label ?? data?.title ?? 'Loading…';
   const scope = filterScopeLabel(centres, filters.centreId, filters.dateFrom ?? '', filters.dateTo ?? '');
+  const totalCount = data?.count ?? 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end" role="presentation">
@@ -40,34 +79,38 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
         onClick={onClose}
       />
 
-      {/* Panel — full-screen slide-up on mobile, side panel on desktop */}
+      {/* Panel — 640px desktop, full-screen mobile */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="role-drilldown-title"
-        className="relative w-full sm:max-w-3xl h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none"
+        className="relative w-full sm:max-w-[640px] h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col
+                   rounded-t-2xl sm:rounded-none border-l border-gray-200/60"
       >
         {/* Mobile drag handle */}
         <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
 
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
-          <div>
-            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">Drill-down</p>
-            <h2 id="role-drilldown-title" className="text-base font-semibold text-gray-900">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-white px-4 sm:px-6 pt-5 pb-4 border-b border-gray-200/60 flex items-start justify-between gap-4 flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-gray-400 mb-1">
+              Drill-down
+            </p>
+            <h2 id="role-drilldown-title" className="text-[18px] font-medium text-gray-900 leading-tight truncate">
               {title}
             </h2>
-            <p className="text-xs text-gray-500 mt-1">{scope}</p>
+            <p className="text-[13px] text-gray-500 mt-0.5 leading-snug">{scope}</p>
             {data && (
-              <p className="text-[12px] text-gray-500 mt-0.5">
-                {data.count} record{data.count !== 1 ? 's' : ''}
+              <p className="text-[13px] text-gray-400 mt-1">
+                {totalCount.toLocaleString()} record{totalCount !== 1 ? 's' : ''}
                 {data.truncated ? ' · showing first 500' : ''}
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {data && data.items.length > 0 && (
               <ExportExcelButton
                 count={data.items.length}
@@ -77,7 +120,9 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
             <button
               type="button"
               onClick={onClose}
-              className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="w-[44px] h-[44px] flex items-center justify-center rounded-lg text-gray-400
+                         hover:text-gray-600 hover:bg-gray-100 transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -86,6 +131,44 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
             </button>
           </div>
         </div>
+
+        {/* Filter bar — search + showing count + copy emails (person records only) */}
+        {!loading && data && data.items.length > 0 && (
+          <div className="px-4 sm:px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2 flex-shrink-0">
+            <div className="relative flex-1 min-w-[160px]">
+              <svg
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search by name, email or centre…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50
+                           focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <span className="text-[12px] text-gray-400 ml-auto whitespace-nowrap">
+              Showing {filteredItems.length.toLocaleString()} of {totalCount.toLocaleString()}
+            </span>
+            {isUserList && (
+              <button
+                type="button"
+                onClick={handleCopyEmails}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600
+                           bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {copied ? 'Copied!' : 'Copy emails'}
+              </button>
+            )}
+          </div>
+        )}
 
         {request.type === 'clinician-inactive' && (
           <div className="px-4 sm:px-6 py-3 border-b border-gray-100 bg-gray-50/60 flex-shrink-0 space-y-3">
@@ -152,9 +235,16 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
 
         <div className="flex-1 overflow-auto scrollbar-thin">
           {loading && (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="px-6 py-4 space-y-2 animate-pulse" role="status" aria-live="polite">
               <span className="sr-only">Loading drill-down records</span>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex gap-3 items-center h-[44px]">
+                  <div className="h-3 bg-gray-100 rounded flex-1" />
+                  <div className="h-3 bg-gray-100 rounded w-16" />
+                  <div className="h-3 bg-gray-100 rounded w-20" />
+                  <div className="h-3 bg-gray-100 rounded w-10" />
+                </div>
+              ))}
             </div>
           )}
 
@@ -167,14 +257,22 @@ export default function RoleDrillDownPanel({ request, filters, centres, onClose 
           {!loading && data && data.items.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2" role="status">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <p className="text-sm font-medium text-gray-700">Nothing to show</p>
+              <p className="text-sm font-medium text-gray-700">No items to show</p>
               <p className="text-[12px] text-gray-500">No matching records for the current filters.</p>
             </div>
           )}
 
-          {!loading && data && data.items.length > 0 && (
+          {!loading && data && data.items.length > 0 && filteredItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2" role="status">
+              <span className="w-2 h-2 rounded-full bg-gray-300" />
+              <p className="text-sm font-medium text-gray-700">No results for &ldquo;{search}&rdquo;</p>
+              <p className="text-[12px] text-gray-500">Try a different name, email or centre.</p>
+            </div>
+          )}
+
+          {!loading && data && filteredItems.length > 0 && (
             <div className="overflow-x-auto">
-              <DrillDownTable items={data.items} isUserList={isUserList} showUnityLinks={!isUserList} />
+              <DrillDownTable items={filteredItems} isUserList={isUserList} showUnityLinks={!isUserList} />
             </div>
           )}
         </div>

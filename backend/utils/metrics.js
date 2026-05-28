@@ -37,6 +37,8 @@ const FILTERS = {
         AND ${alias}.LastName  NOT LIKE '%test%'
         AND ${alias}.Email     NOT LIKE '%@webority.com'
         AND ${alias}.Email     NOT LIKE '%@mailinator.com'
+        AND ${alias}.Email     NOT LIKE '%@parivahealth.com'
+        AND ${alias}.Email     NOT LIKE '%@gmail.com'
       ))`,
 
   /**
@@ -47,7 +49,9 @@ const FILTERS = {
     `${alias}.FirstName NOT LIKE '%test%'
       AND ${alias}.LastName  NOT LIKE '%test%'
       AND ${alias}.Email     NOT LIKE '%@webority.com'
-      AND ${alias}.Email     NOT LIKE '%@mailinator.com'`,
+      AND ${alias}.Email     NOT LIKE '%@mailinator.com'
+      AND ${alias}.Email     NOT LIKE '%@parivahealth.com'
+      AND ${alias}.Email     NOT LIKE '%@gmail.com'`,
 
   /**
    * Exclude SuperAdmin role rows.

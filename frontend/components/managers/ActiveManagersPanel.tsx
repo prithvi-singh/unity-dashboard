@@ -1,12 +1,12 @@
 'use client';
 
 import { useRef, useMemo, useState } from 'react';
-import type { Clinician } from '@/lib/types';
-import { isInactive } from '@/lib/roleStats';
+import type { Manager } from '@/lib/types';
 import { useSlideOverPanel } from '@/hooks/useSlideOverPanel';
+import { shortCentreName } from '@/lib/centreNames';
 
 interface Props {
-  clinicians: Clinician[];
+  managers: Manager[];
   onClose: () => void;
 }
 
@@ -17,98 +17,87 @@ interface CentreRow {
   total: number;
 }
 
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-}
-
 type Urgency = 'ok' | 'warn' | 'danger' | 'never';
 
-function lastSeenLabel(iso: string | null): { label: string; urgency: Urgency } {
-  const days = daysSince(iso);
-  if (days === null) return { label: 'Never seen', urgency: 'never' };
-  if (days === 0) return { label: 'Today', urgency: 'ok' };
-  if (days === 1) return { label: 'Yesterday', urgency: 'ok' };
-  if (days <= 6) return { label: `${days}d ago`, urgency: 'warn' };
-  return { label: `${days}d ago`, urgency: 'danger' };
+function lastSeenLabel(daysAgo: number | null): { label: string; urgency: Urgency } {
+  if (daysAgo == null) return { label: 'Never active', urgency: 'never' };
+  if (daysAgo === 0)   return { label: 'Today',        urgency: 'ok' };
+  if (daysAgo === 1)   return { label: 'Yesterday',    urgency: 'ok' };
+  if (daysAgo <= 6)    return { label: `${daysAgo}d ago`, urgency: 'warn' };
+  return { label: `${daysAgo}d ago`, urgency: 'danger' };
 }
 
 const URGENCY_STYLES: Record<Urgency, string> = {
-  ok: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  warn: 'text-orange-700 bg-orange-50 border-orange-200',
+  ok:     'text-emerald-700 bg-emerald-50 border-emerald-200',
+  warn:   'text-orange-700 bg-orange-50 border-orange-200',
   danger: 'text-rose-700 bg-rose-50 border-rose-200',
-  never: 'text-gray-500 bg-gray-50 border-gray-200',
+  never:  'text-gray-500 bg-gray-50 border-gray-200',
 };
 
-function MiniBar({ pct, color = '#1D9E75' }: { pct: number; color?: string }) {
-  return (
-    <div className="flex items-center gap-2 min-w-[80px]">
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }}
-        />
-      </div>
-      <span className="text-[11px] font-bold tabular-nums text-gray-600 w-8 text-right">
-        {pct}%
-      </span>
-    </div>
-  );
-}
-
-export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
+export default function ActiveManagersPanel({ managers, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<'centres' | 'idle'>('centres');
+  const [tab, setTab] = useState<'centres' | 'not-active'>('centres');
 
   useSlideOverPanel(true, onClose, panelRef);
 
-  const { centreRows, idleClinicians, activeCount, total } = useMemo(() => {
-    const deduped = new Map<number, Clinician>();
-    for (const c of clinicians) {
-      const existing = deduped.get(c.id);
-      if (!existing || (c.lastActivityDate ?? '') > (existing.lastActivityDate ?? '')) {
-        deduped.set(c.id, c);
+  const visible = managers.filter((m) => m.roleName !== 'Super Admin');
+
+  const { centreRows, notActiveManagers, activeCount, total } = useMemo(() => {
+    // Deduplicate — backend now returns one row per manager, but guard anyway
+    const deduped = new Map<number, Manager>();
+    for (const m of visible) {
+      const existing = deduped.get(m.id);
+      if (!existing || (m.lastActivityDate ?? '') > (existing.lastActivityDate ?? '')) {
+        deduped.set(m.id, m);
       }
     }
     const unique = [...deduped.values()];
 
+    const isActive = (m: Manager) => (m.coreJobDays ?? 0) > 0;
+
+    // Build centre rows — a manager contributes to every centre they're assigned to
     const centreMap = new Map<string, CentreRow>();
-    for (const c of unique) {
-      const key = String(c.centreId ?? 'none');
-      if (!centreMap.has(key)) {
-        centreMap.set(key, {
-          centreId: c.centreId,
-          centreName: c.centreName ?? 'No centre',
-          active: 0,
-          total: 0,
-        });
+    for (const m of unique) {
+      const centres = m.centres?.length
+        ? m.centres
+        : m.centreId != null
+          ? [{ centreId: m.centreId, centreName: m.centreName ?? 'Unknown' }]
+          : [];
+
+      for (const c of centres) {
+        const key = String(c.centreId);
+        if (!centreMap.has(key)) {
+          centreMap.set(key, {
+            centreId:   c.centreId,
+            centreName: c.centreName,
+            active:     0,
+            total:      0,
+          });
+        }
+        const row = centreMap.get(key)!;
+        row.total += 1;
+        if (isActive(m)) row.active += 1;
       }
-      const row = centreMap.get(key)!;
-      row.total += 1;
-      if (!isInactive(c.lastActivityDate)) row.active += 1;
     }
 
+    // Sort: lowest engagement first
     const centreRows = [...centreMap.values()].sort((a, b) => {
-      const pctA = a.total > 0 ? a.active / a.total : 1;
-      const pctB = b.total > 0 ? b.active / b.total : 1;
-      return pctA - pctB;
+      const pA = a.total > 0 ? a.active / a.total : 1;
+      const pB = b.total > 0 ? b.active / b.total : 1;
+      return pA - pB;
     });
 
-    const idleClinicians = unique
-      .filter((c) => isInactive(c.lastActivityDate))
-      .sort((a, b) => {
-        const da = daysSince(a.lastActivityDate) ?? 9999;
-        const db = daysSince(b.lastActivityDate) ?? 9999;
-        return db - da;
-      });
+    const notActiveManagers = unique
+      .filter((m) => !isActive(m))
+      .sort((a, b) => (b.lastActiveDaysAgo ?? 9999) - (a.lastActiveDaysAgo ?? 9999));
 
-    const activeCount = unique.filter((c) => !isInactive(c.lastActivityDate)).length;
+    const activeCount = unique.filter(isActive).length;
 
-    return { centreRows, idleClinicians, activeCount, total: unique.length };
-  }, [clinicians]);
+    return { centreRows, notActiveManagers, activeCount, total: unique.length };
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activePct = total > 0 ? Math.round((activeCount / total) * 100) : 0;
-  const idleCount = total - activeCount;
+  const activePct   = total > 0 ? Math.round((activeCount / total) * 100) : 0;
+  const notActive   = total - activeCount;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end" role="presentation">
@@ -125,8 +114,8 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="active-staff-title"
-        className="relative w-full sm:max-w-[640px] h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none border-l border-gray-200/60"
+        aria-labelledby="active-managers-title"
+        className="relative w-full sm:max-w-2xl h-[92dvh] sm:h-full bg-white shadow-2xl flex flex-col rounded-t-2xl sm:rounded-none"
       >
         {/* Mobile drag handle */}
         <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
@@ -136,14 +125,14 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-shrink-0">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-gray-400 mb-1">
+            <p className="text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] mb-1">
               Drill-down
             </p>
-            <h2 id="active-staff-title" className="text-[18px] font-medium text-gray-900 leading-tight">
-              Active Staff Breakdown
+            <h2 id="active-managers-title" className="text-base font-semibold text-gray-900">
+              Active Managers Breakdown
             </h2>
-            <p className="text-[13px] text-gray-500 mt-0.5">
-              Clinicians active in the last 7 days
+            <p className="text-xs text-gray-500 mt-0.5">
+              Managers who performed core job in selected period
             </p>
           </div>
           <button
@@ -161,47 +150,44 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
         {/* Summary bar */}
         <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/60 flex-shrink-0">
           <div className="flex flex-wrap gap-3 mb-3">
-            {/* Active */}
-            <div className="bg-white border border-teal-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-teal-500 flex-shrink-0" />
+            <div className="bg-white border border-violet-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 flex-shrink-0" />
               <div>
                 <p className="text-xl font-bold text-gray-900 tabular-nums leading-tight">{activeCount}</p>
-                <p className="text-[11px] text-gray-500">Active (last 7d)</p>
+                <p className="text-[11px] text-gray-500">Active this period</p>
               </div>
             </div>
-            {/* Idle */}
             <div className="bg-white border border-gray-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-full bg-gray-300 flex-shrink-0" />
               <div>
-                <p className="text-xl font-bold text-gray-900 tabular-nums leading-tight">{idleCount}</p>
-                <p className="text-[11px] text-gray-500">Not engaged</p>
+                <p className="text-xl font-bold text-gray-900 tabular-nums leading-tight">{notActive}</p>
+                <p className="text-[11px] text-gray-500">Not active</p>
               </div>
             </div>
-            {/* Total */}
             <div className="bg-white border border-gray-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-300 flex-shrink-0" />
               <div>
                 <p className="text-xl font-bold text-gray-900 tabular-nums leading-tight">{total}</p>
-                <p className="text-[11px] text-gray-500">Total clinicians</p>
+                <p className="text-[11px] text-gray-500">Total managers</p>
               </div>
             </div>
           </div>
 
-          {/* Full-width engagement bar */}
+          {/* Progress bar */}
           <div>
             <div className="flex justify-between text-[10px] font-semibold text-gray-400 mb-1">
-              <span>Engagement</span>
+              <span>Active rate</span>
               <span>{activePct}% active</span>
             </div>
             <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
-                style={{ width: `${activePct}%`, backgroundColor: '#1D9E75' }}
+                style={{ width: `${activePct}%`, backgroundColor: '#7C3AED' }}
               />
             </div>
             <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-              <span>{activeCount} engaged</span>
-              <span>{idleCount} idle</span>
+              <span>{activeCount} active</span>
+              <span>{notActive} not active</span>
             </div>
           </div>
         </div>
@@ -214,7 +200,7 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
             className={[
               'flex-1 py-2.5 text-xs font-semibold transition-colors',
               tab === 'centres'
-                ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50/40'
+                ? 'text-violet-700 border-b-2 border-violet-600 bg-violet-50/40'
                 : 'text-gray-500 hover:text-gray-700',
             ].join(' ')}
           >
@@ -222,15 +208,15 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setTab('idle')}
+            onClick={() => setTab('not-active')}
             className={[
               'flex-1 py-2.5 text-xs font-semibold transition-colors',
-              tab === 'idle'
+              tab === 'not-active'
                 ? 'text-rose-700 border-b-2 border-rose-600 bg-rose-50/40'
                 : 'text-gray-500 hover:text-gray-700',
             ].join(' ')}
           >
-            Not Engaged ({idleCount})
+            Not Active ({notActive})
           </button>
         </div>
 
@@ -250,100 +236,108 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
                     <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                       Total
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em] w-40">
-                      Engagement
+                    <th className="px-4 sm:px-6 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
+                      Rate
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {centreRows.map((row, i) => {
-                    const pct = row.total > 0 ? Math.round((row.active / row.total) * 100) : 0;
-                    const color =
-                      pct >= 50 ? '#1D9E75' : pct >= 20 ? '#F59E0B' : '#F43F5E';
-                    return (
-                      <tr
-                        key={i}
-                        className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
-                      >
-                        <td
-                          className="px-4 sm:px-6 py-3 font-medium text-gray-800 max-w-[180px] truncate"
-                          title={row.centreName}
-                        >
-                          {row.centreName}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-bold text-teal-700">
-                          {row.active > 0 ? row.active : <span className="text-gray-300 font-normal">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-gray-500">
-                          {row.total}
-                        </td>
-                        <td className="px-4 sm:px-6 py-3">
-                          <MiniBar pct={pct} color={color} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {centreRows.length === 0 && (
+                  {centreRows.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm">
                         No centre data available
                       </td>
                     </tr>
+                  ) : (
+                    centreRows.map((row) => {
+                      const pct   = row.total > 0 ? Math.round((row.active / row.total) * 100) : 0;
+                      const color = pct >= 50 ? '#7C3AED' : pct >= 20 ? '#D97706' : '#EF4444';
+                      return (
+                        <tr
+                          key={String(row.centreId)}
+                          className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
+                        >
+                          <td
+                            className="px-4 sm:px-6 py-3 font-medium text-gray-800 max-w-[200px] truncate"
+                            title={row.centreName}
+                          >
+                            {shortCentreName(row.centreName)}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-bold" style={{ color: '#7C3AED' }}>
+                            {row.active > 0 ? row.active : <span className="text-gray-300 font-normal">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-500">
+                            {row.total}
+                          </td>
+                          <td
+                            className="px-4 sm:px-6 py-3 text-right tabular-nums text-sm font-semibold"
+                            style={{ color }}
+                          >
+                            {pct}%
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
           )}
 
-          {tab === 'idle' && (
+          {tab === 'not-active' && (
             <div className="overflow-x-auto">
-              {idleClinicians.length === 0 ? (
+              {notActiveManagers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <p className="text-sm font-medium text-gray-700">All clinicians engaged</p>
-                  <p className="text-[12px] text-gray-500">Every clinician has been active in the last 7 days.</p>
+                  <span className="w-2 h-2 rounded-full bg-violet-400" />
+                  <p className="text-sm font-medium text-gray-700">All managers active</p>
+                  <p className="text-[12px] text-gray-500">
+                    Every manager performed their core job in the selected period.
+                  </p>
                 </div>
               ) : (
-                <table className="w-full text-sm min-w-[420px]">
+                <table className="w-full text-sm min-w-[440px]">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/60">
                       <th className="px-4 sm:px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
-                        Clinician
+                        Manager
                       </th>
                       <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
                         Centre
                       </th>
-                      <th className="px-4 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
-                        Caseload
+                      <th className="px-4 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
+                        Role
                       </th>
                       <th className="px-4 sm:px-6 py-3 text-right text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
-                        Last seen
+                        Last Active
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {idleClinicians.map((c) => {
-                      const { label, urgency } = lastSeenLabel(c.lastActivityDate);
+                    {notActiveManagers.map((m) => {
+                      const { label, urgency } = lastSeenLabel(m.lastActiveDaysAgo ?? null);
+                      const primaryCentre = m.centres?.[0]?.centreName ?? m.centreName;
+                      const extraCentres  = (m.centres?.length ?? 0) > 1
+                        ? ` +${(m.centres?.length ?? 1) - 1}`
+                        : '';
                       return (
                         <tr
-                          key={c.id}
+                          key={m.id}
                           className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
                         >
                           <td className="px-4 sm:px-6 py-3 font-medium text-gray-800">
-                            {c.firstName} {c.lastName}
+                            {m.firstName} {m.lastName}
                           </td>
                           <td
                             className="px-4 py-3 text-gray-500 max-w-[140px] truncate text-xs"
-                            title={c.centreName ?? undefined}
+                            title={m.centres?.map((c) => c.centreName).join(', ') ?? m.centreName ?? ''}
                           >
-                            {c.centreName ?? '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {c.activeCaseload > 0 ? (
-                              <span className="font-semibold text-gray-800">{c.activeCaseload}</span>
-                            ) : (
-                              <span className="text-gray-300">—</span>
+                            {shortCentreName(primaryCentre ?? null)}
+                            {extraCentres && (
+                              <span className="text-blue-500 ml-1">{extraCentres}</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {m.roleName ?? '—'}
                           </td>
                           <td className="px-4 sm:px-6 py-3 text-right">
                             <span
@@ -367,32 +361,32 @@ export default function ActiveStaffPanel({ clinicians, onClose }: Props) {
           <div className="px-4 sm:px-6 py-3 border-t border-gray-100 flex-shrink-0">
             <div className="flex flex-wrap gap-3 text-[11px] text-gray-500">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-1.5 rounded-full bg-[#1D9E75] inline-block" />
-                ≥50% engaged
+                <span className="w-2.5 h-1.5 rounded-full bg-violet-600 inline-block" />
+                ≥50% active
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                20–49% engaged
+                20–49% active
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-1.5 rounded-full bg-rose-500 inline-block" />
-                &lt;20% engaged
+                &lt;20% active
               </span>
               <span className="ml-auto text-gray-400">sorted by lowest engagement first</span>
             </div>
           </div>
         )}
-        {tab === 'idle' && idleClinicians.length > 0 && (
+        {tab === 'not-active' && notActiveManagers.length > 0 && (
           <div className="px-4 sm:px-6 py-3 border-t border-gray-100 flex-shrink-0">
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className={`px-2 py-0.5 rounded-md border font-semibold ${URGENCY_STYLES.warn}`}>
-                2–6d ago — check in
+                1–6d ago — check in
               </span>
               <span className={`px-2 py-0.5 rounded-md border font-semibold ${URGENCY_STYLES.danger}`}>
-                7d+ — escalate / reassign
+                7d+ — follow up
               </span>
               <span className={`px-2 py-0.5 rounded-md border font-semibold ${URGENCY_STYLES.never}`}>
-                Never seen — verify access
+                Never — verify access
               </span>
             </div>
           </div>

@@ -114,7 +114,8 @@ router.get('/overview', async (req, res, next) => {
     const patExclP       = buildPatientExclusion('p');
     const patExclPt      = buildPatientExclusion('pt');
     const dateFilterPal  = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
-    const dateFilterGoals = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
+        const dateFilterGoals      = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
+        const dateFilterGoalsAdded = buildDateFilter('pgarg.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
     const userExclStrict = FILTERS.userExclusionStrict('au');
     const superAdminExcl = FILTERS.superAdminExclusion('ar');
 
@@ -196,13 +197,14 @@ router.get('/overview', async (req, res, next) => {
           GROUP BY p.CentreId
         ),
 
-        -- ── Cases stuck unassigned (registered > 48 h ago, never assigned) ───
+        -- ── Cases stuck unassigned: registered in selected period, never assigned ever ─
         stuck_cte AS (
           SELECT p.CentreId, COUNT(DISTINCT reg.PatientId) AS stuckUnassigned
           FROM (
             SELECT pal.PatientId, MIN(pal.CreatedDateTime) AS registeredAt
             FROM PatientAuditLog pal
             WHERE pal.Type = 'CaseRegistered'
+              AND ${dateFilterPal}
             GROUP BY pal.PatientId
           ) reg
           JOIN Patient p ON p.Id = reg.PatientId
@@ -219,27 +221,61 @@ router.get('/overview', async (req, res, next) => {
           GROUP BY p.CentreId
         ),
 
-        -- ── Reports drafted, approved, goals added ────────────────────────────
-        output_cte AS (
-          SELECT
-            p.CentreId,
-            SUM(CASE WHEN pal.Type = 'ReportAdded'          THEN 1 ELSE 0 END) AS reportsDrafted,
-            COUNT(DISTINCT CASE WHEN pal.Type = 'ReportPDFGenerated' AND pal.AllocatePatientId IS NOT NULL
-                                THEN pal.AllocatePatientId END)                  AS reportsApproved,
-            SUM(CASE WHEN pal.Type = 'GoalAdded'            THEN 1 ELSE 0 END) AS goalsAdded
+        -- ── Cases assigned in period ─────────────────────────────────────────
+        assigned_cte AS (
+          SELECT p.CentreId, COUNT(DISTINCT pal.PatientId) AS casesAssigned
           FROM PatientAuditLog pal
           JOIN Patient p ON p.Id = pal.PatientId
           JOIN Centre c  ON c.Id = p.CentreId
-          WHERE pal.Type IN ('ReportAdded', 'ReportPDFGenerated', 'GoalAdded')
+          WHERE pal.Type = 'CaseAssigned'
             AND ${centreExcl}
             AND ${patExclP}
             AND ${dateFilterPal}
           GROUP BY p.CentreId
         ),
 
-        -- ── Goals approved ───────────────────────────────────────────────────
+        -- ── Reports drafted and approved ─────────────────────────────────────
+        output_cte AS (
+          SELECT
+            p.CentreId,
+            SUM(CASE WHEN pal.Type = 'ReportAdded' THEN 1 ELSE 0 END)          AS reportsDrafted,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'ReportPDFGenerated'
+                                     AND pal.AllocatePatientId IS NOT NULL
+                                THEN pal.AllocatePatientId END)                  AS reportsApproved
+          FROM PatientAuditLog pal
+          JOIN Patient p ON p.Id = pal.PatientId
+          JOIN Centre c  ON c.Id = p.CentreId
+          WHERE pal.Type IN ('ReportAdded', 'ReportPDFGenerated')
+            AND ${centreExcl}
+            AND ${patExclP}
+            AND ${dateFilterPal}
+          GROUP BY p.CentreId
+        ),
+
+        -- ── Goals Added: distinct assessments + individual item count ─────────
+        goals_added_cte AS (
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS goalsAdded,
+            COUNT(*)                               AS goalsAddedItems
+          FROM PatientGoalApprovalRequestGoal pgarg
+          JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+          JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
+          JOIN Patient pt                      ON pt.Id   = ap.PatientId
+          JOIN Centre c                        ON c.Id    = pt.CentreId
+          WHERE ${buildCentreExclusion('c')}
+            AND ${patExclPt}
+            AND (@centreId IS NULL OR c.Id = @centreId)
+            AND ${dateFilterGoalsAdded}
+          GROUP BY pt.CentreId
+        ),
+
+        -- ── Goals Approved: distinct assessments + individual item count ──────
         goals_approved_cte AS (
-          SELECT pt.CentreId, COUNT(*) AS goalsApproved
+          SELECT
+            pt.CentreId,
+            COUNT(DISTINCT pgar.AllocatePatientId) AS goalsApproved,
+            COUNT(*)                               AS goalsApprovedItems
           FROM PatientGoalApprovalRequestGoal pgarg
           JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
           JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
@@ -376,42 +412,47 @@ router.get('/overview', async (req, res, next) => {
           cb.centreId,
           cb.CentreName,
           -- Intake
-          ISNULL(reg.casesRegistered,    0) AS casesRegistered,
+          ISNULL(reg.casesRegistered,     0) AS casesRegistered,
+          ISNULL(asgn.casesAssigned,      0) AS casesAssigned,
           at.avgDaysToAssign,
-          ISNULL(sk.stuckUnassigned,     0) AS stuckUnassigned,
+          ISNULL(sk.stuckUnassigned,      0) AS stuckUnassigned,
           -- Throughput
-          ISNULL(cl.activeCaseload,      0) AS activeCaseload,
-          ISNULL(sc.assessmentsScored,   0) AS assessmentsScored,
+          ISNULL(cl.activeCaseload,       0) AS activeCaseload,
+          ISNULL(sc.assessmentsScored,    0) AS assessmentsScored,
           -- Output
-          ISNULL(out.reportsDrafted,     0) AS reportsDrafted,
-          ISNULL(out.reportsApproved,    0) AS reportsApproved,
+          ISNULL(out.reportsDrafted,      0) AS reportsDrafted,
+          ISNULL(out.reportsApproved,     0) AS reportsApproved,
           rat.avgDaysToApproveReport,
-          ISNULL(out.goalsAdded,         0) AS goalsAdded,
-          ISNULL(gap.goalsApproved,      0) AS goalsApproved,
+          ISNULL(ga.goalsAdded,           0) AS goalsAdded,
+          ISNULL(ga.goalsAddedItems,      0) AS goalsAddedItems,
+          ISNULL(gap.goalsApproved,       0) AS goalsApproved,
+          ISNULL(gap.goalsApprovedItems,  0) AS goalsApprovedItems,
           gat.avgDaysToApproveGoal,
           -- Staff
-          ISNULL(st.totalStaff,          0) AS totalStaff,
-          ISNULL(st.clinicians,          0) AS clinicians,
-          ISNULL(st.managers,            0) AS managers,
-          ISNULL(st.ops,                 0) AS ops,
-          ISNULL(sa.activeThisPeriod,    0) AS activeThisPeriod,
-          ISNULL(sna.neverActive,        0) AS neverActive,
+          ISNULL(st.totalStaff,           0) AS totalStaff,
+          ISNULL(st.clinicians,           0) AS clinicians,
+          ISNULL(st.managers,             0) AS managers,
+          ISNULL(st.ops,                  0) AS ops,
+          ISNULL(sa.activeThisPeriod,     0) AS activeThisPeriod,
+          ISNULL(sna.neverActive,         0) AS neverActive,
           -- Last activity
           la.lastActivityDate
         FROM centre_base cb
-        LEFT JOIN caseload_cte              cl  ON cl.CentreId  = cb.centreId
-        LEFT JOIN scored_cte                sc  ON sc.CentreId  = cb.centreId
-        LEFT JOIN registered_cte            reg ON reg.CentreId = cb.centreId
-        LEFT JOIN assign_time_cte           at  ON at.CentreId  = cb.centreId
-        LEFT JOIN stuck_cte                 sk  ON sk.CentreId  = cb.centreId
-        LEFT JOIN output_cte                out ON out.CentreId = cb.centreId
-        LEFT JOIN goals_approved_cte        gap ON gap.CentreId = cb.centreId
-        LEFT JOIN report_approval_time_cte  rat ON rat.CentreId = cb.centreId
-        LEFT JOIN goal_approval_time_cte    gat ON gat.CentreId = cb.centreId
-        LEFT JOIN staff_cte                 st  ON st.CentreId  = cb.centreId
-        LEFT JOIN staff_active_cte          sa  ON sa.CentreId  = cb.centreId
-        LEFT JOIN staff_never_active_cte    sna ON sna.CentreId = cb.centreId
-        LEFT JOIN last_activity_cte         la  ON la.CentreId  = cb.centreId
+        LEFT JOIN caseload_cte              cl   ON cl.CentreId   = cb.centreId
+        LEFT JOIN scored_cte                sc   ON sc.CentreId   = cb.centreId
+        LEFT JOIN registered_cte            reg  ON reg.CentreId  = cb.centreId
+        LEFT JOIN assigned_cte              asgn ON asgn.CentreId = cb.centreId
+        LEFT JOIN assign_time_cte           at   ON at.CentreId   = cb.centreId
+        LEFT JOIN stuck_cte                 sk   ON sk.CentreId   = cb.centreId
+        LEFT JOIN output_cte                out  ON out.CentreId  = cb.centreId
+        LEFT JOIN goals_added_cte           ga   ON ga.CentreId   = cb.centreId
+        LEFT JOIN goals_approved_cte        gap  ON gap.CentreId  = cb.centreId
+        LEFT JOIN report_approval_time_cte  rat  ON rat.CentreId  = cb.centreId
+        LEFT JOIN goal_approval_time_cte    gat  ON gat.CentreId  = cb.centreId
+        LEFT JOIN staff_cte                 st   ON st.CentreId   = cb.centreId
+        LEFT JOIN staff_active_cte          sa   ON sa.CentreId   = cb.centreId
+        LEFT JOIN staff_never_active_cte    sna  ON sna.CentreId  = cb.centreId
+        LEFT JOIN last_activity_cte         la   ON la.CentreId   = cb.centreId
         ORDER BY cb.CentreName
       `),
       // Pipeline state counts per centre (point-in-time snapshot)
@@ -425,7 +466,7 @@ router.get('/overview', async (req, res, next) => {
         ),
         active_ap AS (
           SELECT ap.Id AS apId, pt.CentreId,
-            DATEDIFF(day, ap.CreatedDateTime, GETDATE()) AS agedays,
+            DATEDIFF(day, ap.CreatedDateTimeUtc, GETDATE()) AS agedays,
             ap.Status,
             -- has any report been added?
             CASE WHEN EXISTS (
@@ -479,7 +520,7 @@ router.get('/overview', async (req, res, next) => {
           JOIN Patient pt ON pt.Id = ap.PatientId
           JOIN centre_base cb ON cb.centreId = pt.CentreId
           WHERE ap.Status NOT IN (${AP_ACTIVE_CENTRES})
-            AND ${FILTERS.NOT_TEST_PATIENT('pt')}
+            AND ${patExclPt}
         )
         SELECT
           centreId,
@@ -544,6 +585,7 @@ router.get('/overview', async (req, res, next) => {
 
         intake: {
           casesRegistered: r.casesRegistered ?? 0,
+          casesAssigned:   r.casesAssigned   ?? 0,
           avgDaysToAssign: roundDays(r.avgDaysToAssign),
           stuckUnassigned: r.stuckUnassigned ?? 0,
         },
@@ -554,11 +596,13 @@ router.get('/overview', async (req, res, next) => {
         },
         pipeline,
         output: {
-          reportsDrafted:          r.reportsDrafted      ?? 0,
-          reportsApproved:         r.reportsApproved     ?? 0,
+          reportsDrafted:          r.reportsDrafted       ?? 0,
+          reportsApproved:         r.reportsApproved      ?? 0,
           avgDaysToApproveReport:  roundDays(r.avgDaysToApproveReport),
-          goalsAdded:              r.goalsAdded          ?? 0,
-          goalsApproved:           r.goalsApproved       ?? 0,
+          goalsAdded:              r.goalsAdded           ?? 0,
+          goalsAddedItems:         r.goalsAddedItems      ?? 0,
+          goalsApproved:           r.goalsApproved        ?? 0,
+          goalsApprovedItems:      r.goalsApprovedItems   ?? 0,
           avgDaysToApproveGoal:    roundDays(r.avgDaysToApproveGoal),
         },
         staff: {
@@ -581,12 +625,13 @@ router.get('/overview', async (req, res, next) => {
     });
 
     // Summary across all centres.
-    // idleCentres comes from the shared metricsService Q15 (period-based: no PAL
-    // activity in selected date range) so it always matches /api/overview.idleCentreCount.
+    // idleCentres is derived from the same row data the drawer uses, ensuring the
+    // card count matches the drawer's record count exactly.
+    // The drawer filters allRows where staff.activeThisPeriod === 0 && staff.total > 0.
     const onTrack        = centres.filter((c) => c.status === 'on-track').length;
     const needsAttention = centres.filter((c) => c.status === 'needs-attention').length;
     const blocked        = centres.filter((c) => c.status === 'blocked').length;
-    const idleCentres    = metrics.centres.idle;
+    const idleCentres    = centres.filter((c) => c.staff.activeThisPeriod === 0 && c.staff.total > 0).length;
 
     res.json({
       summary: {
@@ -677,7 +722,7 @@ router.get('/:centreId/detail', async (req, res, next) => {
       bind(pool.request()).query(`
         SELECT
           pt.Id AS patientId,
-          pt.PatientDisplayId,
+          pt.PatientID AS PatientDisplayId,
           pt.FirstName,
           pt.LastName,
           CONCAT(clinician.FirstName, ' ', clinician.LastName) AS clinicianName,
@@ -705,7 +750,7 @@ router.get('/:centreId/detail', async (req, res, next) => {
       bind(pool.request()).query(`
         SELECT
           pt.Id AS patientId,
-          pt.PatientDisplayId,
+          pt.PatientID AS PatientDisplayId,
           CONCAT(clinician.FirstName, ' ', clinician.LastName) AS clinicianName,
           ap.Status AS assessmentStatus,
           DATEDIFF(day, ap.CreatedDateTimeUtc, GETDATE()) AS daysPending
@@ -731,7 +776,7 @@ router.get('/:centreId/detail', async (req, res, next) => {
           pal.Description,
           au.FirstName AS actorFirst,
           au.LastName  AS actorLast,
-          pt.PatientDisplayId
+          pt.PatientID AS PatientDisplayId
         FROM PatientAuditLog pal
         JOIN Patient pt      ON pt.Id  = pal.PatientId
         JOIN Centre c        ON c.Id   = pt.CentreId

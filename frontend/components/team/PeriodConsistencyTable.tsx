@@ -6,7 +6,7 @@ import ScrollRegion from '@/components/shared/ScrollRegion';
 import PersonLink from '@/components/PersonLink';
 
 type RoleData = Clinician | Manager | CentreAdmin;
-type SortCol  = 'name' | 'centre' | 'status' | 'coreJobDays' | 'coreOutput' | 'lastActive';
+type SortCol  = 'name' | 'centre' | 'status' | 'coreJobDays' | 'coreOutput' | 'progressNotes' | 'lastActive';
 type SortDir  = 'asc' | 'desc';
 
 interface LinkParams { centreId?: number; dateFrom?: string; dateTo?: string; }
@@ -51,14 +51,14 @@ function coreOutputLabel(role: UserProfileRole, co: Record<string, number> | und
     const s = co.assessmentsScored ?? 0;
     const r = co.reportsDrafted    ?? 0;
     const g = co.goalsAdded        ?? 0;
-    if (s > 0) parts.push(`${s} scoring`);
-    if (r > 0) parts.push(`${r} reporting`);
+    if (s > 0) parts.push(`${s} scored`);
+    if (r > 0) parts.push(`${r} reports`);
     if (g > 0) parts.push(`${g} goals`);
   } else if (role === 'manager') {
     const r = co.reportsApproved ?? 0;
     const g = co.goalsApproved   ?? 0;
     if (r > 0) parts.push(`${r} approved`);
-    if (g > 0) parts.push(`${g} goals`);
+    if (g > 0) parts.push(`${g} goals approved`);
   } else {
     const c = co.casesRegistered    ?? 0;
     const a = co.cliniciansAssigned ?? 0;
@@ -84,7 +84,13 @@ function statusCounts(data: RoleData[]) {
 }
 
 function exportCsv(role: UserProfileRole, rows: RoleData[]) {
-  const header = ['Name', 'Email', 'Centre', 'Consistency', '%', 'Core Job Days', 'Working Days', 'Core Output', 'Last Active'];
+  const includeProgressNotes = role !== 'centre-admin';
+  const baseHeader = ['Name', 'Email', 'Centre', 'Consistency', '%', 'Core Job Days', 'Working Days', 'Core Output'];
+  const header = [
+    ...baseHeader,
+    ...(includeProgressNotes ? ['Progress Notes'] : []),
+    'Last Active',
+  ];
   const lines = rows.map((r) =>
     [
       displayName(r),
@@ -95,6 +101,7 @@ function exportCsv(role: UserProfileRole, rows: RoleData[]) {
       String(r.coreJobDays      ?? 0),
       String(r.totalWorkingDays ?? 0),
       coreOutputLabel(role, r.coreOutput),
+      ...(includeProgressNotes ? [String((r as Clinician).progressNotes ?? 0)] : []),
       r.lastActiveDaysAgo != null ? `${r.lastActiveDaysAgo}d ago` : 'Never',
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','),
   );
@@ -136,6 +143,7 @@ function sortRows(rows: RoleData[], col: SortCol, dir: SortDir, role: UserProfil
         return sign * (ra - rb);
       }
       case 'coreOutput': return sign * (coreOutputTotal(role, a.coreOutput) - coreOutputTotal(role, b.coreOutput));
+      case 'progressNotes': return sign * (((a as Clinician).progressNotes ?? 0) - ((b as Clinician).progressNotes ?? 0));
       case 'lastActive': {
         // Never (null) sorts to top on ascending, bottom on descending
         const da = a.lastActiveDaysAgo ?? (dir === 'asc' ? -1 : Infinity);
@@ -360,6 +368,11 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
               <SortHeader col="status"      active={sortCol === 'status'}      dir={sortDir} onSort={handleSort}>Consistency</SortHeader>
               <SortHeader col="coreJobDays" active={sortCol === 'coreJobDays'} dir={sortDir} onSort={handleSort}>Core Job Days</SortHeader>
               <SortHeader col="coreOutput"  active={sortCol === 'coreOutput'}  dir={sortDir} onSort={handleSort}>Core Output</SortHeader>
+              {role !== 'centre-admin' && (
+                <SortHeader col="progressNotes" active={sortCol === 'progressNotes'} dir={sortDir} onSort={handleSort}>
+                  <span title="Total therapy progress notes added in the selected period">Progress Notes</span>
+                </SortHeader>
+              )}
               <SortHeader col="lastActive"  active={sortCol === 'lastActive'}  dir={sortDir} onSort={handleSort}>Last Active</SortHeader>
             </tr>
           </thead>
@@ -367,7 +380,7 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse" style={{ height: 52 }}>
-                  {Array.from({ length: 7 }).map((__, j) => (
+                  {Array.from({ length: role === 'centre-admin' ? 7 : 8 }).map((__, j) => (
                     <td key={j} className="px-4 py-3.5">
                       <div className="h-3.5 bg-gray-100 rounded w-3/4" />
                     </td>
@@ -376,7 +389,7 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
               ))
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-10 text-center text-gray-400 text-sm">
+                <td colSpan={role === 'centre-admin' ? 7 : 8} className="px-6 py-10 text-center text-gray-400 text-sm">
                   No data for the selected {isFiltered ? 'filters' : 'period'}
                 </td>
               </tr>
@@ -442,6 +455,18 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
                         {coreOutputLabel(role, person.coreOutput)}
                       </span>
                     </td>
+
+                    {/* Progress Notes — clinicians and managers only */}
+                    {role !== 'centre-admin' && (
+                      <td className="px-4 text-right">
+                        {(() => {
+                          const notes = (person as Clinician).progressNotes ?? 0;
+                          return notes > 0
+                            ? <span className="text-[13px] font-medium tabular-nums text-gray-700">{notes}</span>
+                            : <span className="text-gray-300">—</span>;
+                        })()}
+                      </td>
+                    )}
 
                     {/* Last active */}
                     <td className="px-4">

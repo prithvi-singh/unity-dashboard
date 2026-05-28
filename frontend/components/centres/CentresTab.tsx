@@ -9,13 +9,14 @@ import type {
   FilterParams,
   WorkloadCentreRow,
   UserProfileRole,
-  CentrePipelineBreakdown,
 } from '@/lib/types';
 import { fetchCentreDetail } from '@/lib/api';
 import ScrollRegion from '@/components/shared/ScrollRegion';
 import WorkloadByCentreTable from '@/components/clinicians/WorkloadByCentreTable';
 import PersonLink from '@/components/PersonLink';
 import { inferProfileRole } from '@/lib/userProfile';
+import type { OnRoleDrillDown } from '@/lib/roleDrillDown';
+import { goalsDisplay } from '@/lib/roleStats';
 
 // ── Colour constants (spec) ────────────────────────────────────────────────────
 const STATUS_COLOUR: Record<CentreStatus, { dot: string; badge: string; text: string }> = {
@@ -23,6 +24,38 @@ const STATUS_COLOUR: Record<CentreStatus, { dot: string; badge: string; text: st
   'needs-attention': { dot: '#BA7517', badge: 'bg-amber-50  text-amber-700  border-amber-200',       text: 'Needs attention' },
   'blocked':         { dot: '#A32D2D', badge: 'bg-rose-50   text-rose-700   border-rose-200',        text: 'Blocked' },
 };
+
+// ── Pipeline owner badge config ────────────────────────────────────────────────
+const OWNER_BADGE: Record<string, { bg: string; fg: string; label: string }> = {
+  'ops-mgr':  { bg: '#E1F5EE', fg: '#0F6E56', label: 'Ops / Mgr' },
+  'clin-mgr': { bg: 'var(--color-background-secondary, #f3f4f6)', fg: 'var(--color-text-secondary, #6b7280)', label: 'Clin / Mgr' },
+  'clinician':{ bg: '#E6F1FB', fg: '#0C447C', label: 'Clinician' },
+  'manager':  { bg: '#EAF3DE', fg: '#3B6D11', label: 'Manager' },
+};
+
+function pipelineCountColour(
+  value: number,
+  tier: 'normal' | 'warn70' | 'warn30',
+  pctVal: number | undefined,
+): string {
+  if (value === 0) return 'var(--color-text-secondary, #6b7280)';
+  if (pctVal === undefined) return 'var(--color-text-primary, #111827)';
+  if (tier === 'warn70' && pctVal < 70) return '#BA7517';
+  if (tier === 'warn30' && pctVal < 30) return '#A32D2D';
+  return 'var(--color-text-primary, #111827)';
+}
+
+function formatPeriodLabel(dateFrom?: string, dateTo?: string): string {
+  if (!dateFrom && !dateTo) return 'all time';
+  const mv = (s: string) =>
+    new Date(s).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  if (dateFrom && dateTo) {
+    const f = mv(dateFrom);
+    const t = mv(dateTo);
+    return f === t ? f : `${f} – ${t}`;
+  }
+  return dateFrom ? `from ${mv(dateFrom)}` : `to ${mv(dateTo!)}`;
+}
 
 function statusOrder(s: CentreStatus) {
   return s === 'blocked' ? 0 : s === 'needs-attention' ? 1 : 2;
@@ -46,13 +79,6 @@ function pipelineColour(n: number, warn = 1, crit = 3): string {
   return 'text-gray-700';
 }
 
-function approvalTimeColour(days: number | null): string {
-  if (days == null) return 'text-gray-400';
-  if (days > 7) return 'text-rose-600 font-semibold';
-  if (days > 3) return 'text-amber-600 font-semibold';
-  return 'text-gray-700';
-}
-
 // ── Summary card ──────────────────────────────────────────────────────────────
 interface SummaryCardProps {
   label:   string;
@@ -63,19 +89,21 @@ interface SummaryCardProps {
   onClick?: () => void;
 }
 function SummaryCard({ label, value, context, tooltip, valueClass = 'text-gray-900', onClick }: SummaryCardProps) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div
+    <Tag
+      type={onClick ? 'button' : undefined}
       title={tooltip}
       onClick={onClick}
       className={[
-        'bg-white rounded-xl border border-gray-200 px-5 py-4 flex flex-col gap-1',
-        onClick ? 'cursor-pointer hover:border-gray-300 hover:shadow-sm transition-all' : '',
+        'bg-white rounded-xl border border-gray-100 px-6 py-5 flex flex-col gap-2 text-left w-full',
+        onClick ? 'cursor-pointer hover:border-gray-200 hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : '',
       ].join(' ')}
     >
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{label}</p>
-      <p className={`text-3xl font-bold tabular-nums leading-none ${valueClass}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{context}</p>
-    </div>
+      <p className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.05em] leading-tight">{label}</p>
+      <p className={`text-[28px] font-medium tabular-nums leading-none ${valueClass}`}>{value}</p>
+      <p className="text-[13px] text-gray-400 mt-1 leading-snug">{context}</p>
+    </Tag>
   );
 }
 
@@ -143,6 +171,98 @@ interface DetailDrawerProps {
   filters:    FilterParams;
   onClose:    () => void;
 }
+
+// Pipeline snapshot row ───────────────────────────────────────────────────────
+interface PipelineStepDef {
+  label:   string;
+  owner:   string;
+  value:   number;
+  pct:     number | undefined;
+  tier:    'baseline' | 'normal' | 'warn70' | 'warn30';
+}
+
+function PipelineSnapshotRow({ step, isLast }: { step: PipelineStepDef; isLast: boolean }) {
+  const badge = OWNER_BADGE[step.owner];
+  const countColour = step.tier === 'baseline'
+    ? (step.value === 0 ? 'var(--color-text-secondary, #6b7280)' : 'var(--color-text-primary, #111827)')
+    : pipelineCountColour(step.value, step.tier === 'normal' ? 'normal' : step.tier, step.pct);
+  const isBold = step.value > 0;
+
+  return (
+    <div
+      style={{
+        borderBottom: isLast ? 'none' : '0.5px solid var(--color-border-tertiary, #f3f4f6)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        paddingTop: 6,
+        paddingBottom: 6,
+      }}
+    >
+      {/* Step label */}
+      <span
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: '0.03em',
+          color: 'var(--color-text-secondary, #6b7280)',
+          flex: 1,
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {step.label}
+      </span>
+
+      {/* Owner badge */}
+      <span
+        style={{
+          fontSize: 11,
+          padding: '2px 8px',
+          borderRadius: 99,
+          background: badge.bg,
+          color: badge.fg,
+          fontWeight: 600,
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {badge.label}
+      </span>
+
+      {/* Count */}
+      <span
+        style={{
+          fontSize: 14,
+          fontWeight: isBold ? 500 : 400,
+          color: countColour,
+          flexShrink: 0,
+          minWidth: 28,
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {step.value.toLocaleString()}
+      </span>
+
+      {/* Percentage */}
+      <span
+        style={{
+          fontSize: 12,
+          color: 'var(--color-text-secondary, #6b7280)',
+          flexShrink: 0,
+          minWidth: 40,
+          textAlign: 'right',
+        }}
+      >
+        {step.pct !== undefined ? `(${step.pct}%)` : ''}
+      </span>
+    </div>
+  );
+}
+
 function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
   const [detail, setDetail]   = useState<CentreDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,12 +300,78 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
   const staffSortOrder = (s: string) => ({ active: 0, idle: 1, silent: 2, 'never-active': 3 })[s] ?? 4;
   const sortedStaff = detail ? [...detail.staff].sort((a, b) => staffSortOrder(a.status) - staffSortOrder(b.status)) : [];
 
+  // ── Pipeline snapshot data (period-based, from centre prop) ─────────────────
+  const reg = centre.intake.casesRegistered;
+  function snapshotPct(n: number): number | undefined {
+    if (reg <= 0) return undefined;
+    return Math.round((n / reg) * 100);
+  }
+
+  const pipelineSteps: PipelineStepDef[] = [
+    {
+      label: 'Case Registered',
+      owner: 'ops-mgr',
+      value: reg,
+      pct:   undefined,
+      tier:  'baseline',
+    },
+    {
+      label: 'Case History',
+      owner: 'clin-mgr',
+      value: centre.intake.casesAssigned,
+      pct:   snapshotPct(centre.intake.casesAssigned),
+      tier:  'normal',
+    },
+    {
+      label: 'Assessment Assign',
+      owner: 'ops-mgr',
+      value: centre.throughput.assessmentsAssigned,
+      pct:   snapshotPct(centre.throughput.assessmentsAssigned),
+      tier:  'normal',
+    },
+    {
+      label: 'Scoring Complete',
+      owner: 'clinician',
+      value: centre.throughput.assessmentsScored,
+      pct:   snapshotPct(centre.throughput.assessmentsScored),
+      tier:  'warn70',
+    },
+    {
+      label: 'Report Drafted',
+      owner: 'clinician',
+      value: centre.output.reportsDrafted,
+      pct:   snapshotPct(centre.output.reportsDrafted),
+      tier:  'warn70',
+    },
+    {
+      label: 'Report Approved',
+      owner: 'manager',
+      value: centre.output.reportsApproved,
+      pct:   snapshotPct(centre.output.reportsApproved),
+      tier:  'warn70',
+    },
+    {
+      label: 'Goals Added',
+      owner: 'clinician',
+      value: centre.output.goalsAdded,
+      pct:   snapshotPct(centre.output.goalsAdded),
+      tier:  'warn30',
+    },
+    {
+      label: 'Goals Approved',
+      owner: 'manager',
+      value: centre.output.goalsApproved,
+      pct:   snapshotPct(centre.output.goalsApproved),
+      tier:  'warn30',
+    },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative ml-auto w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full overflow-hidden">
 
-        {/* Header */}
+        {/* Header — unchanged */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
           <div className="flex-1 min-w-0">
             <h2 id="detail-title" className="text-xl font-bold text-gray-900 truncate">{centre.centreName}</h2>
@@ -211,95 +397,124 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
 
           {/* Section 1 — Key metrics mini cards */}
           <div className="grid grid-cols-4 gap-3">
-            {[
-              { label: 'Active Caseload', value: centre.throughput.activeCaseload },
-              { label: 'In Scoring',      value: centre.pipeline.scoring,
-                valueClass: centre.pipeline.scoring > 0 ? 'text-blue-600' : 'text-gray-900' },
-              { label: 'Staff Active',    value: `${centre.staff.activeThisPeriod}/${centre.staff.total}` },
-              { label: 'Stuck Cases',     value: centre.intake.stuckUnassigned,
-                valueClass: centre.intake.stuckUnassigned > 0 ? 'text-rose-600' : 'text-gray-900' },
-            ].map((m) => (
-              <div key={m.label} className="bg-gray-50 rounded-lg px-3 py-3 text-center">
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider leading-none mb-1">{m.label}</p>
-                <p className={`text-xl font-bold tabular-nums ${(m as { valueClass?: string }).valueClass ?? 'text-gray-900'}`}>{m.value}</p>
-              </div>
+            {/* Active Caseload */}
+            <div className="bg-gray-50 rounded-lg px-3 py-3 text-center">
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider leading-none mb-1">Active Caseload</p>
+              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                {centre.throughput.activeCaseload}
+              </p>
+            </div>
+            {/* In Scoring — spec: text-primary, not blue */}
+            <div className="bg-gray-50 rounded-lg px-3 py-3 text-center">
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider leading-none mb-1">In Scoring</p>
+              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                {centre.pipeline.scoring}
+              </p>
+            </div>
+            {/* Staff Active — X in #1D9E75 / /Y in text-tertiary */}
+            <div className="bg-gray-50 rounded-lg px-3 py-3 text-center">
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider leading-none mb-1">Staff Active</p>
+              <p className="text-xl font-bold tabular-nums">
+                <span style={{ color: '#1D9E75' }}>{centre.staff.activeThisPeriod}</span>
+                <span style={{ color: 'var(--color-text-tertiary, #9ca3af)' }}>/{centre.staff.total}</span>
+              </p>
+            </div>
+            {/* Stuck Cases — #A32D2D if > 0 */}
+            <div className="bg-gray-50 rounded-lg px-3 py-3 text-center">
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider leading-none mb-1">Stuck Cases</p>
+              <p
+                className="text-xl font-bold tabular-nums"
+                style={{ color: centre.intake.stuckUnassigned > 0 ? '#A32D2D' : 'var(--color-text-primary, #111827)' }}
+              >
+                {centre.intake.stuckUnassigned}
+              </p>
+            </div>
+          </div>
+
+          {/* Section 1b — Pipeline Snapshot (always rendered, uses centre prop — no detail-fetch dependency) */}
+          <div>
+            <div className="mb-2">
+              <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary, #111827)', margin: 0 }}>
+                Pipeline snapshot
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', marginTop: 2 }}>
+                Cases at each stage · this centre · {formatPeriodLabel(filters.dateFrom, filters.dateTo)}
+              </p>
+            </div>
+            {pipelineSteps.map((step, i) => (
+              <PipelineSnapshotRow
+                key={step.label}
+                step={step}
+                isLast={i === pipelineSteps.length - 1}
+              />
             ))}
           </div>
 
-          {/* Section 1b — Pipeline breakdown */}
-          {loading ? null : (
-            <div className="bg-blue-50/60 border border-blue-100 rounded-xl px-4 py-3">
-              <p className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-2">Pipeline snapshot</p>
-              {detail ? (
-                <PipelineBreakdownBar pb={detail.pipelineBreakdown} />
-              ) : (
-                <div className="flex gap-2 flex-wrap">
-                  {['In scoring', 'Awaiting report', 'Awaiting approval', 'Goals pending', 'Completed'].map((l) => (
-                    <div key={l} className="h-4 w-24 bg-blue-100 rounded animate-pulse" />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Section 2 — Intake & Throughput */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Intake & Throughput</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Intake</p>
-                <Row label="Cases registered"   value={centre.intake.casesRegistered} />
-                <Row
+          {/* Section 2 — Intake, Throughput & Output — flat two-column grid */}
+          <div className="space-y-4">
+            {/* INTAKE group */}
+            <div>
+              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.05em] mb-2">Intake</p>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCell
+                  label="Cases registered"
+                  value={centre.intake.casesRegistered}
+                />
+                <MetricCell
                   label="Avg days to assign"
                   value={centre.intake.avgDaysToAssign != null ? `${centre.intake.avgDaysToAssign}d` : '—'}
-                  valueClass={centre.intake.avgDaysToAssign != null && centre.intake.avgDaysToAssign > 2 ? 'text-rose-600 font-semibold' : undefined}
+                  colour={centre.intake.avgDaysToAssign != null && centre.intake.avgDaysToAssign > 2 ? '#A32D2D' : undefined}
                 />
-                <Row
+                <MetricCell
                   label="Stuck unassigned"
                   value={centre.intake.stuckUnassigned}
-                  valueClass={centre.intake.stuckUnassigned > 0 ? 'text-rose-600 font-semibold' : undefined}
+                  colour={centre.intake.stuckUnassigned > 0 ? '#A32D2D' : undefined}
+                />
+                <MetricCell
+                  label="Cases assigned"
+                  value={centre.intake.casesAssigned}
                 />
               </div>
-              <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Throughput</p>
-                <Row label="Assessments assigned" value={centre.throughput.assessmentsAssigned} />
-                <Row label="Assessments scored"   value={centre.throughput.assessmentsScored} />
-                <Row
+            </div>
+
+            {/* THROUGHPUT group */}
+            <div>
+              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.05em] mb-2">Throughput</p>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCell label="Active caseload"       value={centre.throughput.activeCaseload} />
+                <MetricCell label="Assessments assigned"  value={centre.throughput.assessmentsAssigned} />
+                <MetricCell label="Assessments scored"    value={centre.throughput.assessmentsScored} />
+                <MetricCell
                   label="Pending approval"
                   value={centre.pipeline.pendingApproval}
-                  valueClass={centre.pipeline.pendingApproval > 0 ? 'text-amber-600 font-semibold' : undefined}
+                  colour={centre.pipeline.pendingApproval > 0 ? '#A32D2D' : undefined}
+                />
+              </div>
+            </div>
+
+            {/* OUTPUT group */}
+            <div>
+              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.05em] mb-2">Output</p>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCell label="Reports drafted"   value={centre.output.reportsDrafted} />
+                <MetricCell label="Reports approved"  value={centre.output.reportsApproved} />
+                <MetricCell label="Goals added"       value={centre.output.goalsAdded} />
+                <MetricCell label="Goals approved"    value={centre.output.goalsApproved} />
+                <MetricCell
+                  label="Avg days to approve report"
+                  value={centre.output.avgDaysToApproveReport != null ? `${centre.output.avgDaysToApproveReport}d` : '—'}
+                  colour={centre.output.avgDaysToApproveReport != null && centre.output.avgDaysToApproveReport > 7 ? '#A32D2D' : undefined}
+                />
+                <MetricCell
+                  label="Avg days to approve goal"
+                  value={centre.output.avgDaysToApproveGoal != null ? `${centre.output.avgDaysToApproveGoal}d` : '—'}
+                  colour={centre.output.avgDaysToApproveGoal != null && centre.output.avgDaysToApproveGoal > 7 ? '#A32D2D' : undefined}
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 3 — Output */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Output</h3>
-            <div className="grid grid-cols-2 gap-3 mb-2">
-              {[
-                { label: 'Reports Drafted',   value: centre.output.reportsDrafted },
-                { label: 'Reports Approved',  value: centre.output.reportsApproved },
-                { label: 'Cases w/ Goals',    value: centre.output.goalsAdded },
-                { label: 'Goals Approved',    value: centre.output.goalsApproved },
-              ].map((m) => (
-                <div key={m.label} className="bg-gray-50 rounded-lg px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">{m.label}</span>
-                  <span className="text-sm font-bold text-gray-900 tabular-nums">{m.value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <p className={`text-xs flex-1 px-3 py-2 rounded-lg bg-gray-50 ${approvalTimeColour(centre.output.avgDaysToApproveReport)}`}>
-                Avg {centre.output.avgDaysToApproveReport != null ? `${centre.output.avgDaysToApproveReport}d` : 'N/A'} to approve reports
-              </p>
-              <p className={`text-xs flex-1 px-3 py-2 rounded-lg bg-gray-50 ${approvalTimeColour(centre.output.avgDaysToApproveGoal)}`}>
-                Avg {centre.output.avgDaysToApproveGoal != null ? `${centre.output.avgDaysToApproveGoal}d` : 'N/A'} to approve goals
-              </p>
-            </div>
-          </div>
-
-          {/* Section 4 — Staff */}
+          {/* Section 3 — Staff at this centre */}
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-0.5">Staff at this centre</h3>
             <p className="section-click-hint mb-2">Click any name to view their full profile</p>
@@ -318,7 +533,7 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name / Email</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Role</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Last Active</th>
@@ -327,23 +542,42 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {sortedStaff.map((s) => {
-                      const st = staffStatusLabel[s.status];
+                      const st = staffStatusLabel[s.status] ?? { label: s.status || '—', className: 'bg-gray-100 text-gray-500' };
                       const profileRole: UserProfileRole | null = inferProfileRole(s.roleName);
                       return (
                         <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
-                          <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">
-                            {profileRole ? (
-                              <PersonLink
-                                userId={s.id}
-                                role={profileRole}
-                                firstName={s.firstName}
-                                lastName={s.lastName}
-                              />
-                            ) : (
-                              <>{s.firstName} {s.lastName}</>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            <div className="font-medium text-gray-800">
+                              {profileRole ? (
+                                <PersonLink
+                                  userId={s.id}
+                                  role={profileRole}
+                                  firstName={s.firstName}
+                                  lastName={s.lastName}
+                                />
+                              ) : (
+                                <span>{s.firstName} {s.lastName}</span>
+                              )}
+                            </div>
+                            {s.email && (
+                              <div className="text-[11px] text-gray-400 mt-0.5">{s.email}</div>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-500">{s.roleName || '—'}</td>
+                          <td className="px-4 py-2.5">
+                            {s.roleName ? (
+                              <span
+                                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                                style={{
+                                  background: s.roleName === 'Clinician' ? '#E6F1FB' : s.roleName === 'CentreManager' ? '#EAF3DE' : '#E1F5EE',
+                                  color:      s.roleName === 'Clinician' ? '#0C447C' : s.roleName === 'CentreManager' ? '#3B6D11' : '#0F6E56',
+                                }}
+                              >
+                                {s.roleName}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5">
                             <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${st.className}`}>
                               {st.label}
@@ -360,7 +594,7 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
             )}
           </div>
 
-          {/* Section 5 — Active cases (collapsed) */}
+          {/* Section 4 — Active cases (collapsed) */}
           {!loading && detail && (
             <div>
               <button
@@ -408,7 +642,7 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
             </div>
           )}
 
-          {/* Section 6 — Overdue assessments (collapsed) */}
+          {/* Section 5 — Overdue assessments (collapsed) */}
           {!loading && detail && (
             <div>
               <button
@@ -475,44 +709,40 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
   );
 }
 
-// ── Helper row component ──────────────────────────────────────────────────────
-function Row({
+// ── MetricCell — flat grid cell for Intake/Throughput/Output sections ─────────
+function MetricCell({
   label,
   value,
-  valueClass,
+  colour,
 }: {
-  label: string;
-  value: string | number;
-  valueClass?: string;
+  label:   string;
+  value:   string | number;
+  colour?: string;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`text-sm tabular-nums ${valueClass ?? 'text-gray-900 font-medium'}`}>{value}</span>
-    </div>
-  );
-}
-
-// ── Pipeline breakdown bar ────────────────────────────────────────────────────
-function PipelineBreakdownBar({ pb }: { pb: CentrePipelineBreakdown }) {
-  const items = [
-    { label: 'In scoring',        value: pb.inScoring,        bg: 'bg-blue-500' },
-    { label: 'Awaiting report',   value: pb.awaitingReport,   bg: 'bg-amber-400' },
-    { label: 'Awaiting approval', value: pb.awaitingApproval, bg: 'bg-orange-500' },
-    { label: 'Goals pending',     value: pb.goalsNotAdded,    bg: 'bg-rose-500' },
-    { label: 'Completed',         value: pb.completed,        bg: 'bg-emerald-500' },
-  ];
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2 flex-wrap">
-        {items.map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${item.bg}`} />
-            <span className="text-gray-400">{item.label}:</span>
-            <span className="font-semibold tabular-nums text-gray-800">{item.value}</span>
-          </div>
-        ))}
-      </div>
+    <div className="rounded-lg bg-gray-50 px-3 py-2.5">
+      <p
+        style={{
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: 'var(--color-text-secondary, #6b7280)',
+          fontWeight: 500,
+          marginBottom: 2,
+        }}
+      >
+        {label}
+      </p>
+      <p
+        className="tabular-nums"
+        style={{
+          fontSize: 14,
+          fontWeight: 500,
+          color: colour ?? 'var(--color-text-primary, #111827)',
+        }}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -526,9 +756,10 @@ interface CentresTabProps {
   filters:         FilterParams;
   workload:        WorkloadCentreRow[] | null;
   workloadLoading: boolean;
+  onDrillDown?:    OnRoleDrillDown;
 }
 
-export default function CentresTab({ data, loading, error, filters, workload, workloadLoading }: CentresTabProps) {
+export default function CentresTab({ data, loading, error, filters, workload, workloadLoading, onDrillDown }: CentresTabProps) {
   const [statusDrawer, setStatusDrawer] = useState<{ title: string; centres: CentreOverviewRow[] } | null>(null);
   const [detailCentre, setDetailCentre] = useState<CentreOverviewRow | null>(null);
   const [search, setSearch]             = useState('');
@@ -548,13 +779,14 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
     });
   }, [allRows, search]);
 
-  const colCount = 13;
+  const colCount = 15;
 
   const openStatusDrawer = useCallback((status: CentreStatus | 'idle') => {
     if (status === 'idle') {
+      // "Idle" = no staff active in the selected period (matches Q15 in metricsService).
       setStatusDrawer({
         title:   'Idle Centres',
-        centres: allRows.filter((c) => c.lastActivityDate === null),
+        centres: allRows.filter((c) => c.staff.activeThisPeriod === 0 && c.staff.total > 0),
       });
     } else {
       const map: Record<CentreStatus, string> = {
@@ -569,6 +801,12 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
     }
   }, [allRows]);
 
+  // Must be declared before any early return to satisfy Rules of Hooks
+  const totalStuckScoring = useMemo(
+    () => allRows.reduce((s, c) => s + (c.pipeline?.stuckScoring14d ?? 0), 0),
+    [allRows],
+  );
+
   if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -579,11 +817,6 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
       </div>
     );
   }
-
-  const totalStuckScoring = useMemo(
-    () => allRows.reduce((s, c) => s + (c.pipeline?.stuckScoring14d ?? 0), 0),
-    [allRows],
-  );
 
   return (
     <div className="space-y-5">
@@ -628,21 +861,29 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
           valueClass={(summary?.idleCentres ?? 0) > 0 ? 'text-rose-600' : 'text-gray-900'}
           onClick={() => !loading && openStatusDrawer('idle')}
         />
+        {/* Card 6 — Goal coverage */}
         <SummaryCard
-          label="Stuck in scoring"
-          value={loading ? '—' : totalStuckScoring}
-          context="14+ days, no result yet"
-          tooltip="Total assessments stuck in scoring (14+ days without a result generated) across all centres."
-          valueClass={totalStuckScoring > 0 ? 'text-rose-600' : 'text-gray-900'}
+          label="Goal coverage"
+          value={
+            loading || !data?.goalCoverage
+              ? '—'
+              : `${data.goalCoverage.coveragePercent}%`
+          }
+          context={
+            data?.goalCoverage
+              ? `${data.goalCoverage.goalsWithNotes} of ${data.goalCoverage.approvedGoals} goals documented`
+              : 'Approved goals with progress notes'
+          }
+          tooltip="Percentage of approved goals that have at least one progress note. FSP goals excluded — no progress table available."
         />
       </div>
 
       {/* ── Status table ──────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3 justify-between">
+        <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 justify-between">
           <div>
-            <h2 className="text-[14px] font-medium text-gray-900">Centre Status</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Blocked first · click any row to drill down</p>
+            <h2 className="text-[15px] font-medium text-gray-900">Centre Status</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">Blocked first · click any row to drill down</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -662,20 +903,23 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
 
         <ScrollRegion maxHeightClass="max-h-[600px]" label="table">
           <table className="w-full min-w-[900px] text-sm" role="table" aria-label="Centre status table">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/60">
-                <th className="px-5 py-3 text-left w-6 text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">#</th>
-                <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Centre</th>
-                <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Status</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Stuck</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Caseload</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]" title="Cases in scoring (not_started/in_progress)">Scoring</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]" title="Cases in report/approval/goals stages">Pipeline</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Rpts Drafted</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Rpts Approved</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Goals Apprvd</th>
-                <th className="px-5 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Staff</th>
-                <th className="px-5 py-3 text-left  text-[10px] font-bold text-gray-500 uppercase tracking-[0.08em]">Last Activity</th>
+            <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
+              <tr>
+                <th className="px-5 py-[10px] text-left w-6 text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">#</th>
+                <th className="px-5 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</th>
+                <th className="px-5 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Status</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Stuck</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Caseload</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Cases in scoring (not_started/in_progress)">Scoring</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Cases in report/approval/goals stages">Pipeline</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Distinct patients registered in period">Cases Reg</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Distinct patients assigned to clinical in period">Cases Asgn</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Rpts Drafted</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Rpts Approved</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Goals Added: N assessments (total items)">Goals Added</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]" title="Goals Approved: N assessments (total items)">Goals Apprvd</th>
+                <th className="px-5 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Staff</th>
+                <th className="px-5 py-[10px] text-left  text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Last Activity</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -722,9 +966,20 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
                           ? (c.pipeline.reportNotDrafted + c.pipeline.pendingApproval + c.pipeline.goalsNotAdded)
                           : <span className="text-gray-200">—</span>}
                       </td>
+                      <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>{c.intake.casesRegistered || <span className="text-gray-200">—</span>}</td>
+                      <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>{c.intake.casesAssigned || <span className="text-gray-200">—</span>}</td>
                       <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>{c.output.reportsDrafted || <span className="text-gray-200">—</span>}</td>
                       <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>{c.output.reportsApproved || <span className="text-gray-200">—</span>}</td>
-                      <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>{c.output.goalsApproved || <span className="text-gray-200">—</span>}</td>
+                      <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>
+                        {c.output.goalsAdded > 0
+                          ? goalsDisplay(c.output.goalsAdded, c.output.goalsAddedItems ?? 0)
+                          : <span className="text-gray-200">—</span>}
+                      </td>
+                      <td className={`px-5 py-3 text-right tabular-nums ${rowClass}`}>
+                        {c.output.goalsApproved > 0
+                          ? goalsDisplay(c.output.goalsApproved, c.output.goalsApprovedItems ?? 0)
+                          : <span className="text-gray-200">—</span>}
+                      </td>
                       <td className={`px-5 py-3 text-right tabular-nums ${c.staff.activeThisPeriod === 0 && c.staff.total > 0 ? 'text-rose-600 font-semibold' : rowClass}`}>
                         {c.staff.total > 0 ? `${c.staff.activeThisPeriod}/${c.staff.total}` : <span className="text-gray-200">—</span>}
                       </td>

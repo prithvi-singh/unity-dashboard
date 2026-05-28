@@ -20,14 +20,6 @@ interface Props {
 type SortDir = 'asc' | 'desc';
 interface SortState { col: string; dir: SortDir }
 
-function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
-  return (
-    <span className={`ml-1 text-[10px] ${active ? 'text-gray-600' : 'text-gray-300'}`}>
-      {active ? (dir === 'asc' ? '↑' : '↓') : '⇅'}
-    </span>
-  );
-}
-
 function SortTh({
   col, label, sort, onSort, align = 'left', isText = false, title,
 }: {
@@ -38,20 +30,27 @@ function SortTh({
   const active = sort.col === col;
   return (
     <th
-      className={`px-5 py-3 text-${align} cursor-pointer select-none hover:text-gray-700 transition-colors`}
+      className={[
+        'px-3 py-[10px] text-[11px] font-medium uppercase tracking-[0.03em] cursor-pointer select-none transition-colors',
+        `text-${align}`,
+        active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700',
+      ].join(' ')}
       title={title}
       onClick={() => onSort(col, isText ? 'asc' : 'desc')}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <span className="inline-flex items-center">
+      <span className="inline-flex items-center gap-0.5">
         {label}
-        <SortIcon active={active} dir={sort.dir} />
+        {active && (
+          <span className="text-[10px] text-gray-600">{sort.dir === 'asc' ? '↑' : '↓'}</span>
+        )}
       </span>
     </th>
   );
 }
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return 'Never active';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
@@ -61,21 +60,14 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-function stalenessClass(iso: string | null): string {
-  if (!iso) return 'text-gray-300';
+function lastActiveClass(iso: string | null): string {
+  if (!iso) return 'text-[#A32D2D] font-bold';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 1) return 'text-green-600 font-medium';
-  if (days <= 7) return 'text-amber-500';
-  return 'text-rose-500';
-}
-
-function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
-      <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-    </div>
-  );
+  if (days === 0) return 'text-[#1D9E75]';
+  if (days === 1) return 'text-gray-800';
+  if (days <= 3)  return 'text-gray-500';
+  if (days <= 6)  return 'text-[#BA7517]';
+  return 'text-[#A32D2D]';
 }
 
 function getVal(a: CentreAdmin, col: string): number | string {
@@ -125,38 +117,23 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
     );
   }
 
-  const rows        = applySort(admins, sort);
-  const peopleCount = new Set(rows.map((a) => a.id)).size;
-  const maxCases        = Math.max(...rows.map((a) => a.casesRegistered), 1);
-  const maxAssigned     = Math.max(...rows.map((a) => a.casesAssignedToClinical), 1);
-  const maxActions      = Math.max(...rows.map((a) => a.totalActions), 1);
+  const rows = applySort(admins, sort);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <h2 className="text-[14px] font-medium text-gray-900">Centre Admin Detail</h2>
-          <p className="text-[12px] text-gray-500 mt-0.5">Sort by column</p>
-          <p className="section-click-hint">Click any name to view their full profile</p>
-        </div>
-        <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-          {rows.length} centre assignment{rows.length !== 1 ? 's' : ''}
-          {peopleCount !== rows.length && ` · ${peopleCount} admins`}
-        </span>
-      </div>
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
         <table className="w-full text-sm" role="table" aria-label="Centre admin detail table">
-          <thead>
-            <tr className="border-b border-gray-100 text-[12px] font-medium text-gray-500 uppercase tracking-[0.03em]">
-              <th className="px-6 py-3 text-left w-6">#</th>
-              <SortTh col="name"        label="Admin"                sort={sort} onSort={handleSort} isText />
-              <SortTh col="centreName"  label="Centre"               sort={sort} onSort={handleSort} isText />
-              <SortTh col="cases"       label="Cases Registered"     sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="assigned"    label="Assigned to Clinical" sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="assignRate"  label="Assignment Rate"      sort={sort} onSort={handleSort} align="right"
+          <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
+            <tr>
+              <th className="px-6 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em] w-6">#</th>
+              <SortTh col="name"         label="Admin"               sort={sort} onSort={handleSort} isText />
+              <SortTh col="centreName"   label="Centre"              sort={sort} onSort={handleSort} isText />
+              <SortTh col="cases"        label="Cases Registered"    sort={sort} onSort={handleSort} align="right" />
+              <SortTh col="assigned"     label="Clinicians Assigned" sort={sort} onSort={handleSort} align="right" />
+              <SortTh col="assignRate"   label="Routing Rate"        sort={sort} onSort={handleSort} align="right"
                       title="Cases Assigned to Clinical ÷ Cases Registered" />
               <SortTh col="totalActions" label="Total Actions"       sort={sort} onSort={handleSort} align="right" />
-              <SortTh col="lastActivity" label="Last Activity"       sort={sort} onSort={handleSort} />
+              <SortTh col="lastActivity" label="Last Active"         sort={sort} onSort={handleSort} />
               <SortTh col="lastLogin"    label="Last Login"          sort={sort} onSort={handleSort} />
             </tr>
           </thead>
@@ -179,19 +156,21 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
               </tr>
             ) : (
               rows.map((a, idx) => {
-                const assignRate = a.casesRegistered > 0
-                  ? Math.min((a.casesAssignedToClinical / a.casesRegistered) * 100, 100)
+                const assignRate = (a.casesRegistered ?? 0) > 0
+                  ? Math.min(((a.casesAssignedToClinical ?? 0) / (a.casesRegistered ?? 0)) * 100, 100)
                   : null;
                 const assignRateLabel = assignRate !== null ? `${assignRate.toFixed(0)}%` : '—';
-                const assignRateColor =
-                  assignRate === null ? 'text-gray-300'
-                  : assignRate >= 80   ? 'text-green-600 font-semibold'
-                  : assignRate >= 50   ? 'text-amber-500 font-medium'
-                  : 'text-rose-500 font-medium';
+                const assignRateClass =
+                  assignRate === null  ? 'text-gray-300'
+                  : assignRate >= 100  ? 'text-[#1D9E75] font-semibold'
+                  : assignRate >= 67   ? 'text-[#BA7517]'
+                  : 'text-[#A32D2D]';
 
                 return (
                   <tr key={`${a.id}-${a.centreId ?? idx}`} className="hover:bg-gray-50/70 transition-colors">
                     <td className="px-6 py-3.5 text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</td>
+
+                    {/* Admin name */}
                     <td className="px-5 py-3.5 font-medium text-gray-800 whitespace-nowrap">
                       <UserProfileLink
                         userId={a.id}
@@ -202,11 +181,15 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
                         {a.firstName} {a.lastName}
                       </UserProfileLink>
                     </td>
+
+                    {/* Centre */}
                     <td className="px-5 py-3.5 text-gray-600 text-xs max-w-[160px] truncate" title={a.centreName ?? ''}>
                       {shortCentreName(a.centreName)}
                     </td>
+
+                    {/* Cases Registered */}
                     <td className="px-5 py-3.5 text-right">
-                      {onDrillDown && a.casesRegistered > 0 ? (
+                      {onDrillDown && (a.casesRegistered ?? 0) > 0 ? (
                         <button
                           type="button"
                           title={DRILL_DOWN_HINT}
@@ -216,24 +199,20 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
                             drillCentreId: a.centreId ?? undefined,
                             label: `Registered · ${a.firstName} ${a.lastName}`,
                           })}
-                          className="text-right rounded-lg hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          className="tabular-nums font-semibold text-gray-800 rounded-lg hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
-                          <span className="tabular-nums font-semibold text-teal-600">
-                            {a.casesRegistered.toLocaleString()}
-                          </span>
-                          <MiniBar value={a.casesRegistered} max={maxCases} color="bg-teal-500" />
+                          {(a.casesRegistered ?? 0).toLocaleString()}
                         </button>
                       ) : (
-                        <>
-                          <span className="tabular-nums font-semibold text-teal-600">
-                            {a.casesRegistered.toLocaleString()}
-                          </span>
-                          <MiniBar value={a.casesRegistered} max={maxCases} color="bg-teal-500" />
-                        </>
+                        <span className="tabular-nums font-semibold text-gray-800">
+                          {(a.casesRegistered ?? 0).toLocaleString()}
+                        </span>
                       )}
                     </td>
+
+                    {/* Clinicians Assigned */}
                     <td className="px-5 py-3.5 text-right">
-                      {onDrillDown && a.casesAssignedToClinical > 0 ? (
+                      {onDrillDown && (a.casesAssignedToClinical ?? 0) > 0 ? (
                         <button
                           type="button"
                           title={DRILL_DOWN_HINT}
@@ -243,35 +222,36 @@ export default function CentreAdminTable({ admins, loading, error, linkParams, o
                             drillCentreId: a.centreId ?? undefined,
                             label: `Routed · ${a.firstName} ${a.lastName}`,
                           })}
-                          className="text-right rounded-lg hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          className="tabular-nums text-gray-800 rounded-lg hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
-                          <span className="tabular-nums text-orange-500">
-                            {a.casesAssignedToClinical.toLocaleString()}
-                          </span>
-                          <MiniBar value={a.casesAssignedToClinical} max={maxAssigned} color="bg-orange-400" />
+                          {(a.casesAssignedToClinical ?? 0).toLocaleString()}
                         </button>
                       ) : (
-                        <>
-                          <span className="tabular-nums text-orange-500">
-                            {a.casesAssignedToClinical.toLocaleString()}
-                          </span>
-                          <MiniBar value={a.casesAssignedToClinical} max={maxAssigned} color="bg-orange-400" />
-                        </>
+                        <span className="tabular-nums text-gray-800">
+                          {(a.casesAssignedToClinical ?? 0).toLocaleString()}
+                        </span>
                       )}
                     </td>
-                    <td className={`px-5 py-3.5 text-right tabular-nums ${assignRateColor}`}>
+
+                    {/* Routing Rate */}
+                    <td className={`px-5 py-3.5 text-right tabular-nums ${assignRateClass}`}>
                       {assignRateLabel}
                     </td>
+
+                    {/* Total Actions */}
                     <td className="px-5 py-3.5 text-right">
-                      <span className="tabular-nums text-gray-600">
-                        {a.totalActions.toLocaleString()}
+                      <span className="tabular-nums font-bold text-gray-800">
+                        {(a.totalActions ?? 0).toLocaleString()}
                       </span>
-                      <MiniBar value={a.totalActions} max={maxActions} color="bg-gray-300" />
                     </td>
-                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${stalenessClass(a.lastActivityDate)}`}>
+
+                    {/* Last Active */}
+                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveClass(a.lastActivityDate)}`}>
                       {timeAgo(a.lastActivityDate)}
                     </td>
-                    <td className="px-5 py-3.5 text-gray-400 whitespace-nowrap text-sm">
+
+                    {/* Last Login */}
+                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveClass(a.lastLoginDate)}`}>
                       {timeAgo(a.lastLoginDate)}
                     </td>
                   </tr>

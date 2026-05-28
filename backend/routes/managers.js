@@ -7,6 +7,7 @@ const { abbreviateCentre } = require('../lib/formatters');
 const { getCoreMetrics } = require('../services/metricsService');
 const { EVENT_TYPES, toSqlIn } = require('../utils/metrics');
 const { TERMINAL_STATUSES } = require('../utils/assessmentState');
+const { getProgressNoteCountsByUser } = require('../utils/goalProgress');
 
 const AP_ACTIVE = TERMINAL_STATUSES.map((s) => `'${s}'`).join(', ');
 
@@ -73,7 +74,7 @@ router.get('/', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
     const dateFilter      = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
-    const [metrics, rosterResult, consistencyResult, pendingResult] = await Promise.all([
+    const [metrics, rosterResult, consistencyResult, pendingResult, progressMap] = await Promise.all([
       getCoreMetrics({ dateFrom, dateTo, centreId }),
 
       // Manager-specific: roster, total actions, last activity
@@ -217,20 +218,55 @@ router.get('/', async (req, res, next) => {
             AND af.Assessment IN ('SPM', 'DP3', 'REELS', 'ISAA')
           GROUP BY au.Id
         `),
+
+      // Progress note counts per manager in the selected period
+      getProgressNoteCountsByUser(dateFrom, dateTo, centreId),
     ]);
 
     // Build lookup maps from shared service per-manager arrays
-    const casesByMgr   = new Map(metrics.cases.byManager.map((r) => [r.userId, r.count]));
-    const reportsByMgr = new Map(metrics.reports.byManager.map((r) => [r.userId, r.approved]));
-    const goalsByMgr   = new Map(metrics.goals.byManager.map((r) => [r.userId, r.approved]));
-    const consistencyMap = new Map(consistencyResult.recordset.map((r) => [r.userId, r]));
-    const pendingMap   = new Map(pendingResult.recordset.map((r) => [r.userId, r]));
+    const casesByMgr            = new Map(metrics.cases.byManager.map((r) => [r.userId, r.count]));
+    const assignmentsByMgr      = new Map((metrics.assessments.byManager || []).map((r) => [r.userId, r.assigned]));
+    const reportsByMgr          = new Map(metrics.reports.byManager.map((r) => [r.userId, r.approved]));
+    const goalsByMgr            = new Map(metrics.goals.byManager.map((r) => [r.userId, r.approved]));
+    const goalsByMgrItems       = new Map(metrics.goals.byManager.map((r) => [r.userId, r.approvedItems ?? 0]));
+    const consistencyMap        = new Map(consistencyResult.recordset.map((r) => [r.userId, r]));
+    const pendingMap            = new Map(pendingResult.recordset.map((r) => [r.userId, r]));
 
     const totalWorkingDays = countWorkingDays(dateFrom, dateTo);
 
-    const managers = rosterResult.recordset.map((r) => {
+    // Deduplicate roster: the SQL query returns one row per manager × centre.
+    // Collapse to one entry per manager, accumulating totalActions across all
+    // their centres and collecting the full list of centre assignments.
+    const managerRosterMap = new Map();
+    for (const r of rosterResult.recordset) {
+      const centreEntry = {
+        centreId:   r.centreId,
+        centreName: abbreviateCentre(r.CentreName) || r.CentreName,
+      };
+      const existing = managerRosterMap.get(r.Id);
+      if (existing) {
+        existing._centres.push(centreEntry);
+        existing._totalActions += (r.totalActions ?? 0);
+        if (r.lastActivityDate) {
+          const d = new Date(r.lastActivityDate);
+          if (!existing._lastActivityDate || d > existing._lastActivityDate) {
+            existing._lastActivityDate = d;
+          }
+        }
+      } else {
+        managerRosterMap.set(r.Id, {
+          _row:             r,
+          _centres:         [centreEntry],
+          _totalActions:    r.totalActions ?? 0,
+          _lastActivityDate: r.lastActivityDate ? new Date(r.lastActivityDate) : null,
+        });
+      }
+    }
+
+    const managers = [...managerRosterMap.values()].map(({ _row: r, _centres, _totalActions, _lastActivityDate }) => {
       const cons    = consistencyMap.get(r.Id) || {};
       const pend    = pendingMap.get(r.Id)     || {};
+      const prog    = progressMap.get(r.Id)    || { notesAdded: 0, goalsDocumented: 0, lastNoteDate: null };
       const coreJobDays        = cons.coreJobDays ?? 0;
       const consistencyPercent = totalWorkingDays > 0
         ? Math.round((coreJobDays / totalWorkingDays) * 100)
@@ -240,22 +276,32 @@ router.get('/', async (req, res, next) => {
         ? Math.max(0, Math.floor((Date.now() - new Date(lastActiveDate).getTime()) / 86400000))
         : null;
 
+      // Primary centre (first alphabetically from the query order) for
+      // backward-compat fields. Full list available in `centres`.
+      const primary = _centres[0] || {};
+
       return {
         id:               r.Id,
         firstName:        r.FirstName,
         lastName:         r.LastName,
         email:            r.Email,
         roleName:         r.roleName || null,
-        centreId:         r.centreId,
-        centreName:       abbreviateCentre(r.CentreName) || null,
+        // All centre assignments for this manager
+        centres:          _centres,
+        centreCount:      _centres.length,
+        // Primary centre (first) — kept for backward compatibility
+        centreId:         primary.centreId   ?? null,
+        centreName:       primary.centreName ?? null,
         // ── From shared metrics service ─────────────────────────────────────────
-        casesRegistered:    casesByMgr.get(r.Id)   ?? 0,
-        reportsApproved:    reportsByMgr.get(r.Id) ?? 0,
-        goalsApproved:      goalsByMgr.get(r.Id)   ?? 0,
+        casesRegistered:      casesByMgr.get(r.Id)         ?? 0,
+        assessmentsAssigned:  assignmentsByMgr.get(r.Id)  ?? 0,
+        reportsApproved:      reportsByMgr.get(r.Id)      ?? 0,
+        goalsApproved:        goalsByMgr.get(r.Id)        ?? 0,
+        goalsApprovedItems:   goalsByMgrItems.get(r.Id)   ?? 0,
         // ── Manager-specific data ────────────────────────────────────────────────
-        totalActions:       r.totalActions       ?? 0,
-        lastActivityDate:   r.lastActivityDate   || null,
-        lastLoginDate:      r.LastLoginDateTimeUtc || null,
+        totalActions:        _totalActions,
+        lastActivityDate:    _lastActivityDate ? _lastActivityDate.toISOString() : null,
+        lastLoginDate:       r.LastLoginDateTimeUtc || null,
         // ── Consistency data ──────────────────────────────────────────────────
         consistencyPercent,
         consistencyStatus: consistencyStatus(consistencyPercent),
@@ -271,6 +317,10 @@ router.get('/', async (req, res, next) => {
         reportsToApprove: pend.reportsToApprove ?? 0,
         goalsToApprove:   pend.goalsToApprove   ?? 0,
         pendingApprovals: (pend.reportsToApprove ?? 0) + (pend.goalsToApprove ?? 0),
+        // ── Goal progress (period-scoped) ─────────────────────────────────────
+        progressNotes:    prog.notesAdded      ?? 0,
+        goalsDocumented:  prog.goalsDocumented ?? 0,
+        lastNoteDate:     prog.lastNoteDate    ?? null,
       };
     });
 

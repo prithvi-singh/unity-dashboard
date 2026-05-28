@@ -71,8 +71,8 @@ router.get('/', async (req, res, next) => {
             ar.Name      AS roleName,
             c.Id         AS centreId,
             c.CentreName,
-            SUM(CASE WHEN pal.Type = 'CaseRegistered' AND p.CentreId = c.Id THEN 1 ELSE 0 END) AS casesRegistered,
-            SUM(CASE WHEN pal.Type = 'CaseAssigned'   AND p.CentreId = c.Id THEN 1 ELSE 0 END) AS casesAssignedToClinical,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered' AND p.CentreId = c.Id THEN p.Id END) AS casesRegistered,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'   AND p.CentreId = c.Id THEN p.Id END) AS casesAssignedToClinical,
             SUM(CASE WHEN p.CentreId = c.Id THEN 1 ELSE 0 END) AS totalActions,
             MAX(CASE WHEN p.CentreId = c.Id THEN pal.CreatedDateTime END) AS lastActivityDate
           FROM AdminUser au
@@ -111,8 +111,8 @@ router.get('/', async (req, res, next) => {
               CASE WHEN pal.Type IN (${OPS_CORE_EVENTS})
               THEN CAST(pal.CreatedDateTime AS DATE) END
             ) AS coreJobDays,
-            SUM(CASE WHEN pal.Type = 'CaseRegistered' THEN 1 ELSE 0 END) AS casesRegistered,
-            SUM(CASE WHEN pal.Type = 'CaseAssigned'   THEN 1 ELSE 0 END) AS cliniciansAssigned,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered' THEN pal.PatientId END) AS casesRegistered,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'   THEN pal.PatientId END) AS cliniciansAssigned,
             MAX(pal.CreatedDateTime) AS lastActiveDate
           FROM AdminUser au
           JOIN AdminUserRole aur ON aur.UserId = au.Id

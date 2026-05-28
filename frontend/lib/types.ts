@@ -31,7 +31,9 @@ export interface MetricsCentreGoals {
   centreId: number;
   centreName: string;
   added: number;
+  addedItems: number;
   approved: number;
+  approvedItems: number;
 }
 
 export interface MetricsCentreUsers {
@@ -410,11 +412,19 @@ export interface Clinician {
   coreOutput?: { assessmentsScored: number; reportsDrafted: number };
   lastActiveDate?: string | null;
   lastActiveDaysAgo?: number | null;
+  /** Goals submitted on this clinician's cases: distinct assessments */
+  goalsAdded?: number;
+  /** Goals submitted on this clinician's cases: individual goal items (for N(total) format) */
+  goalsAddedItems?: number;
   // Pipeline breakdown (point-in-time)
   stuckCases?: number;
   reportsNotDrafted?: number;
   goalsNotAdded?: number;
   pipelineBreakdown?: ClinicianPipelineBreakdown;
+  // Goal progress (period-scoped)
+  progressNotes?: number;
+  goalsDocumented?: number;
+  lastNoteDate?: string | null;
 }
 
 export interface Manager {
@@ -425,10 +435,15 @@ export interface Manager {
   roleName: string | null;
   centreId: number | null;
   centreName: string | null;
+  /** All centre assignments for this manager — backend returns one row per manager */
+  centres?: { centreId: number; centreName: string }[];
+  centreCount?: number;
   casesRegistered: number;
   assessmentsAssigned: number;
   reportsApproved?: number;
   goalsApproved?: number;
+  /** Individual approved goal items — used for N(total) display format */
+  goalsApprovedItems?: number;
   totalActions: number;
   lastActivityDate: string | null;
   lastLoginDate: string | null;
@@ -444,6 +459,10 @@ export interface Manager {
   reportsToApprove?: number;
   goalsToApprove?: number;
   pendingApprovals?: number;
+  // Goal progress (period-scoped)
+  progressNotes?: number;
+  goalsDocumented?: number;
+  lastNoteDate?: string | null;
 }
 
 export interface CentreAdmin {
@@ -714,6 +733,8 @@ export interface UserProfileData {
   coreJobDefinition: string;
   consistencyScore: ConsistencyScore;
   coreMetrics: ClinicianCoreMetrics | ManagerCoreMetrics | OpsAdminCoreMetrics;
+  /** Total core job actions all time (no date filter). 0 → NEVER ACTIVE badge. */
+  allTimeCoreJobCount: number;
   activityByDay: ActivityByDay[];
   recentActions: UserProfileRecentAction[];
   activeCases: UserProfileActiveCase[];
@@ -801,9 +822,12 @@ export interface UserBreakdownRole {
   roleName: string;
   total: number;
   active: number;
+  /** Logged in during period but zero audit actions */
+  idle: number;
   quiet: number;
   activePercent: number;
   activeUsers: RosterListUser[];
+  idleUsers: RosterListUser[];
   quietUsers: RosterListUser[];
 }
 
@@ -814,9 +838,12 @@ export interface UserBreakdownCentre {
   clinicians: number;
   managers: number;
   active: number;
+  /** Logged in during period but zero audit actions */
+  idle?: number;
   quiet: number;
   activePercent: number;
   activeUsers: RosterListUser[];
+  idleUsers?: RosterListUser[];
   quietUsers: RosterListUser[];
 }
 
@@ -847,7 +874,12 @@ export interface UserBreakdownData {
   dateFrom?: string | null;
   dateTo?: string | null;
   byRole: UserBreakdownRole[];
-  byStatus: { active: number; inactive: number };
+  byStatus: {
+    active: number;
+    /** Logged in during period but zero audit actions */
+    idle?: number;
+    inactive: number;
+  };
   byCentre: UserBreakdownCentre[];
   recentlyInactive: UserBreakdownAttentionUser[];
   neverActive: UserBreakdownNeverActive[];
@@ -1071,14 +1103,26 @@ export interface WorkloadCentreRow {
   reportEdits: number;
   /** ReportPDFGenerated events (distinct per assessment) */
   reportsApproved: number;
-  /** GoalAdded events */
+  /** Distinct assessments with goals submitted */
   goalsAdded: number;
-  /** PatientGoalApprovalRequestGoal rows WHERE Status = 'Approved' */
+  /** Individual goal items submitted (for N(total) format) */
+  goalsAddedItems: number;
+  /** Distinct assessments with an approved goal */
   goalsApproved: number;
+  /** Individual approved goal items (for N(total) format) */
+  goalsApprovedItems: number;
   /** ReportPDFGenerated events actioned by manager-role users (not Clinician / Super Admin) */
   managerReportsApproved: number;
-  /** Approved goals at centres with a manager-role user assigned */
+  /** Distinct assessments with an approved goal at manager-assigned centres */
   managerGoalsApproved: number;
+  /** Individual approved goal items at manager-assigned centres (for N(total) format) */
+  managerGoalsApprovedItems: number;
+  /** Distinct assessments with goals submitted at manager-assigned centres */
+  managerGoalsAdded: number;
+  /** Individual goal items submitted at manager-assigned centres (for N(total) format) */
+  managerGoalsAddedItems: number;
+  /** ProgressAdded audit events for clinicians at this centre in the selected period */
+  progressNotes?: number;
 }
 
 // ── Centres tab ───────────────────────────────────────────────────────────────
@@ -1106,6 +1150,7 @@ export interface CentreOverviewRow {
 
   intake: {
     casesRegistered: number;
+    casesAssigned:   number;
     avgDaysToAssign: number | null;
     stuckUnassigned: number;
   };
@@ -1119,8 +1164,14 @@ export interface CentreOverviewRow {
     reportsDrafted:         number;
     reportsApproved:        number;
     avgDaysToApproveReport: number | null;
+    /** Distinct assessments with goals submitted */
     goalsAdded:             number;
+    /** Individual goal items submitted (for N(total) format) */
+    goalsAddedItems:        number;
+    /** Distinct assessments with an approved goal */
     goalsApproved:          number;
+    /** Individual approved goal items (for N(total) format) */
+    goalsApprovedItems:     number;
     avgDaysToApproveGoal:   number | null;
   };
   staff: {
@@ -1153,8 +1204,14 @@ export interface CentresOverviewSummary {
 }
 
 export interface CentresOverviewData {
-  summary:  CentresOverviewSummary;
-  centres:  CentreOverviewRow[];
+  summary:      CentresOverviewSummary;
+  centres:      CentreOverviewRow[];
+  /** Optional goal coverage summary — populated from /api/goal-progress */
+  goalCoverage?: {
+    approvedGoals:   number;
+    goalsWithNotes:  number;
+    coveragePercent: number;
+  };
 }
 
 export interface CentreDetailStaff {
@@ -1458,4 +1515,92 @@ export interface UserSummaryProfile {
   goalApprovalsPending?: number;
   goalApprovalsCompleted?: number;
   avgApprovalTurnaroundHours?: number | null;
+  // Goal progress
+  goalProgress?: GoalProgressForClinician;
+}
+
+// ── Goal Progress ─────────────────────────────────────────────────────────────
+
+export interface GoalProgressNote {
+  noteId: number;
+  content: string;
+  addedBy: string;
+  addedByRole: string;
+  addedDate: string | null;
+}
+
+export interface GoalProgressGoal {
+  goalId: number;
+  assessmentType: string;
+  notesCount: number;
+  lastNoteDate: string | null;
+  notes: GoalProgressNote[];
+}
+
+export interface GoalProgressForAssessment {
+  allocatePatientId: number;
+  approvedGoals: number;
+  goalsWithNotes: number;
+  coveragePercent: number;
+  goals: GoalProgressGoal[];
+}
+
+export interface GoalProgressByUser {
+  userId: number;
+  userName: string;
+  userEmail: string;
+  role: string;
+  notesAdded: number;
+  goalsDocumented: number;
+  lastNoteDate: string | null;
+}
+
+export interface GoalProgressByAssessmentType {
+  type: string;
+  approvedGoals: number;
+  goalsWithNotes: number;
+  coveragePercent: number;
+  totalNotes: number;
+  hasProgressTable: boolean;
+}
+
+export interface GoalProgressUndocumented {
+  patientName: string;
+  patientDisplayId: string | null;
+  assessmentType: string;
+  clinicianName: string | null;
+  centreName: string;
+  approvedGoals: number;
+  notesCount: number;
+  lastNoteDate: string | null;
+  daysSinceLastNote: number | null;
+}
+
+export interface GoalProgressSummary {
+  totalApprovedGoals: number;
+  goalsWithNotes: number;
+  goalsWithoutNotes: number;
+  coveragePercent: number;
+  totalNotes: number;
+  avgNotesPerGoal: number;
+  byAssessmentType: GoalProgressByAssessmentType[];
+  byUser: GoalProgressByUser[];
+  recentlyUndocumented: GoalProgressUndocumented[];
+}
+
+export interface GoalProgressByGoal {
+  patientName: string;
+  assessmentType: string;
+  goalId: number;
+  notesCount: number;
+  lastNoteDate: string | null;
+}
+
+export interface GoalProgressForClinician {
+  userId: number;
+  notesAdded: number;
+  goalsDocumented: number;
+  assessmentsWithNotes: number;
+  lastNoteDate: string | null;
+  byGoal: GoalProgressByGoal[];
 }

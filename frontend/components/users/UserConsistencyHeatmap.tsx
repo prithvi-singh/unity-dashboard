@@ -4,7 +4,6 @@ import { useState } from 'react';
 import type { ActivityByDay, ConsistencyScore } from '@/lib/types';
 import {
   isSunday,
-  isSaturday,
   generateDateRange,
   toLocalISO,
 } from '@/lib/formatDate';
@@ -31,8 +30,6 @@ const STATUS_CONFIG: Record<ConsistencyStatus, { label: string; bg: string; text
 };
 
 function cellTitle(day: ActivityByDay | undefined, dateStr: string): string {
-  const weekend = isSaturday(dateStr) || isSunday(dateStr);
-  if (weekend) return 'Weekend';
   if (!day || !day.didCoreJob) return `${fmtDateFull(dateStr)} — No core job activity`;
   const b = day.breakdown;
   const parts: string[] = [];
@@ -125,7 +122,6 @@ export default function UserConsistencyHeatmap({
                       new Date(`${date}T12:00:00`).getMonth() !==
                         new Date(`${dates[idx - 1]}T12:00:00`).getMonth();
                     const sun = isSunday(date);
-                    const sat = isSaturday(date);
                     const dayNum = new Date(`${date}T12:00:00`).getDate();
                     const monthLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-IN', { month: 'short' });
 
@@ -151,11 +147,7 @@ export default function UserConsistencyHeatmap({
                         <div
                           style={{
                             fontSize: '9px',
-                            color: sun
-                              ? 'var(--sunday-text)'
-                              : sat
-                              ? '#d1d5db'
-                              : '#d1d5db',
+                            color: sun ? 'var(--sunday-text)' : '#d1d5db',
                           }}
                         >
                           {dayNum}
@@ -170,22 +162,21 @@ export default function UserConsistencyHeatmap({
                   {dates.map((date) => {
                     const day     = dayMap.get(date);
                     const sun     = isSunday(date);
-                    const sat     = isSaturday(date);
                     const didCore = day?.didCoreJob ?? false;
                     const count   = day?.coreJobCount ?? 0;
 
-                    // 3-state colour: green (active) / light-grey (no activity) / rose (Sunday) / slightly-grey (Saturday)
+                    // Colour rules:
+                    //   Active day (any day of week)  → green bg, white text
+                    //   Empty Sunday                  → pink tint (#FFF5F5), visual week separator only
+                    //   Empty day (incl. Saturday)    → secondary bg, no text
                     let bg: string;
                     let textColor: string;
-                    if (sun) {
-                      bg        = '#FFF5F5';
-                      textColor = didCore ? '#C0545A' : 'transparent';
-                    } else if (sat) {
-                      bg        = 'var(--color-background-tertiary)';
-                      textColor = 'transparent';
-                    } else if (didCore) {
+                    if (didCore) {
                       bg        = '#1D9E75';
                       textColor = '#fff';
+                    } else if (sun) {
+                      bg        = '#FFF5F5';
+                      textColor = 'transparent';
                     } else {
                       bg        = 'var(--color-background-secondary)';
                       textColor = 'transparent';
@@ -236,10 +227,6 @@ export default function UserConsistencyHeatmap({
                     <span className="text-[11px] text-gray-500">No core job</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded" style={{ backgroundColor: 'var(--color-background-tertiary)', border: '1px solid #e5e7eb' }} />
-                    <span className="text-[11px] text-gray-400">Weekend</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
                     <div className="w-4 h-4 rounded" style={{ backgroundColor: '#FFF5F5', border: '1px solid #fecaca' }} />
                     <span className="text-[11px]" style={{ color: 'var(--sunday-text)' }}>Sunday</span>
                   </div>
@@ -254,9 +241,7 @@ export default function UserConsistencyHeatmap({
                 style={{ top: tooltip.y + 8, left: tooltip.x }}
               >
                 <div className="font-semibold mb-0.5">{fmtDateFull(tooltip.date)}</div>
-                {isSaturday(tooltip.date) || isSunday(tooltip.date) ? (
-                  <div className="text-gray-400">Weekend</div>
-                ) : tooltip.day.didCoreJob ? (
+                {tooltip.day.didCoreJob ? (
                   <div className="space-y-0.5">
                     {tooltip.day.breakdown.assessmentsScored > 0 && (
                       <div>Assessments scored: {tooltip.day.breakdown.assessmentsScored}</div>

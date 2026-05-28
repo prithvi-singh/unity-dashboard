@@ -1,8 +1,8 @@
 'use strict';
 
 const { Router } = require('express');
-const { poolPromise } = require('../db');
-const { buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
+const { sql, poolPromise } = require('../db');
+const { parseDateParam, buildDateFilter, buildCentreExclusion, buildPatientExclusion } = require('../lib/queryHelpers');
 const { abbreviateCentre } = require('../lib/formatters');
 const { FILTERS } = require('../utils/metrics');
 const { makeCache } = require('../lib/routeCache');
@@ -78,6 +78,12 @@ router.get('/', async (req, res, next) => {
     const cacheKey = issuesCache.key(req);
     const hit = issuesCache.get(cacheKey);
     if (hit) return res.json(hit);
+
+    // Date params are optional; when omitted the stuckOnboarding query falls
+    // back to all-time behaviour (the IS NULL guards in buildDateFilter fire).
+    const dateFrom = parseDateParam(req.query.dateFrom);
+    const dateTo   = parseDateParam(req.query.dateTo);
+    const dateFilterRegistered = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
     const pool = await poolPromise;
 
@@ -529,8 +535,11 @@ router.get('/', async (req, res, next) => {
         ORDER BY daysInCurrentState DESC
       `),
 
-      // ── Critical: Stuck onboarding > 48h unassigned ────────────────────────
-      pool.request().query(`
+      // ── Critical: Stuck onboarding — registered in selected period, never assigned ever ─
+      pool.request()
+        .input('dateFrom', sql.DateTimeOffset, dateFrom)
+        .input('dateTo',   sql.DateTimeOffset, dateTo)
+        .query(`
         WITH reg AS (
           SELECT
             pal.PatientId,
@@ -540,6 +549,7 @@ router.get('/', async (req, res, next) => {
           JOIN Patient pt ON pt.Id = pal.PatientId
           JOIN Centre c   ON c.Id  = pt.CentreId
           WHERE pal.Type = 'CaseRegistered'
+            AND ${dateFilterRegistered}
             AND ${CENTRE_EXCL_C}
             AND ${PATIENT_EXCL_PT}
           GROUP BY pal.PatientId

@@ -6,6 +6,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
+const compression = require('compression');
 
 const { poolPromise } = require('./db');
 
@@ -33,12 +34,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 // ---------------------------------------------------------------------------
 
-// NOTE: Gzip compression is deferred until `npm install compression` can run.
-// The custom zlib implementation was removed as its async res.end() path
-// conflicted with Express's response lifecycle on certain edge cases.
-// To re-enable: npm install compression, then add:
-//   const compression = require('compression');
-//   app.use(compression({ level: 6, threshold: 1024 }));
+app.use(compression({ level: 6, threshold: 1024 }));
 
 app.use(helmet());
 
@@ -50,11 +46,24 @@ const allowedOrigins = [
   'http://localhost:3003',
 ].filter(Boolean);
 
+// CORS_ALLOW_PATTERN supports Vercel preview deployments with dynamic subdomains
+// (e.g. https://unity-dashboard-git-feature-xyz.vercel.app).
+// Set this env var to a regex string like: ^https://.*\.vercel\.app$
+const corsAllowPattern = process.env.CORS_ALLOW_PATTERN
+  ? new RegExp(process.env.CORS_ALLOW_PATTERN)
+  : null;
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // server-to-server requests
+  if (allowedOrigins.includes(origin)) return true;
+  if (corsAllowPattern && corsAllowPattern.test(origin)) return true;
+  return false;
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow server-to-server requests (no origin header) and listed origins
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: origin ${origin} not allowed`));

@@ -11,6 +11,7 @@ const compression = require('compression');
 const { poolPromise } = require('./db');
 
 const { getCoreMetrics } = require('./services/metricsService');
+const { initCron, startupWarmUp, getStatus: getCacheStatus } = require('./services/nightlyJob');
 const overviewRouter = require('./routes/overview');
 const cliniciansRouter = require('./routes/clinicians');
 const managersRouter = require('./routes/managers');
@@ -26,6 +27,7 @@ const dailyReviewRouter    = require('./routes/dailyReview');
 const centresRouter        = require('./routes/centres');
 const issuesRouter         = require('./routes/issues');
 const goalProgressRouter   = require('./routes/goal-progress');
+const adminCacheRouter     = require('./routes/adminCache');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -103,9 +105,30 @@ app.get('/api/health', async (_req, res) => {
   try {
     const pool = await poolPromise;
     await pool.request().query('SELECT 1');
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), dbConnected: true });
+
+    // Include cache status so we can verify pre-computation is working
+    let cacheStatus = null;
+    try {
+      cacheStatus = await getCacheStatus();
+    } catch (e) {
+      cacheStatus = { error: e.message };
+    }
+
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      dbConnected: true,
+      cache: cacheStatus
+        ? {
+            warm: cacheStatus.windows ? cacheStatus.windows.some((w) => w.exists) : false,
+            windows: cacheStatus.windows || [],
+            lastComputed: cacheStatus.lastJobRun || null,
+            nextComputed: cacheStatus.nextJobRun || null,
+          }
+        : { warm: false, windows: [], lastComputed: null, nextComputed: null },
+    });
   } catch {
-    res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), dbConnected: false });
+    res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), dbConnected: false, cache: { warm: false } });
   }
 });
 
@@ -156,6 +179,7 @@ app.use('/api/workload', workloadRouter);
 app.use('/api/centres', centresRouter);
 app.use('/api/issues',  issuesRouter);
 app.use('/api/goal-progress', goalProgressRouter);
+app.use('/api/admin/cache', adminCacheRouter);
 
 // 404 for unknown routes
 app.use((_req, res) => {
@@ -201,6 +225,18 @@ poolPromise.then(async () => {
       console.log('[warmup] Self-ping enabled every 4 minutes');
     }, 30_000);
   });
+
+  // ── Nightly pre-computation cache ───────────────────────────────────────
+  // Initialise cron scheduler for daily pre-computation at midnight IST.
+  initCron();
+
+  // Run startup warm-up: if the cache is cold (new deploy/restart),
+  // pre-compute everything now so the first real request is fast.
+  try {
+    await startupWarmUp();
+  } catch (err) {
+    console.warn('[startup] Cache warm-up error (non-fatal):', err.message);
+  }
 
   // In development, run full schema discovery so the terminal always shows
   // the exact status values, event types, role names, and test data counts

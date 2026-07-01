@@ -9,6 +9,9 @@ const { activeCaseloadWhere } = require('../utils/queries');
 const { EVENT_TYPES, toSqlIn } = require('../utils/metrics');
 const { TERMINAL_STATUSES } = require('../utils/assessmentState');
 const { getProgressNoteCountsByUser } = require('../utils/goalProgress');
+const persistentCache = require('../services/persistentCache');
+const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable } = require('../services/incrementalService');
+const { mergeMetrics } = require('../utils/cacheMerge');
 
 // SQL fragment for excluding terminal (completed) AllocatePatient rows
 const AP_ACTIVE = TERMINAL_STATUSES.map((s) => `'${s}'`).join(', ');
@@ -82,10 +85,34 @@ router.get('/', async (req, res, next) => {
     const centreExclusion = buildCentreExclusion('c');
     const dateFilterPal   = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
-    // Run the shared service, clinician roster, consistency data, pipeline breakdown,
+    // ── Cache-first metrics resolution ──────────────────────────────────────
+    let metrics = null;
+    const cacheable = isDateRangeCacheable(dateFrom, dateTo);
+    const windowLabel = cacheable ? getMatchingWindow(dateFrom) : null;
+
+    if (windowLabel) {
+      try {
+        const [cached, todayDelta] = await Promise.all([
+          persistentCache.get('metrics', windowLabel),
+          getTodayIncrementalMetrics({ centreId }),
+        ]);
+        if (cached && cached.data) {
+          metrics = mergeMetrics(cached.data, todayDelta);
+          console.log(`[clinicians] Cache HIT for ${windowLabel}`);
+        }
+      } catch (err) {
+        console.warn('[clinicians] Cache merge failed, falling back to live:', err.message);
+      }
+    }
+
+    if (!metrics) {
+      console.log('[clinicians] Cache MISS — running live metrics query');
+      metrics = await getCoreMetrics({ dateFrom, dateTo, centreId });
+    }
+
+    // Run clinician roster, consistency data, pipeline breakdown,
     // and progress note counts in parallel
-    const [metrics, rosterResult, consistencyResult, pipelineResult, progressMap] = await Promise.all([
-      getCoreMetrics({ dateFrom, dateTo, centreId }),
+    const [rosterResult, consistencyResult, pipelineResult, progressMap] = await Promise.all([
 
       // Clinician-specific data: roster, active caseload, audit activity totals
       pool.request()
@@ -149,14 +176,15 @@ router.get('/', async (req, res, next) => {
             ) AS coreJobDays,
             SUM(CASE WHEN pal.Type = '${EVENT_TYPES.ASSESSMENT_RESULT_GENERATED}' THEN 1 ELSE 0 END) AS assessmentsScored,
             SUM(CASE WHEN pal.Type IN (${toSqlIn(EVENT_TYPES.REPORT_ADDED, EVENT_TYPES.UPDATE_REPORT)}) THEN 1 ELSE 0 END) AS reportsDrafted,
-            MAX(pal.CreatedDateTime) AS lastActiveDate
+            MAX(pal_all.CreatedDateTime) AS lastActiveDate
           FROM AdminUser au
           JOIN AdminUserRole aur ON aur.UserId = au.Id
           JOIN AdminRole ar      ON ar.Id = aur.RoleId AND ar.Name = 'Clinician'
           JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
           JOIN Centre c            ON c.Id = auc.CentreId
-          LEFT JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id
+          LEFT JOIN PatientAuditLog pal     ON pal.AdminUserId     = au.Id
             AND ${dateFilterPal}
+          LEFT JOIN PatientAuditLog pal_all ON pal_all.AdminUserId = au.Id
           WHERE (@centreId IS NULL OR c.Id = @centreId)
             AND ${centreExclusion}
             AND LOWER(au.FirstName) NOT LIKE '%test%'

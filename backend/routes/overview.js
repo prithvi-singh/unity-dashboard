@@ -7,6 +7,9 @@ const { abbreviateCentre } = require('../lib/formatters');
 const { getCoreMetrics } = require('../services/metricsService');
 const { FILTERS } = require('../utils/metrics');
 const { getGoalCoverageForOverview } = require('../utils/goalProgress');
+const persistentCache = require('../services/persistentCache');
+const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable } = require('../services/incrementalService');
+const { mergeMetrics } = require('../utils/cacheMerge');
 
 const router = Router();
 
@@ -69,6 +72,7 @@ function round1(n) { return Math.round(n * 10) / 10; }
 
 router.get('/', async (req, res, next) => {
   const reqStart = Date.now();
+  console.time('overview');
   console.log('[overview] → request received', req.query);
   res.on('finish', () => console.log(`[overview] ← response sent in ${Date.now() - reqStart}ms`));
   try {
@@ -134,21 +138,68 @@ router.get('/', async (req, res, next) => {
     const CE  = FILTERS.centreExclusion();
     const CF  = FILTERS.centreFilter();
 
-    // Run overview-specific queries in parallel alongside the shared metrics service.
+    // ── Cache-first metrics resolution ──────────────────────────────────────
+    // Try to serve metrics from the pre-computed nightly cache, merged with
+    // today's incremental data. Falls back to live query if cache is cold or
+    // the date range doesn't match any pre-computed window.
+    let metrics = null;
+    let metricsFromCache = false;
+    let prevMetrics = null;
+
+    const cacheable = isDateRangeCacheable(dateFrom, dateTo);
+    const windowLabel = cacheable ? getMatchingWindow(dateFrom) : null;
+
+    if (windowLabel) {
+      const cacheStart = Date.now();
+      try {
+        const [cached, todayDelta] = await Promise.all([
+          persistentCache.get('metrics', windowLabel),
+          getTodayIncrementalMetrics({ centreId }),
+        ]);
+
+        if (cached && cached.data) {
+          metrics = mergeMetrics(cached.data, todayDelta);
+          metricsFromCache = true;
+          console.log(`[overview] Cache HIT for ${windowLabel} (${Date.now() - cacheStart}ms)`);
+        }
+      } catch (err) {
+        console.warn('[overview] Cache merge failed, falling back to live:', err.message);
+      }
+    }
+
+    // Fallback: live query if cache miss
+    if (!metrics) {
+      console.log('[overview] Cache MISS — running live metrics query');
+      metrics = await getCoreMetrics({ dateFrom, dateTo, centreId });
+    }
+
+    // Previous period metrics — try cache first, then live
+    if (prevDateFrom && prevDateTo) {
+      const prevCacheable = isDateRangeCacheable(prevDateFrom, prevDateTo);
+      const prevWindowLabel = prevCacheable ? getMatchingWindow(prevDateFrom) : null;
+      if (prevWindowLabel) {
+        try {
+          const [prevCached, prevTodayDelta] = await Promise.all([
+            persistentCache.get('metrics', prevWindowLabel),
+            getTodayIncrementalMetrics({ centreId }),
+          ]);
+          if (prevCached && prevCached.data) {
+            prevMetrics = mergeMetrics(prevCached.data, prevTodayDelta);
+          }
+        } catch { /* fall through */ }
+      }
+      if (!prevMetrics) {
+        prevMetrics = await getCoreMetrics({ dateFrom: prevDateFrom, dateTo: prevDateTo, centreId });
+      }
+    }
+
+    // Run overview-specific queries in parallel (centres list, bottlenecks, etc.)
     const [
-      metrics,
-      prevMetrics,
       centresResult,
       upcomingBottlenecksResult,
       multiAssessmentResult,
       needsActionResult,
     ] = await Promise.all([
-
-      // Shared metrics — single source of truth
-      getCoreMetrics({ dateFrom, dateTo, centreId }),
-
-      // Previous period metrics for period-over-period comparison
-      prevDateFrom ? getCoreMetrics({ dateFrom: prevDateFrom, dateTo: prevDateTo, centreId }) : Promise.resolve(null),
 
       // Centre dropdown list (for filter UI)
       pool.request().query(`
@@ -212,9 +263,11 @@ router.get('/', async (req, res, next) => {
       // ── Needs-action counts: 4 pipeline health signals ────────────────────
       // Point-in-time — NOT date-filtered. Counts open items exceeding
       // the minimum alert threshold per pipeline state.
-      withTimeout(pool.request()
-        .input('centreId', sql.BigInt, centreId)
-        .query(`
+      (async () => {
+        console.time('needs-action-query');
+        const r = await withTimeout(pool.request()
+          .input('centreId', sql.BigInt, centreId)
+          .query(`
         WITH
         result_gen AS (
           SELECT DISTINCT AllocatePatientId
@@ -266,7 +319,7 @@ router.get('/', async (req, res, next) => {
             JOIN Centre c   ON c.Id  = pt.CentreId
             WHERE ap.Assessment IN ('SPM','DP3','REELS','ISAA')
               AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
-              AND ap.Id NOT IN (SELECT AllocatePatientId FROM result_gen)
+              AND NOT EXISTS (SELECT 1 FROM result_gen rg0 WHERE rg0.AllocatePatientId = ap.Id)
               AND DATEDIFF(day, ap.CreatedDateTimeUtc, SYSDATETIMEOFFSET()) > 14
               AND LOWER(c.CentreName) NOT LIKE '%test%' AND LOWER(c.CentreName) NOT LIKE '%delete%'
               AND pt.FirstName NOT LIKE '%test%' AND pt.LastName NOT LIKE '%test%'
@@ -278,7 +331,7 @@ router.get('/', async (req, res, next) => {
             JOIN AllocatePatient ap ON ap.Id = rg.AllocatePatientId
             JOIN Patient pt ON pt.Id = ap.PatientId
             JOIN Centre c   ON c.Id  = pt.CentreId
-            WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM report_added)
+            WHERE NOT EXISTS (SELECT 1 FROM report_added ra0 WHERE ra0.AllocatePatientId = ap.Id)
               AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
               AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
               AND DATEDIFF(day, rg.resultGeneratedAt, SYSDATETIMEOFFSET()) > 7
@@ -292,7 +345,7 @@ router.get('/', async (req, res, next) => {
               JOIN AllocatePatient ap ON ap.Id = ra.AllocatePatientId
               JOIN Patient pt ON pt.Id = ap.PatientId
               JOIN Centre c   ON c.Id  = pt.CentreId
-              WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM pdf_gen)
+              WHERE NOT EXISTS (SELECT 1 FROM pdf_gen pg0 WHERE pg0.AllocatePatientId = ap.Id)
                 AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
                 AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
                 AND DATEDIFF(day, ra.draftedAt, SYSDATETIMEOFFSET()) > 5
@@ -322,7 +375,7 @@ router.get('/', async (req, res, next) => {
             JOIN AllocatePatient ap ON ap.Id = pg.AllocatePatientId
             JOIN Patient pt ON pt.Id = ap.PatientId
             JOIN Centre c   ON c.Id  = pt.CentreId
-            WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM goal_req)
+            WHERE NOT EXISTS (SELECT 1 FROM goal_req gr0 WHERE gr0.AllocatePatientId = ap.Id)
               AND NOT EXISTS (
                 SELECT 1
                 FROM PatientGoalApprovalRequest pgar2
@@ -349,7 +402,7 @@ router.get('/', async (req, res, next) => {
             JOIN Centre c   ON c.Id  = pt.CentreId
             WHERE ap.Assessment IN ('SPM','DP3','REELS','ISAA')
               AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
-              AND ap.Id NOT IN (SELECT AllocatePatientId FROM result_gen)
+              AND NOT EXISTS (SELECT 1 FROM result_gen rg0 WHERE rg0.AllocatePatientId = ap.Id)
               AND LOWER(c.CentreName) NOT LIKE '%test%' AND LOWER(c.CentreName) NOT LIKE '%delete%'
               AND pt.FirstName NOT LIKE '%test%' AND pt.LastName NOT LIKE '%test%'
               AND (@centreId IS NULL OR c.Id = @centreId)
@@ -360,7 +413,7 @@ router.get('/', async (req, res, next) => {
             JOIN AllocatePatient ap ON ap.Id = rg.AllocatePatientId
             JOIN Patient pt ON pt.Id = ap.PatientId
             JOIN Centre c   ON c.Id  = pt.CentreId
-            WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM report_added)
+            WHERE NOT EXISTS (SELECT 1 FROM report_added ra0 WHERE ra0.AllocatePatientId = ap.Id)
               AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
               AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
               AND LOWER(c.CentreName) NOT LIKE '%test%' AND LOWER(c.CentreName) NOT LIKE '%delete%'
@@ -373,7 +426,7 @@ router.get('/', async (req, res, next) => {
               JOIN AllocatePatient ap ON ap.Id = ra.AllocatePatientId
               JOIN Patient pt ON pt.Id = ap.PatientId
               JOIN Centre c   ON c.Id  = pt.CentreId
-              WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM pdf_gen)
+              WHERE NOT EXISTS (SELECT 1 FROM pdf_gen pg0 WHERE pg0.AllocatePatientId = ap.Id)
                 AND ap.Assessment IN ('SPM','DP3','REELS','ISAA')
                 AND ap.Status NOT IN (${AP_NOT_TERMINAL_OV})
                 AND LOWER(c.CentreName) NOT LIKE '%test%' AND LOWER(c.CentreName) NOT LIKE '%delete%'
@@ -400,7 +453,7 @@ router.get('/', async (req, res, next) => {
             JOIN AllocatePatient ap ON ap.Id = pg.AllocatePatientId
             JOIN Patient pt ON pt.Id = ap.PatientId
             JOIN Centre c   ON c.Id  = pt.CentreId
-            WHERE ap.Id NOT IN (SELECT AllocatePatientId FROM goal_req)
+            WHERE NOT EXISTS (SELECT 1 FROM goal_req gr0 WHERE gr0.AllocatePatientId = ap.Id)
               AND NOT EXISTS (
                 SELECT 1
                 FROM PatientGoalApprovalRequest pgar3
@@ -417,7 +470,10 @@ router.get('/', async (req, res, next) => {
               AND pt.FirstName NOT LIKE '%test%' AND pt.LastName NOT LIKE '%test%'
               AND (@centreId IS NULL OR c.Id = @centreId)
           ) AS totalGoalsNotAdded
-      `), 10_000),
+      `), 10_000);
+        console.timeEnd('needs-action-query');
+        return r;
+      })(),
     ]);
 
     // ── Build pipeline stages from metricsService (already cached, fast) ────────
@@ -610,6 +666,7 @@ router.get('/', async (req, res, next) => {
       totalGoalsNotAdded:   naRow.totalGoalsNotAdded   ?? 0,
     };
 
+    console.timeEnd('overview');
     res.json({
       // ── Core counts from shared service ──────────────────────────────────
       totalCases,

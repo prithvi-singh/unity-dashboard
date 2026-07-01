@@ -68,6 +68,19 @@ jobs:
           curl -sf "${{ secrets.API_URL }}/api/issues" || echo "Issues warm failed (non-fatal)"
           echo "Warming monitoring cache..."
           curl -sf "${{ secrets.API_URL }}/api/monitoring" || echo "Monitoring warm failed (non-fatal)"
-          echo "Cache warm complete."
+
+      # Trigger nightly pre-computation so the persistent cache is ready
+      # before the first real user hits the dashboard.
+      # The startup warm-up in server.js also handles this, but explicitly
+      # triggering here ensures the cache is warm within 2-3 minutes of deploy.
+      - name: Trigger cache pre-computation
+        run: |
+          echo "Triggering cache pre-computation..."
+          curl -sf -X POST "${{ secrets.API_URL }}/api/admin/cache/refresh" || echo "Cache refresh trigger failed (server will warm-up on startup)"
+          echo "Waiting 60s for pre-computation to complete..."
+          sleep 60
+          echo "Checking cache status..."
+          curl -sf "${{ secrets.API_URL }}/api/admin/cache/status" || echo "Cache status check failed (non-fatal)"
+          echo "Cache pre-computation triggered."
 
 

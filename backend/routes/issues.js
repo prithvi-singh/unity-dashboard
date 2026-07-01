@@ -7,6 +7,7 @@ const { abbreviateCentre } = require('../lib/formatters');
 const { FILTERS } = require('../utils/metrics');
 const { makeCache } = require('../lib/routeCache');
 const { TERMINAL_STATUSES } = require('../utils/assessmentState');
+const persistentCache = require('../services/persistentCache');
 
 // SQL fragment: exclude terminal (Completed) AllocatePatient rows from all
 // issue groups. Assessments with Status IN TERMINAL_STATUSES are done and
@@ -76,13 +77,29 @@ const CENTRE_MANAGER_CTE = `
 router.get('/', async (req, res, next) => {
   try {
     const cacheKey = issuesCache.key(req);
+
+    // 1. Check hot in-memory cache (2-minute TTL)
     const hit = issuesCache.get(cacheKey);
     if (hit) return res.json(hit);
 
-    // Date params are optional; when omitted the stuckOnboarding query falls
-    // back to all-time behaviour (the IS NULL guards in buildDateFilter fire).
+    // 2. Check persistent disk cache (all-time issues, recomputed nightly)
     const dateFrom = parseDateParam(req.query.dateFrom);
     const dateTo   = parseDateParam(req.query.dateTo);
+
+    // Only use persistent cache when no date filter is applied (all-time view)
+    if (!dateFrom && !dateTo) {
+      try {
+        const cachedIssues = await persistentCache.get('issues', 'current');
+        if (cachedIssues && cachedIssues.data) {
+          console.log('[issues] Persistent cache HIT');
+          issuesCache.set(cacheKey, cachedIssues.data);
+          return res.json(cachedIssues.data);
+        }
+      } catch (err) {
+        console.warn('[issues] Persistent cache read failed:', err.message);
+      }
+    }
+
     const dateFilterRegistered = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
     const pool = await poolPromise;
@@ -1047,6 +1064,15 @@ router.get('/', async (req, res, next) => {
     };
 
     issuesCache.set(cacheKey, payload);
+
+    // Persist to disk cache for all-time views (no date filter)
+    if (!dateFrom && !dateTo) {
+      persistentCache.set('issues', 'current', {
+        data: payload,
+        computedAt: new Date().toISOString(),
+      }).catch((err) => console.warn('[issues] Persistent cache write failed:', err.message));
+    }
+
     res.json(payload);
   } catch (err) {
     next(err);

@@ -43,6 +43,14 @@ jobs:
           resourceGroup: unity-dashboard-rg
           containerAppEnvironment: unity-dashboard-env
           imageToBuild: parivaremindersacr.azurecr.io/unity-dashboard-api:${{ github.sha }}
+          environmentVariables: 'ALLOWED_ORIGIN=https://unity-dashboard-six.vercel.app CORS_ALLOW_PATTERN=^https://.*\\.vercel\\.app$'
+
+      # Show the real Container App URL so it can be set on Vercel if needed.
+      - name: Show API URL
+        run: |
+          FQDN=$(az containerapp show --name unity-dashboard-api --resource-group unity-dashboard-rg --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "API URL: https://$FQDN"
+          echo "If NEXT_PUBLIC_API_URL on Vercel is not https://$FQDN, update it and redeploy."
 
       # Warm up API cache after deploy so the first real user hits warm cache.
       # 45s sleep: Container Apps typically takes 30–40s to become healthy after image swap.

@@ -43,7 +43,6 @@ jobs:
           resourceGroup: unity-dashboard-rg
           containerAppEnvironment: unity-dashboard-env
           imageToBuild: parivaremindersacr.azurecr.io/unity-dashboard-api:${{ github.sha }}
-          environmentVariables: 'ALLOWED_ORIGIN=https://unity-dashboard-six.vercel.app CORS_ALLOW_PATTERN=^https://.*\\.vercel\\.app$'
 
       # Show the real Container App URL so it can be set on Vercel if needed.
       # Base64-encoded to avoid GitHub secret masking (the FQDN matches the API_URL secret).

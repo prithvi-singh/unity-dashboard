@@ -8,7 +8,7 @@ const { getCoreMetrics } = require('../services/metricsService');
 const { FILTERS } = require('../utils/metrics');
 const { getGoalCoverageForOverview } = require('../utils/goalProgress');
 const persistentCache = require('../services/persistentCache');
-const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable } = require('../services/incrementalService');
+const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable, isTodayIncluded } = require('../services/incrementalService');
 const { mergeMetrics } = require('../utils/cacheMerge');
 
 const router = Router();
@@ -148,23 +148,33 @@ router.get('/', async (req, res, next) => {
 
     const cacheable = isDateRangeCacheable(dateFrom, dateTo);
     const windowLabel = cacheable ? getMatchingWindow(dateFrom) : null;
+    const needTodayDelta = dateTo ? isTodayIncluded(dateTo) : true;
 
     if (windowLabel) {
       const cacheStart = Date.now();
       try {
+        // Only fetch today's incremental if the request's dateTo actually
+        // includes today. Otherwise the cache alone is sufficient.
         const [cached, todayDelta] = await Promise.all([
           persistentCache.get('metrics', windowLabel),
-          getTodayIncrementalMetrics({ centreId }),
+          needTodayDelta ? getTodayIncrementalMetrics({ centreId }) : Promise.resolve(null),
         ]);
 
         if (cached && cached.data) {
           metrics = mergeMetrics(cached.data, todayDelta);
           metricsFromCache = true;
-          console.log(`[overview] Cache HIT for ${windowLabel} (${Date.now() - cacheStart}ms)`);
+          console.log(`[overview] Cache HIT window=${windowLabel} needDelta=${needTodayDelta} (${Date.now() - cacheStart}ms)`);
+        } else {
+          console.log(`[overview] Cache entry 'metrics-${windowLabel}' exists but has no .data field`);
         }
       } catch (err) {
         console.warn('[overview] Cache merge failed, falling back to live:', err.message);
       }
+    } else {
+      const reason = dateFrom
+        ? (isTodayIncluded(dateTo) ? `no matching window` : `dateTo (${dateTo ? dateTo.toISOString().slice(0,10) : 'null'}) before yesterday`)
+        : 'no dateFrom';
+      console.log(`[overview] Cache SKIPPED — ${reason}`);
     }
 
     // Fallback: live query if cache miss
@@ -177,11 +187,12 @@ router.get('/', async (req, res, next) => {
     if (prevDateFrom && prevDateTo) {
       const prevCacheable = isDateRangeCacheable(prevDateFrom, prevDateTo);
       const prevWindowLabel = prevCacheable ? getMatchingWindow(prevDateFrom) : null;
+      const prevNeedDelta = prevDateTo ? isTodayIncluded(prevDateTo) : true;
       if (prevWindowLabel) {
         try {
           const [prevCached, prevTodayDelta] = await Promise.all([
             persistentCache.get('metrics', prevWindowLabel),
-            getTodayIncrementalMetrics({ centreId }),
+            prevNeedDelta ? getTodayIncrementalMetrics({ centreId }) : Promise.resolve(null),
           ]);
           if (prevCached && prevCached.data) {
             prevMetrics = mergeMetrics(prevCached.data, prevTodayDelta);

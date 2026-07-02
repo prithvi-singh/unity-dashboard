@@ -10,7 +10,7 @@ const { EVENT_TYPES, toSqlIn } = require('../utils/metrics');
 const { TERMINAL_STATUSES } = require('../utils/assessmentState');
 const { getProgressNoteCountsByUser } = require('../utils/goalProgress');
 const persistentCache = require('../services/persistentCache');
-const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable } = require('../services/incrementalService');
+const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable, isTodayIncluded } = require('../services/incrementalService');
 const { mergeMetrics } = require('../utils/cacheMerge');
 
 // SQL fragment for excluding terminal (completed) AllocatePatient rows
@@ -89,20 +89,23 @@ router.get('/', async (req, res, next) => {
     let metrics = null;
     const cacheable = isDateRangeCacheable(dateFrom, dateTo);
     const windowLabel = cacheable ? getMatchingWindow(dateFrom) : null;
+    const needTodayDelta = dateTo ? isTodayIncluded(dateTo) : true;
 
     if (windowLabel) {
       try {
         const [cached, todayDelta] = await Promise.all([
           persistentCache.get('metrics', windowLabel),
-          getTodayIncrementalMetrics({ centreId }),
+          needTodayDelta ? getTodayIncrementalMetrics({ centreId }) : Promise.resolve(null),
         ]);
         if (cached && cached.data) {
           metrics = mergeMetrics(cached.data, todayDelta);
-          console.log(`[clinicians] Cache HIT for ${windowLabel}`);
+          console.log(`[clinicians] Cache HIT window=${windowLabel} needDelta=${needTodayDelta}`);
         }
       } catch (err) {
         console.warn('[clinicians] Cache merge failed, falling back to live:', err.message);
       }
+    } else {
+      console.log(`[clinicians] Cache SKIPPED — ${dateFrom ? 'no matching window' : 'no dateFrom'}`);
     }
 
     if (!metrics) {

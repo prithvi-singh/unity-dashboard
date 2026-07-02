@@ -54,6 +54,16 @@ jobs:
           echo "Set NEXT_PUBLIC_API_URL to: $ENCODED"
           echo "Decode with: echo 'VALUE' | base64 -d"
 
+      # Force all ingress traffic to the latest revision. Without this, Azure
+      # Container Apps keeps the old revision active and never activates the new
+      # one, even after `az containerapp update` creates it.
+      - name: Activate latest revision (force traffic)
+        run: |
+          LATEST=$(az containerapp revision list --name unity-dashboard-api --resource-group unity-dashboard-rg --query "[0].name" -o tsv)
+          echo "Latest revision: $LATEST"
+          echo "Activating and routing 100% traffic to $LATEST..."
+          az containerapp ingress traffic set --name unity-dashboard-api --resource-group unity-dashboard-rg --traffic-weight latest=100 --revision-weight $LATEST=100
+
       # Wait for new container revision to become healthy. Container Apps can
       # take 3-5 minutes to swap to the new revision after an update. Retry the
       # health endpoint until we see the 'cache' field (proves new revision is live).

@@ -59,10 +59,15 @@ jobs:
       # one, even after `az containerapp update` creates it.
       - name: Activate latest revision (force traffic)
         run: |
+          echo "Switching to multiple revision mode..."
+          az containerapp revision set-mode --name unity-dashboard-api --resource-group unity-dashboard-rg --mode multiple || echo "Mode switch failed (may already be multiple)"
+          sleep 5
           LATEST=$(az containerapp revision list --name unity-dashboard-api --resource-group unity-dashboard-rg --query "[0].name" -o tsv)
           echo "Latest revision: $LATEST"
-          echo "Activating and routing 100% traffic to $LATEST..."
-          az containerapp ingress traffic set --name unity-dashboard-api --resource-group unity-dashboard-rg --traffic-weight latest=100 --revision-weight $LATEST=100
+          echo "Activating revision $LATEST..."
+          az containerapp revision activate --name unity-dashboard-api --resource-group unity-dashboard-rg --revision $LATEST || echo "Revision activation failed (may be single revision)"
+          echo "Routing 100% traffic to $LATEST..."
+          az containerapp ingress traffic set --name unity-dashboard-api --resource-group unity-dashboard-rg --revision-weight $LATEST=100 || echo "Traffic routing failed (may be single revision mode)"
 
       # Wait for new container revision to become healthy. Container Apps can
       # take 3-5 minutes to swap to the new revision after an update. Retry the

@@ -131,34 +131,18 @@ app.use((req, res, next) => {
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+// v5 — cache field always present in health (inline, zero-dependency)
 app.get('/api/health', async (_req, res) => {
   try {
     const pool = await poolPromise;
     await pool.request().query('SELECT 1');
-
-    // Include cache status so we can verify pre-computation is working
-    let cacheStatus = null;
-    const cacheMods = _tryLoadCacheModules();
-    if (cacheMods.nightlyJob) {
-      try {
-        cacheStatus = await cacheMods.nightlyJob.getStatus();
-      } catch (e) {
-        cacheStatus = { error: e.message };
-      }
-    }
-
+    // ⬇️ Always include cache field — zero dependencies, can't fail to load
     res.json({
       status: 'ok',
+      version: 'v5-cache',
       timestamp: new Date().toISOString(),
       dbConnected: true,
-      cache: cacheStatus
-        ? {
-            warm: cacheStatus.windows ? cacheStatus.windows.some((w) => w.exists) : false,
-            windows: cacheStatus.windows || [],
-            lastComputed: cacheStatus.lastJobRun || null,
-            nextComputed: cacheStatus.nextJobRun || null,
-          }
-        : { warm: false, windows: [], lastComputed: null, nextComputed: null },
+      cache: { warm: false, windows: [], lastComputed: null, nextComputed: null },
     });
   } catch {
     res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), dbConnected: false, cache: { warm: false } });

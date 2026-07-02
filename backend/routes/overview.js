@@ -8,7 +8,7 @@ const { getCoreMetrics } = require('../services/metricsService');
 const { FILTERS } = require('../utils/metrics');
 const { getGoalCoverageForOverview } = require('../utils/goalProgress');
 const persistentCache = require('../services/persistentCache');
-const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable, isTodayIncluded } = require('../services/incrementalService');
+const { getTodayIncrementalMetrics, getMatchingWindow, isDateRangeCacheable, isTodayIncluded, dateToISTString } = require('../services/incrementalService');
 const { mergeMetrics } = require('../utils/cacheMerge');
 
 const router = Router();
@@ -172,7 +172,7 @@ router.get('/', async (req, res, next) => {
       }
     } else {
       const reason = dateFrom
-        ? (isTodayIncluded(dateTo) ? `no matching window` : `dateTo (${dateTo ? dateTo.toISOString().slice(0,10) : 'null'}) before yesterday`)
+        ? (isTodayIncluded(dateTo) ? `no matching window` : `dateTo (${dateTo ? dateToISTString(dateTo) : 'null'}) before yesterday`)
         : 'no dateFrom';
       console.log(`[overview] Cache SKIPPED — ${reason}`);
     }

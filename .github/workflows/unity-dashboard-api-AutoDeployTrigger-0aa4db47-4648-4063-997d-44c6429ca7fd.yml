@@ -54,33 +54,54 @@ jobs:
           echo "Set NEXT_PUBLIC_API_URL to: $ENCODED"
           echo "Decode with: echo 'VALUE' | base64 -d"
 
-      # Warm up API cache after deploy so the first real user hits warm cache.
-      # 45s sleep: Container Apps typically takes 30–40s to become healthy after image swap.
-      - name: Warm up API cache after deploy
+      # Wait for new container revision to become healthy. Container Apps can
+      # take 60-90s after deploy to swap to the new revision. Retry health endpoint
+      # until we see the 'cache' field (proves new revision is live).
+      - name: Wait for new revision to be healthy
         run: |
-          echo "Waiting 45s for container to become ready..."
-          sleep 45
-          echo "Pinging health endpoint..."
-          curl -sf "${{ secrets.API_URL }}/api/health" || echo "Health ping failed (non-fatal)"
-          echo "Warming overview cache..."
-          curl -sf "${{ secrets.API_URL }}/api/overview" || echo "Overview warm failed (non-fatal)"
-          echo "Warming issues cache..."
-          curl -sf "${{ secrets.API_URL }}/api/issues" || echo "Issues warm failed (non-fatal)"
-          echo "Warming monitoring cache..."
-          curl -sf "${{ secrets.API_URL }}/api/monitoring" || echo "Monitoring warm failed (non-fatal)"
+          echo "Waiting for new container revision to become healthy..."
+          for i in $(seq 1 12); do
+            echo " Attempt $i/12..."
+            RESPONSE=$(curl -s --max-time 10 "${{ secrets.API_URL }}/api/health" 2>/dev/null || echo "")
+            if echo "$RESPONSE" | grep -q '"cache"'; then
+              echo "New revision is healthy and serving traffic!"
+              echo "$RESPONSE"
+              break
+            fi
+            echo " Health check response: $RESPONSE"
+            [ $i -lt 12 ] && sleep 10
+          done
+
+      # Warm up API endpoints so the in-memory caches are hot.
+      - name: Warm up API endpoints
+        run: |
+          echo "Warming overview..."
+          curl -sf --max-time 30 "${{ secrets.API_URL }}/api/overview" || echo "Overview warm failed (non-fatal)"
+          echo "Warming issues..."
+          curl -sf --max-time 30 "${{ secrets.API_URL }}/api/issues" || echo "Issues warm failed (non-fatal)"
+          echo "Warming monitoring..."
+          curl -sf --max-time 30 "${{ secrets.API_URL }}/api/monitoring" || echo "Monitoring warm failed (non-fatal)"
 
       # Trigger nightly pre-computation so the persistent cache is ready
       # before the first real user hits the dashboard.
-      # The startup warm-up in server.js also handles this, but explicitly
-      # triggering here ensures the cache is warm within 2-3 minutes of deploy.
+      # Retries up to 3 times since the startup warm-up may still be running.
       - name: Trigger cache pre-computation
         run: |
           echo "Triggering cache pre-computation..."
-          curl -sf -X POST "${{ secrets.API_URL }}/api/admin/cache/refresh" || echo "Cache refresh trigger failed (server will warm-up on startup)"
+          for i in 1 2 3; do
+            echo " Attempt $i/3..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "${{ secrets.API_URL }}/api/admin/cache/refresh" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
+              echo "Cache refresh triggered (HTTP $HTTP_CODE)"
+              break
+            fi
+            echo " Cache refresh returned HTTP $HTTP_CODE, retrying in 15s..."
+            [ $i -lt 3 ] && sleep 15
+          done
           echo "Waiting 60s for pre-computation to complete..."
           sleep 60
           echo "Checking cache status..."
-          curl -sf "${{ secrets.API_URL }}/api/admin/cache/status" || echo "Cache status check failed (non-fatal)"
+          curl -sf --max-time 10 "${{ secrets.API_URL }}/api/admin/cache/status" || echo "Cache status check failed (non-fatal)"
           echo "Cache pre-computation triggered."
 
 

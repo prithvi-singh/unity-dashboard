@@ -11,23 +11,53 @@ const compression = require('compression');
 const { poolPromise } = require('./db');
 
 const { getCoreMetrics } = require('./services/metricsService');
-const { initCron, startupWarmUp, getStatus: getCacheStatus } = require('./services/nightlyJob');
-const overviewRouter = require('./routes/overview');
-const cliniciansRouter = require('./routes/clinicians');
-const managersRouter = require('./routes/managers');
-const centreAdminsRouter = require('./routes/centre-admins');
-const monitoringRouter = require('./routes/monitoring');
-const bottlenecksRouter = require('./routes/bottlenecks');
-const assessmentsRouter = require('./routes/assessments');
-const usersRouter = require('./routes/users');
-const pipelineRouter = require('./routes/pipeline');
-const workloadRouter       = require('./routes/workload');
-const topPerformersRouter  = require('./routes/topPerformers');
-const dailyReviewRouter    = require('./routes/dailyReview');
-const centresRouter        = require('./routes/centres');
-const issuesRouter         = require('./routes/issues');
-const goalProgressRouter   = require('./routes/goal-progress');
-const adminCacheRouter     = require('./routes/adminCache');
+
+// ── Cache imports (lazy/defensive — server starts even if cache modules fail) ──
+let _cacheModules = null;
+function _tryLoadCacheModules() {
+  if (_cacheModules) return _cacheModules;
+  try {
+    const nightlyJob = require('./services/nightlyJob');
+    const adminCacheRouter = require('./routes/adminCache');
+    _cacheModules = { nightlyJob, adminCacheRouter };
+    console.log('[server] Cache modules loaded successfully');
+    return _cacheModules;
+  } catch (err) {
+    console.warn('[server] Cache modules not available:', err.message);
+    _cacheModules = { nightlyJob: null, adminCacheRouter: null };
+    return _cacheModules;
+  }
+}
+
+// ── Route imports (defensive — server starts even if individual routes fail) ──
+function _safeRequire(modulePath, name) {
+  try {
+    return require(modulePath);
+  } catch (err) {
+    console.error(`[server] Failed to load route '${name}':`, err.message);
+    // Return a router that returns 503 for all requests
+    const { Router } = require('express');
+    const fallback = Router();
+    fallback.all('*', (_req, res) => res.status(503).json({ error: `${name} temporarily unavailable` }));
+    return fallback;
+  }
+}
+
+const overviewRouter      = _safeRequire('./routes/overview', 'overview');
+const cliniciansRouter    = _safeRequire('./routes/clinicians', 'clinicians');
+const managersRouter      = _safeRequire('./routes/managers', 'managers');
+const centreAdminsRouter  = _safeRequire('./routes/centre-admins', 'centre-admins');
+const monitoringRouter    = _safeRequire('./routes/monitoring', 'monitoring');
+const bottlenecksRouter   = _safeRequire('./routes/bottlenecks', 'bottlenecks');
+const assessmentsRouter   = _safeRequire('./routes/assessments', 'assessments');
+const usersRouter         = _safeRequire('./routes/users', 'users');
+const pipelineRouter      = _safeRequire('./routes/pipeline', 'pipeline');
+const workloadRouter      = _safeRequire('./routes/workload', 'workload');
+const topPerformersRouter = _safeRequire('./routes/topPerformers', 'top-performers');
+const dailyReviewRouter   = _safeRequire('./routes/dailyReview', 'daily-review');
+const centresRouter       = _safeRequire('./routes/centres', 'centres');
+const issuesRouter        = _safeRequire('./routes/issues', 'issues');
+const goalProgressRouter  = _safeRequire('./routes/goal-progress', 'goal-progress');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -108,10 +138,13 @@ app.get('/api/health', async (_req, res) => {
 
     // Include cache status so we can verify pre-computation is working
     let cacheStatus = null;
-    try {
-      cacheStatus = await getCacheStatus();
-    } catch (e) {
-      cacheStatus = { error: e.message };
+    const cacheMods = _tryLoadCacheModules();
+    if (cacheMods.nightlyJob) {
+      try {
+        cacheStatus = await cacheMods.nightlyJob.getStatus();
+      } catch (e) {
+        cacheStatus = { error: e.message };
+      }
     }
 
     res.json({
@@ -179,7 +212,13 @@ app.use('/api/workload', workloadRouter);
 app.use('/api/centres', centresRouter);
 app.use('/api/issues',  issuesRouter);
 app.use('/api/goal-progress', goalProgressRouter);
-app.use('/api/admin/cache', adminCacheRouter);
+app.use('/api/admin/cache', (_req, res, next) => {
+  const cacheMods = _tryLoadCacheModules();
+  if (!cacheMods.adminCacheRouter) {
+    return res.status(503).json({ error: 'Cache admin not available — cache modules failed to load' });
+  }
+  cacheMods.adminCacheRouter(_req, res, next);
+});
 
 // 404 for unknown routes
 app.use((_req, res) => {
@@ -228,14 +267,18 @@ poolPromise.then(async () => {
 
   // ── Nightly pre-computation cache ───────────────────────────────────────
   // Initialise cron scheduler for daily pre-computation at midnight IST.
-  initCron();
+  const cacheMods = _tryLoadCacheModules();
+  if (cacheMods.nightlyJob) {
+    cacheMods.nightlyJob.initCron();
 
-  // Run startup warm-up: if the cache is cold (new deploy/restart),
-  // pre-compute everything now so the first real request is fast.
-  try {
-    await startupWarmUp();
-  } catch (err) {
-    console.warn('[startup] Cache warm-up error (non-fatal):', err.message);
+    // Run startup warm-up: if the cache is cold (new deploy/restart),
+    // pre-compute everything now so the first real request is fast.
+    // Run in background — don't block the server from accepting health checks.
+    cacheMods.nightlyJob.startupWarmUp()
+      .then(() => console.log('[startup] Cache warm-up completed'))
+      .catch((err) => console.warn('[startup] Cache warm-up error (non-fatal):', err.message));
+  } else {
+    console.warn('[server] Skipping cache initialisation — nightlyJob module not available');
   }
 
   // In development, run full schema discovery so the terminal always shows

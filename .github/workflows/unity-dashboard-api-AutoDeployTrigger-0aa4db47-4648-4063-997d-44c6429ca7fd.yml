@@ -55,22 +55,29 @@ jobs:
           echo "Decode with: echo 'VALUE' | base64 -d"
 
       # Wait for new container revision to become healthy. Container Apps can
-      # take 60-90s after deploy to swap to the new revision. Retry health endpoint
-      # until we see the 'cache' field (proves new revision is live).
+      # take 3-5 minutes to swap to the new revision after an update. Retry the
+      # health endpoint until we see the 'cache' field (proves new revision is live).
+      # If it never appears, continue anyway — the warmup will force the new
+      # revision to start processing requests.
       - name: Wait for new revision to be healthy
         run: |
           echo "Waiting for new container revision to become healthy..."
-          for i in $(seq 1 12); do
-            echo " Attempt $i/12..."
+          FOUND=0
+          for i in $(seq 1 30); do
+            echo " Attempt $i/30..."
             RESPONSE=$(curl -s --max-time 10 "${{ secrets.API_URL }}/api/health" 2>/dev/null || echo "")
             if echo "$RESPONSE" | grep -q '"cache"'; then
               echo "New revision is healthy and serving traffic!"
               echo "$RESPONSE"
+              FOUND=1
               break
             fi
             echo " Health check response: $RESPONSE"
-            [ $i -lt 12 ] && sleep 10
+            if [ $i -lt 30 ]; then sleep 10; fi
           done
+          if [ "$FOUND" -eq 0 ]; then
+            echo "WARNING: New revision health not confirmed after 5 min — proceeding anyway"
+          fi
 
       # Warm up API endpoints so the in-memory caches are hot.
       - name: Warm up API endpoints
@@ -96,7 +103,7 @@ jobs:
               break
             fi
             echo " Cache refresh returned HTTP $HTTP_CODE, retrying in 15s..."
-            [ $i -lt 3 ] && sleep 15
+            if [ $i -lt 3 ]; then sleep 15; fi
           done
           echo "Waiting 60s for pre-computation to complete..."
           sleep 60

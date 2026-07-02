@@ -1,5 +1,5 @@
 'use strict';
-// v3 — overview debug logging added.
+// v4 — nightly pre-computation cache with timezone fix deployed.
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 
 const express = require('express');

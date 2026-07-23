@@ -15,8 +15,8 @@ COPY . .
 # ═══════════════════════════════════════════════════════════════════════════════
 # Verify the deployment includes our code changes — this will FAIL the Docker
 # build if the wrong code is in the image, preventing a broken deploy.
-RUN grep -q 'v5-cache' server.js || (echo "ERROR: server.js does not contain v5-cache marker — stale Docker layer?" >&2 && exit 1)
-RUN echo "server.js verification: OK (v5-cache marker found)"
+RUN grep -q 'api/zoho' server.js || (echo "ERROR: server.js does not contain /api/zoho mount — stale Docker layer?" >&2 && exit 1)
+RUN echo "server.js verification: OK (/api/zoho marker found)"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Transfer ownership to non-root user

@@ -56,42 +56,57 @@ jobs:
       # Force all ingress traffic to the latest revision. Without this, Azure
       # Container Apps keeps the old revision active and never activates the new
       # one, even after `az containerapp update` creates it.
+      # DEPLOY GATE — this job FAILS unless the newly built revision is
+      # Healthy AND serving 100% of traffic. A green run must mean the new
+      # code is actually live. (Added 2026-07-23 after three weeks of revisions
+      # silently crash-looping while traffic stayed on a May 28 revision.)
       - name: Activate latest revision (force traffic)
         run: |
-          echo "Switching to multiple revision mode..."
-          az containerapp revision set-mode --name unity-dashboard-api --resource-group unity-dashboard-rg --mode multiple || echo "Mode switch failed (may already be multiple)"
+          set -e
+          az containerapp revision set-mode --name unity-dashboard-api --resource-group unity-dashboard-rg --mode multiple || echo "Mode switch skipped (already multiple)"
           sleep 5
-          LATEST=$(az containerapp revision list --name unity-dashboard-api --resource-group unity-dashboard-rg --query "[0].name" -o tsv)
+          # Newest by createdTime — do NOT rely on list order.
+          LATEST=$(az containerapp revision list --name unity-dashboard-api --resource-group unity-dashboard-rg \
+            --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv)
           echo "Latest revision: $LATEST"
-          echo "Activating revision $LATEST..."
-          az containerapp revision activate --name unity-dashboard-api --resource-group unity-dashboard-rg --revision $LATEST || echo "Revision activation failed (may be single revision)"
-          echo "Routing 100% traffic to $LATEST..."
-          az containerapp ingress traffic set --name unity-dashboard-api --resource-group unity-dashboard-rg --revision-weight $LATEST=100 || echo "Traffic routing failed (may be single revision mode)"
+          echo "LATEST_REVISION=$LATEST" >> "$GITHUB_ENV"
+          az containerapp revision activate --name unity-dashboard-api --resource-group unity-dashboard-rg --revision "$LATEST"
+          # NOTE: traffic is NOT shifted here. The gate below verifies the new
+          # revision is Healthy FIRST, then shifts traffic — never route prod
+          # to an unverified revision.
 
-      # Wait for new container revision to become healthy. Container Apps can
-      # take 3-5 minutes to swap to the new revision after an update. Retry the
-      # health endpoint until we see the 'cache' field (proves new revision is live).
-      # If it never appears, continue anyway — the warmup will force the new
-      # revision to start processing requests.
-      - name: Wait for new revision to be healthy
+      - name: "Deploy gate: verify Healthy, then shift traffic"
         run: |
-          echo "Waiting for new container revision to become healthy..."
-          FOUND=0
+          echo "Gating on revision $LATEST_REVISION..."
+          HEALTHY=0
           for i in $(seq 1 30); do
-            echo " Attempt $i/30..."
-            RESPONSE=$(curl -s --max-time 10 "${{ secrets.API_URL }}/api/health" 2>/dev/null || echo "")
-            if echo "$RESPONSE" | grep -q '"cache"'; then
-              echo "New revision is healthy and serving traffic!"
-              echo "$RESPONSE"
-              FOUND=1
-              break
-            fi
-            echo " Health check response: $RESPONSE"
+            STATE=$(az containerapp revision show --name unity-dashboard-api --resource-group unity-dashboard-rg \
+              --revision "$LATEST_REVISION" --query "properties.healthState" -o tsv 2>/dev/null || echo "Unknown")
+            echo " Attempt $i/30: healthState=$STATE"
+            if [ "$STATE" = "Healthy" ]; then HEALTHY=1; break; fi
             if [ $i -lt 30 ]; then sleep 10; fi
           done
-          if [ "$FOUND" -eq 0 ]; then
-            echo "WARNING: New revision health not confirmed after 5 min — proceeding anyway"
+          if [ "$HEALTHY" -eq 0 ]; then
+            echo "::error::DEPLOY GATE FAILED: revision $LATEST_REVISION never became Healthy within 5 min."
+            echo "Replica logs (why did it crash?):"
+            az containerapp logs show --name unity-dashboard-api --resource-group unity-dashboard-rg --tail 50 || true
+            echo "Traffic was NEVER shifted — production still serves the previous revision. THIS DEPLOY DID NOT SHIP."
+            exit 1
           fi
+          echo "Revision Healthy — shifting 100% traffic..."
+          az containerapp ingress traffic set --name unity-dashboard-api --resource-group unity-dashboard-rg --revision-weight "$LATEST_REVISION=100"
+          # Confirm end-to-end through the public URL
+          for i in $(seq 1 12); do
+            RESPONSE=$(curl -s --max-time 10 "${{ secrets.API_URL }}/api/health" 2>/dev/null || echo "")
+            if echo "$RESPONSE" | grep -q '"dbConnected":true'; then
+              echo "GATE PASSED: $LATEST_REVISION Healthy, serving 100% traffic, DB connected."
+              echo "$RESPONSE"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::DEPLOY GATE FAILED: traffic shifted but public health check never confirmed. Investigate immediately."
+          exit 1
 
       # Warm up API endpoints so the in-memory caches are hot.
       - name: Warm up API endpoints

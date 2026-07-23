@@ -32,26 +32,19 @@ router.get('/health', (_req, res) => {
 });
 
 // GET /api/zoho/summary — record counts for all modules (for summary cards)
-router.get('/summary', async (_req, res, next) => {
-  try {
-    const keys = Object.keys(REPORTS);
-    const results = await Promise.allSettled(keys.map(loadModule));
-    const summary = {};
-    let anyStale = false;
-
-    results.forEach((r, i) => {
-      const key = keys[i];
-      if (r.status === 'fulfilled') {
-        summary[key] = { count: r.value.data.length, asOf: r.value.asOf, stale: r.value.stale };
-        anyStale = anyStale || r.value.stale;
-      } else {
-        console.warn(`[zoho/routes] summary: ${key} failed:`, r.reason?.message);
-        summary[key] = { count: null, error: true };
-      }
-    });
-
-    res.json({ source: 'zoho', stale: anyStale, summary });
-  } catch (err) { next(err); }
+// CACHE-ONLY by design: never triggers Zoho fetches. With 20k+ records per
+// module, fanning out 7 parallel full-report fetches OOM-kills a 1Gi
+// container (learned in production, 2026-07-23). The warm loop populates the
+// cache; modules not yet warmed report { warming: true }.
+router.get('/summary', (_req, res) => {
+  const cached = cacheStatus(); // { key: { records, asOf } }
+  const summary = {};
+  for (const key of Object.keys(REPORTS)) {
+    summary[key] = cached[key]
+      ? { count: cached[key].records, asOf: cached[key].asOf }
+      : { count: null, warming: true };
+  }
+  res.json({ source: 'zoho', summary });
 });
 
 // GET /api/zoho/:module — full mapped list

@@ -1,0 +1,83 @@
+---
+description: Skill/agent routing — always pick the most specific skill for the task, not a generic role agent
+alwaysApply: true
+---
+
+# Skill Routing Rules
+
+Prithvi's full skill inventory and when to use each. **Rule zero: prefer the most
+specific `ce-*` workflow skill over a generic role agent.** Role agents
+(@backend-architect etc.) are a fallback for open-ended design work, not the default.
+
+## Routing by lifecycle stage
+
+### Explore / decide (before any code)
+| Task | Skill |
+|---|---|
+| Vague idea → right-sized requirements plan | `ce-brainstorm` |
+| Generate + evaluate options before choosing | `ce-ideate` |
+| Second opinion / verdict on an approach or doc | `ce-pov` |
+| Create/update product STRATEGY.md | `ce-strategy` |
+| Review an existing plan/spec with role lenses | `ce-doc-review` |
+| Market/trend/competitor research | `product-trend-researcher` |
+| Sprint scoping, RICE/MoSCoW prioritization | `product-sprint-prioritizer` |
+
+### Plan / build
+| Task | Skill |
+|---|---|
+| Break work into a structured multi-step plan | `ce-plan` |
+| Execute a plan/spec/clear build request end-to-end | `ce-work` |
+| Fully autonomous: plan→implement→PR, hands-off | `lfg` (only when explicitly wanted) |
+| Isolated branch/worktree before risky work | `ce-worktree` |
+| Open-ended system/API/schema/infra design | `@backend-architect` |
+| UI implementation, React, performance, a11y | `@engineering-frontend-developer` |
+| CI/CD, Docker, IaC, deploy strategies | `@engineering-devops-automator` |
+| Laravel/Livewire/FluxUI/Three.js premium builds | `@engineering-senior-developer` |
+| Anything touching Supabase | `supabase` |
+| Postgres query/schema/perf work | `supabase-postgres-best-practices` |
+
+### Debug / improve
+| Task | Skill |
+|---|---|
+| Bugs, stack traces, failing tests, stuck fixes | `ce-debug` (NOT a role agent) |
+| Tidy/refactor recently changed code | `ce-simplify-code` |
+| Metric-driven optimization loops | `ce-optimize` |
+| In-browser polish pass on a feature | `ce-polish` |
+| Browser tests for current branch/PR | `ce-test-browser` |
+| iOS simulator build+test | `ce-test-xcode` |
+| Hands-off browser QA of active branch | `ce-dogfood` (manual invocation only) |
+
+### Ship / review
+| Task | Skill |
+|---|---|
+| Pre-PR structured code review | `ce-code-review` |
+| Commit with a good message | `ce-commit` |
+| Commit + push + open PR | `ce-commit-push-pr` |
+| Watch a PR to merge-ready (CI, comments, rebases) | `ce-babysit-pr` |
+| Address/resolve PR review feedback | `ce-resolve-pr-feedback` |
+
+### After shipping / knowledge
+| Task | Skill |
+|---|---|
+| Capture a solved problem or project vocabulary | `ce-compound` |
+| Audit stale/drifted docs/solutions learnings | `ce-compound-refresh` |
+| Durable teaching artifact / deep explainer | `ce-explain` |
+| Session handoff to another agent/session | `ce-handoff` |
+| Publish/share specs or drafts in Proof | `ce-proof` |
+| Launch/promo copy for a shipped feature | `ce-promote` |
+| Time-windowed product pulse report | `ce-product-pulse` |
+| Sweep Slack/GitHub feedback sources | `ce-sweep` |
+| Analyze Riffrec recordings/bundles | `ce-riffrec-feedback-analysis` |
+| Check compound-engineering repo config | `ce-setup` |
+
+## Anti-patterns
+- Don't use `@backend-architect` for a bug — that's `ce-debug`.
+- Don't use `ce-work` for open-ended bugs — `ce-work` executes plans, `ce-debug` diagnoses.
+- Don't hand-write commits/PRs — `ce-commit` / `ce-commit-push-pr`.
+- Don't use `lfg` unless fully autonomous shipping was explicitly requested.
+- Don't stack a role agent on top of a `ce-*` skill that already covers the job.
+- After solving anything non-obvious, end with `ce-compound` to capture the learning.
+
+## Conventions
+- Always check and follow rules in `.cursor/rules/`.
+- Never paste explicit SQL into prompts — let the agent discover schema.

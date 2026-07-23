@@ -196,6 +196,11 @@ app.use('/api/workload', workloadRouter);
 app.use('/api/centres', centresRouter);
 app.use('/api/issues',  issuesRouter);
 app.use('/api/goal-progress', goalProgressRouter);
+
+// Zoho integration — fully isolated module (/backend/zoho). Mounts a stub
+// router if ZOHO_* env vars are missing; failure here never affects the app.
+const _zohoModule = _safeRequire('./zoho', 'zoho');
+app.use('/api/zoho', _zohoModule.router || _zohoModule);
 app.use('/api/admin/cache', (_req, res, next) => {
   const cacheMods = _tryLoadCacheModules();
   if (!cacheMods.adminCacheRouter) {

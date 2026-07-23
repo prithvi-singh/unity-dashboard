@@ -728,13 +728,7 @@ router.get('/:centreId/detail', async (req, res, next) => {
           CONCAT(clinician.FirstName, ' ', clinician.LastName) AS clinicianName,
           ap.Status,
           DATEDIFF(day, ap.CreatedDateTimeUtc, GETDATE()) AS daysOpen,
-          (
-            SELECT TOP 1 pal2.Type
-            FROM PatientAuditLog pal2
-            JOIN AllocatePatient ap2 ON ap2.Id = pal2.AllocatePatientId
-            WHERE ap2.PatientId = pt.Id AND ap2.Id = ap.Id
-            ORDER BY pal2.CreatedDateTime DESC
-          ) AS lastAssessmentType
+          ap.Assessment AS assessmentType
         FROM AllocatePatient ap
         JOIN Patient pt            ON pt.Id  = ap.PatientId
         JOIN Centre c              ON c.Id   = pt.CentreId
@@ -751,6 +745,9 @@ router.get('/:centreId/detail', async (req, res, next) => {
         SELECT
           pt.Id AS patientId,
           pt.PatientID AS PatientDisplayId,
+          pt.FirstName,
+          pt.LastName,
+          ap.Assessment AS assessmentType,
           CONCAT(clinician.FirstName, ' ', clinician.LastName) AS clinicianName,
           ap.Status AS assessmentStatus,
           DATEDIFF(day, ap.CreatedDateTimeUtc, GETDATE()) AS daysPending
@@ -867,20 +864,22 @@ router.get('/:centreId/detail', async (req, res, next) => {
     });
 
     const activeCases = activeCasesResult.recordset.map((r) => ({
-      patientId:          r.patientId,
-      patientDisplayId:   r.PatientDisplayId || null,
-      patientName:        `${r.FirstName} ${r.LastName}`,
-      clinicianName:      r.clinicianName || null,
-      status:             r.Status,
-      daysOpen:           r.daysOpen ?? 0,
-      lastAssessmentType: r.lastAssessmentType || null,
+      patientId:        r.patientId,
+      patientDisplayId: r.PatientDisplayId || null,
+      patientName:      `${r.FirstName} ${r.LastName}`,
+      clinicianName:    r.clinicianName || null,
+      status:           r.Status,
+      daysOpen:         r.daysOpen ?? 0,
+      assessmentType:   r.assessmentType || null,
     }));
 
     const overdueAssessments = overdueResult.recordset.map((r) => ({
       patientId:        r.patientId,
       patientDisplayId: r.PatientDisplayId || null,
+      patientName:      `${r.FirstName} ${r.LastName}`,
       clinicianName:    r.clinicianName || null,
       assessmentStatus: r.assessmentStatus,
+      assessmentType:   r.assessmentType || null,
       daysPending:      r.daysPending ?? 0,
     }));
 

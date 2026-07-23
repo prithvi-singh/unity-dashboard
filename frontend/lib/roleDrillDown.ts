@@ -15,6 +15,8 @@ export type RoleDrillDownType =
   | 'manager-registered'
   | 'manager-assigned'
   | 'manager-stuck-onboarding'
+  | 'manager-pending-reports'
+  | 'manager-pending-goals'
   | 'admin-registered'
   | 'admin-assigned'
   | 'admin-unassigned';

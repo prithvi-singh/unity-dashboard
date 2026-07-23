@@ -8,7 +8,6 @@ import UserProfileLink from '@/components/users/UserProfileLink';
 import type { ProfileLinkParams } from '@/lib/userProfile';
 import type { OnRoleDrillDown } from '@/lib/roleDrillDown';
 import { DRILL_DOWN_HINT } from '@/lib/roleDrillDown';
-import RoleBadge from '@/components/shared/RoleBadge';
 import { goalsDisplay } from '@/lib/roleStats';
 
 interface Props {
@@ -55,7 +54,6 @@ function CentreCell({ manager }: { manager: Manager }) {
     );
   }
 
-  // 3+ centres — show first + "+X more", tooltip opens downward
   const rest = centres.slice(1);
   return (
     <div className="relative inline-block">
@@ -98,7 +96,7 @@ function SortTh({
   return (
     <th
       className={[
-        'px-3 py-[10px] text-[11px] font-medium uppercase tracking-[0.03em] cursor-pointer select-none transition-colors',
+        'px-3 py-[10px] text-[11px] font-medium uppercase tracking-[0.03em] cursor-pointer select-none transition-colors whitespace-nowrap',
         `text-${align}`,
         active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700',
       ].join(' ')}
@@ -108,6 +106,11 @@ function SortTh({
     >
       <span className="inline-flex items-center gap-0.5">
         {label}
+        {title && (
+          <span className="text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal" title={title}>
+            ⓘ
+          </span>
+        )}
         {active && (
           <span className="text-[10px] text-gray-600">{sort.dir === 'asc' ? '↑' : '↓'}</span>
         )}
@@ -118,8 +121,8 @@ function SortTh({
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+function timeAgo(iso: string | null, hasLogin?: boolean): string {
+  if (!iso) return hasLogin ? 'Zero activity' : 'Never active';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
@@ -129,13 +132,21 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-/** Last Active colour rules: Today→green, 1–3d→amber, 4+d→red, Never→red bold */
 function lastActiveColor(iso: string | null): string {
-  if (!iso) return 'text-rose-600 font-bold';
+  if (!iso) return 'text-[#A32D2D] font-bold';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days === 0) return 'text-emerald-600 font-medium';
-  if (days <= 3)  return 'text-amber-600';
-  return 'text-rose-500';
+  if (days === 0) return 'text-[#1D9E75]';
+  if (days === 1) return 'text-gray-900';
+  if (days <= 3)  return 'text-gray-500';
+  if (days <= 6)  return 'text-[#BA7517]';
+  return 'text-[#A32D2D]';
+}
+
+function avgApprovalColor(days: number | null | undefined): string {
+  if (days == null) return 'text-gray-400';
+  if (days < 2)  return 'text-[#1D9E75] font-semibold';
+  if (days <= 5) return 'text-[#BA7517]';
+  return 'text-[#A32D2D] font-semibold';
 }
 
 // ── Sort value extractor ──────────────────────────────────────────────────────
@@ -143,14 +154,18 @@ function lastActiveColor(iso: string | null): string {
 function getVal(m: Manager, col: string): number | string {
   switch (col) {
     case 'name':              return `${m.lastName} ${m.firstName}`.toLowerCase();
-    case 'roleName':          return (m.roleName ?? '').toLowerCase();
     case 'centreName':        return (m.centreName ?? '').toLowerCase();
+    case 'reportsToApprove':  return m.reportsToApprove ?? 0;
+    case 'goalsToApprove':    return m.goalsToApprove   ?? 0;
+    case 'reportsApproved':   return m.reportsApproved  ?? 0;
+    case 'goalsApproved':     return m.goalsApproved    ?? 0;
+    case 'avgApprovalDays':   return m.avgApprovalDays  ?? -1;
+    case 'assessmentsScored': return m.assessmentsScored ?? 0;
+    case 'reportsDrafted':    return m.reportsDrafted    ?? 0;
+    case 'progressNotes':     return m.progressNotes     ?? 0;
     case 'cases':             return m.casesRegistered;
     case 'assessments':       return m.assessmentsAssigned;
-    case 'goalsApproved':     return m.goalsApproved ?? 0;
-    case 'reportsToApprove':  return m.reportsToApprove ?? 0;
-    case 'goalsToApprove':    return m.goalsToApprove ?? 0;
-    case 'lastActivity':      return m.lastActivityDate ?? '';
+    case 'lastActivity':      return m.lastActiveDate ?? '';
     case 'lastLogin':         return m.lastLoginDate ?? '';
     default:                  return 0;
   }
@@ -173,7 +188,6 @@ function applySort(rows: Manager[], { col, dir }: SortState): Manager[] {
 // ── Table ─────────────────────────────────────────────────────────────────────
 
 function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }: Props) {
-  // Default sort: most urgent first (most reports to approve)
   const [sort, setSort] = useState<SortState>({ col: 'reportsToApprove', dir: 'desc' });
 
   const handleSort = (col: string, def: SortDir) =>
@@ -192,47 +206,66 @@ function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }
     );
   }
 
-  // Deduplicate — backend now returns one row per manager, guard for safety
   const visible = managers.filter((m) => m.roleName !== 'Super Admin');
   const deduped = [...new Map(visible.map((m) => [m.id, m])).values()];
   const rows    = applySort(deduped, sort);
 
+  // col count: # Manager Centre | RtA GtA RApproved GApproved AvgTime | Scored Drafted Notes | Registered Assigned | LastActive LastLogin
+  const colCount = 15;
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-          {rows.length} manager{rows.length !== 1 ? 's' : ''}
-        </span>
-        <span className="text-xs text-gray-400 ml-auto">Sorted by approval backlog — highest first</span>
+      <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap min-h-[40px]">
+        {loading ? (
+          <div className="h-6 w-24 bg-gray-100 rounded-full animate-pulse" />
+        ) : (
+          <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+            {rows.length} manager{rows.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
-        <table className="w-full text-sm" role="table" aria-label="Manager detail table">
+        <table className="w-full text-sm min-w-[1200px]" role="table" aria-label="Manager detail table">
           <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
             <tr>
               <th className="px-6 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em] w-6">#</th>
-              <SortTh col="name"             label="Manager"             sort={sort} onSort={handleSort} isText />
-              <SortTh col="roleName"         label="Role"                sort={sort} onSort={handleSort} isText />
-              <SortTh col="centreName"       label="Centre"              sort={sort} onSort={handleSort} isText />
-              <SortTh col="cases"            label="Cases Registered"    sort={sort} onSort={handleSort} align="right"
-                      title="Cases registered by this manager" />
+              <SortTh col="name"             label="Manager"              sort={sort} onSort={handleSort} isText />
+              <SortTh col="centreName"       label="Centre"               sort={sort} onSort={handleSort} isText />
+              {/* ── APPROVAL ── */}
+              <SortTh col="reportsToApprove" label="Reports to Approve"   sort={sort} onSort={handleSort} align="right"
+                      title="Reports drafted by clinicians awaiting this manager's approval. Click to see list." />
+              <SortTh col="goalsToApprove"   label="Goals to Approve"     sort={sort} onSort={handleSort} align="right"
+                      title="Goals awaiting this manager's approval. Click to see list." />
+              <SortTh col="reportsApproved"  label="Reports Approved"     sort={sort} onSort={handleSort} align="right"
+                      title="Reports signed off by this manager in the selected period." />
+              <SortTh col="goalsApproved"    label="Goals Approved"       sort={sort} onSort={handleSort} align="right"
+                      title="Goals signed off by this manager in the selected period." />
+              <SortTh col="avgApprovalDays"  label="Avg Approval Time"    sort={sort} onSort={handleSort} align="right"
+                      title="Average days from report draft to manager approval in the period." />
+              {/* ── CLINICIAN OUTPUT ── */}
+              <SortTh col="assessmentsScored" label="Assessments Scored"  sort={sort} onSort={handleSort} align="right"
+                      title="Assessments scored directly by this manager in the period." />
+              <SortTh col="reportsDrafted"   label="Reports Drafted"      sort={sort} onSort={handleSort} align="right"
+                      title="Reports drafted directly by this manager in the period." />
+              <SortTh col="progressNotes"    label="Progress Notes"       sort={sort} onSort={handleSort} align="right"
+                      title="Therapy progress notes added by this manager in the period." />
+              {/* ── OPS OUTPUT ── */}
+              <SortTh col="cases"            label="Cases Registered"     sort={sort} onSort={handleSort} align="right"
+                      title="Cases registered by this manager in the period." />
               <SortTh col="assessments"      label="Assessments Assigned" sort={sort} onSort={handleSort} align="right"
-                      title="Assessments assigned to clinicians by this manager" />
-              <SortTh col="goalsApproved"    label="Goals Approved"      sort={sort} onSort={handleSort} align="right"
-                      title="Goals signed off by this manager in the selected period — N (individual goal items)" />
-              <SortTh col="reportsToApprove" label="Reports to Approve"  sort={sort} onSort={handleSort} align="right"
-                      title="Reports drafted by clinicians but not yet approved (report_pending_approval state)" />
-              <SortTh col="goalsToApprove"   label="Goals to Approve"    sort={sort} onSort={handleSort} align="right"
-                      title="Goals submitted by clinicians but not yet approved (goals_pending_approval state)" />
-              <SortTh col="lastActivity"     label="Last Active"         sort={sort} onSort={handleSort} />
-              <SortTh col="lastLogin"        label="Last Login"          sort={sort} onSort={handleSort} />
+                      title="Assessments routed to clinicians by this manager in the period." />
+              {/* ── ACTIVITY ── */}
+              <SortTh col="lastActivity"     label="Last Active"          sort={sort} onSort={handleSort}
+                      title="Last audit action performed by this user — ever, not limited to the selected period. Login alone does not count as activity." />
+              <SortTh col="lastLogin"        label="Last Login"           sort={sort} onSort={handleSort} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 11 }).map((__, j) => (
+                  {Array.from({ length: colCount }).map((__, j) => (
                     <td key={j} className="px-5 py-3.5">
                       <div className="h-4 bg-gray-100 rounded w-16" />
                     </td>
@@ -241,7 +274,7 @@ function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-6 py-10 text-center text-gray-400">
+                <td colSpan={colCount} className="px-6 py-10 text-center text-gray-400">
                   No manager data for the selected filters
                 </td>
               </tr>
@@ -250,19 +283,12 @@ function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }
                 const rta = m.reportsToApprove ?? 0;
                 const gta = m.goalsToApprove   ?? 0;
 
-                const rtaColor = rta > 5  ? 'text-rose-600 font-bold'
-                               : rta > 0  ? 'text-amber-600 font-medium'
-                               : 'text-gray-300';
-                const gtaColor = gta > 5  ? 'text-rose-600 font-bold'
-                               : gta > 0  ? 'text-amber-600 font-medium'
-                               : 'text-gray-300';
-
                 return (
                   <tr key={m.id} className="hover:bg-gray-50/70 transition-colors">
                     {/* # */}
                     <td className="px-6 py-3.5 text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</td>
 
-                    {/* Manager name — PersonLink */}
+                    {/* Manager name */}
                     <td className="px-5 py-3.5 font-medium text-gray-800 whitespace-nowrap">
                       <UserProfileLink
                         userId={m.id}
@@ -274,14 +300,100 @@ function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }
                       </UserProfileLink>
                     </td>
 
-                    {/* Role */}
-                    <td className="px-5 py-3.5">
-                      <RoleBadge role={m.roleName} />
-                    </td>
-
-                    {/* Centre — +X more pattern */}
+                    {/* Centre */}
                     <td className="px-5 py-3.5 max-w-[200px]">
                       <CentreCell manager={m} />
+                    </td>
+
+                    {/* Reports to Approve — #A32D2D if > 0, clickable */}
+                    <td className="px-5 py-3.5 text-right">
+                      {onDrillDown && rta > 0 ? (
+                        <button
+                          type="button"
+                          title={DRILL_DOWN_HINT}
+                          onClick={() => onDrillDown({
+                            type: 'manager-pending-reports',
+                            drillUserId: m.id,
+                            label: `Reports to approve · ${m.firstName} ${m.lastName}`,
+                          })}
+                          className="tabular-nums font-bold text-[#A32D2D] rounded hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          {rta.toLocaleString()}
+                        </button>
+                      ) : (
+                        <span className={`tabular-nums ${rta > 0 ? 'font-bold text-[#A32D2D]' : 'text-gray-300'}`}>
+                          {rta > 0 ? rta.toLocaleString() : '—'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Goals to Approve — #A32D2D if > 0, clickable */}
+                    <td className="px-5 py-3.5 text-right">
+                      {onDrillDown && gta > 0 ? (
+                        <button
+                          type="button"
+                          title={DRILL_DOWN_HINT}
+                          onClick={() => onDrillDown({
+                            type: 'manager-pending-goals',
+                            drillUserId: m.id,
+                            label: `Goals to approve · ${m.firstName} ${m.lastName}`,
+                          })}
+                          className="tabular-nums font-bold text-[#A32D2D] rounded hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          {gta.toLocaleString()}
+                        </button>
+                      ) : (
+                        <span className={`tabular-nums ${gta > 0 ? 'font-bold text-[#A32D2D]' : 'text-gray-300'}`}>
+                          {gta > 0 ? gta.toLocaleString() : '—'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Reports Approved */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={m.reportsApproved ?? 0} />
+                    </td>
+
+                    {/* Goals Approved — X (Y) format */}
+                    <td className="px-5 py-3.5 text-right">
+                      {onDrillDown && (m.goalsApproved ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          title={DRILL_DOWN_HINT}
+                          onClick={() => onDrillDown({
+                            type: 'clinician-pipeline-goals-approved',
+                            drillUserId: m.id,
+                            label: `Goals approved · ${m.firstName} ${m.lastName}`,
+                          })}
+                          className="tabular-nums text-emerald-700 rounded hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          {goalsDisplay(m.goalsApproved ?? 0, m.goalsApprovedItems ?? 0)}
+                        </button>
+                      ) : (
+                        <span className="tabular-nums text-gray-300">—</span>
+                      )}
+                    </td>
+
+                    {/* Avg Approval Time */}
+                    <td className={`px-5 py-3.5 text-right tabular-nums whitespace-nowrap ${avgApprovalColor(m.avgApprovalDays)}`}>
+                      {m.avgApprovalDays != null
+                        ? `${m.avgApprovalDays.toFixed(1)}d`
+                        : <span className="text-gray-300">N/A</span>}
+                    </td>
+
+                    {/* Assessments Scored (manager acting as clinician) */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={m.assessmentsScored ?? 0} />
+                    </td>
+
+                    {/* Reports Drafted (manager acting as clinician) */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={m.reportsDrafted ?? 0} />
+                    </td>
+
+                    {/* Progress Notes */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={m.progressNotes ?? 0} />
                     </td>
 
                     {/* Cases Registered */}
@@ -328,43 +440,9 @@ function ManagerTableInner({ managers, loading, error, linkParams, onDrillDown }
                       )}
                     </td>
 
-                    {/* Goals Approved — N (total) format */}
-                    <td className="px-5 py-3.5 text-right">
-                      {onDrillDown && (m.goalsApproved ?? 0) > 0 ? (
-                        <button
-                          type="button"
-                          title={DRILL_DOWN_HINT}
-                          onClick={() => onDrillDown({
-                            type: 'clinician-pipeline-goals-approved',
-                            drillUserId: m.id,
-                            label: `Goals approved · ${m.firstName} ${m.lastName}`,
-                          })}
-                          className="tabular-nums text-emerald-700 rounded hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                        >
-                          {goalsDisplay(m.goalsApproved ?? 0, m.goalsApprovedItems ?? 0)}
-                        </button>
-                      ) : (
-                        <span className="tabular-nums text-gray-300">—</span>
-                      )}
-                    </td>
-
-                    {/* Reports to Approve — amber >0, red >5 */}
-                    <td className="px-5 py-3.5 text-right">
-                      <span className={`tabular-nums ${rtaColor}`}>
-                        {rta > 0 ? rta.toLocaleString() : '—'}
-                      </span>
-                    </td>
-
-                    {/* Goals to Approve — amber >0, red >5 */}
-                    <td className="px-5 py-3.5 text-right">
-                      <span className={`tabular-nums ${gtaColor}`}>
-                        {gta > 0 ? gta.toLocaleString() : '—'}
-                      </span>
-                    </td>
-
-                    {/* Last Active — colour-coded */}
-                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveColor(m.lastActivityDate)}`}>
-                      {timeAgo(m.lastActivityDate)}
+                    {/* Last Active */}
+                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveColor(m.lastActiveDate ?? null)}`}>
+                      {timeAgo(m.lastActiveDate ?? null, !!m.lastLoginDate)}
                     </td>
 
                     {/* Last Login */}
@@ -391,3 +469,11 @@ const ManagerTable = React.memo(ManagerTableInner, (prev, next) =>
 );
 
 export default ManagerTable;
+
+function NumCell({ value }: { value: number }) {
+  return (
+    <span className="tabular-nums font-bold text-gray-900">
+      {value > 0 ? value.toLocaleString() : <span className="text-gray-300 font-normal">—</span>}
+    </span>
+  );
+}

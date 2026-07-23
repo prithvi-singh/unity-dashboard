@@ -8,6 +8,7 @@ import ClinicianTable from '@/components/clinicians/ClinicianTable';
 import WorkloadByCentreTable from '@/components/clinicians/WorkloadByCentreTable';
 import ManagerChart, { buildManagerCentreRows, ManagerCentreActivityTable } from '@/components/managers/ManagerChart';
 import ManagerTable from '@/components/managers/ManagerTable';
+import PendingManagerActions from '@/components/managers/PendingManagerActions';
 import CentreAdminChart from '@/components/centre-admins/CentreAdminChart';
 import CentreAdminTable from '@/components/centre-admins/CentreAdminTable';
 import UsersTab from '@/components/users/UsersTab';
@@ -62,7 +63,7 @@ function groupClinicianRowsForExport(rows: Clinician[]) {
     } else {
       map.set(c.id, {
         firstName: c.firstName, lastName: c.lastName, email: c.email,
-        centres: [c.centreName ?? ''],
+        centres:          [c.centreName ?? ''],
         scoringComplete:  c.scoringComplete  ?? 0,
         reportsDrafted:   c.reportsDrafted   ?? 0,
         reportEdits:      c.reportEdits      ?? 0,
@@ -112,6 +113,8 @@ export interface TeamTabProps {
   clinicalPipelineLoading: boolean;
   workload: WorkloadCentreRow[] | null;
   workloadLoading: boolean;
+  workloadError: string | null;
+  onWorkloadRetry: () => void;
 
   managers: Manager[];
   managersLoading: boolean;
@@ -150,6 +153,8 @@ export default function TeamTab({
   clinicalPipelineLoading,
   workload,
   workloadLoading,
+  workloadError,
+  onWorkloadRetry,
   managers,
   managersLoading,
   managersError,
@@ -200,12 +205,13 @@ export default function TeamTab({
     const grouped = groupClinicianRowsForExport(filteredClinicians);
     exportCsv(
       `unity-clinician-detail-${todayStr()}.csv`,
-      ['Name', 'Email', 'Centre', 'Assessments Scored', 'Reports Drafted', 'Report Edits', 'Goals to Add', 'Progress Notes', 'Goals Documented', 'Active Cases', 'Last Active', 'Last Login'],
+      ['Name', 'Email', 'Centre', 'Assessments Scored', 'Reports Drafted', 'Report Edits', 'Active Cases', 'Scoring Backlog', 'Reports Pending', 'Goals Pending', 'Progress Notes', 'Goals Documented', 'Last Active', 'Last Login'],
       grouped.map((g) => [
         `${g.firstName} ${g.lastName}`, g.email, g.centres.join(' | '),
         String(g.scoringComplete), String(g.reportsDrafted), String(g.reportEdits),
-        String(g.pipelineGoals), String(g.progressNotes), String(g.goalsDocumented),
-        String(g.activeCaseload), fmtDateCsv(g.lastActivityDate), fmtDateCsv(g.lastLoginDate),
+        String(g.activeCaseload), String(0), String(0), String(g.pipelineGoals),
+        String(g.progressNotes), String(g.goalsDocumented),
+        fmtDateCsv(g.lastActivityDate), fmtDateCsv(g.lastLoginDate),
       ]),
     );
   }, [filteredClinicians]);
@@ -215,14 +221,17 @@ export default function TeamTab({
     const deduped = [...new Map(visible.map((m) => [m.id, m])).values()];
     exportCsv(
       `unity-manager-detail-${todayStr()}.csv`,
-      ['Name', 'Email', 'Role', 'Centre', 'Cases Registered', 'Assessments Assigned', 'Reports to Approve', 'Goals to Approve', 'Reports Approved', 'Goals Approved', 'Progress Notes', 'Last Active', 'Last Login'],
+      ['Name', 'Email', 'Centre', 'Reports to Approve', 'Goals to Approve', 'Reports Approved', 'Goals Approved', 'Avg Approval Time', 'Assessments Scored', 'Reports Drafted', 'Progress Notes', 'Cases Registered', 'Assessments Assigned', 'Last Active', 'Last Login'],
       deduped.map((m) => [
-        `${m.firstName} ${m.lastName}`, m.email, m.roleName ?? '',
+        `${m.firstName} ${m.lastName}`, m.email,
         m.centres?.map((c) => c.centreName).join(' | ') ?? m.centreName ?? '',
-        String(m.casesRegistered), String(m.assessmentsAssigned),
         String(m.reportsToApprove ?? 0), String(m.goalsToApprove ?? 0),
         String(m.reportsApproved ?? 0), String(m.goalsApproved ?? 0),
-        String(m.progressNotes ?? 0), fmtDateCsv(m.lastActivityDate), fmtDateCsv(m.lastLoginDate),
+        m.avgApprovalDays != null ? `${m.avgApprovalDays.toFixed(1)}d` : 'N/A',
+        String(m.assessmentsScored ?? 0), String(m.reportsDrafted ?? 0),
+        String(m.progressNotes ?? 0),
+        String(m.casesRegistered), String(m.assessmentsAssigned),
+        fmtDateCsv(m.lastActivityDate), fmtDateCsv(m.lastLoginDate),
       ]),
     );
   }, [filteredManagers]);
@@ -230,13 +239,18 @@ export default function TeamTab({
   const handleExportAdmins = useCallback(() => {
     exportCsv(
       `unity-ops-detail-${todayStr()}.csv`,
-      ['Name', 'Email', 'Centre', 'Cases Registered', 'Clinicians Assigned', 'Awaiting', 'Last Active', 'Last Login'],
-      filteredAdmins.map((a) => [
-        `${a.firstName} ${a.lastName}`, a.email, a.centreName ?? '',
-        String(a.casesRegistered), String(a.casesAssignedToClinical),
-        String(Math.max(0, (a.casesRegistered ?? 0) - (a.casesAssignedToClinical ?? 0))),
-        fmtDateCsv(a.lastActivityDate), fmtDateCsv(a.lastLoginDate),
-      ]),
+      ['Name', 'Email', 'Centre', 'Cases Registered', 'Assessments Assigned', 'Routing Rate', 'Awaiting Assignment', 'Last Active', 'Last Login'],
+      filteredAdmins.map((a) => {
+        const reg      = a.casesRegistered ?? 0;
+        const assigned = a.casesAssignedToClinical ?? 0;
+        const rate     = reg > 0 ? `${Math.min(Math.round((assigned / reg) * 100), 100)}%` : '—';
+        return [
+          `${a.firstName} ${a.lastName}`, a.email, a.centreName ?? '',
+          String(reg), String(assigned), rate,
+          String(Math.max(0, reg - assigned)),
+          fmtDateCsv(a.lastActivityDate), fmtDateCsv(a.lastLoginDate),
+        ];
+      }),
     );
   }, [filteredAdmins]);
 
@@ -348,6 +362,8 @@ export default function TeamTab({
             <WorkloadByCentreTable
               rows={workload ?? null}
               loading={workloadLoading}
+              error={workloadError}
+              onRetry={onWorkloadRetry}
             />
 
           </div>
@@ -355,13 +371,13 @@ export default function TeamTab({
       )}
 
       {/* ── MANAGERS ────────────────────────────────────────────────────────── */}
-      {/* Section order: Metric cards → Pending manager actions →              */}
-      {/*               Manager Detail table → Centre Activity Summary         */}
+      {/* Section order: Metric cards → Pending manager actions →               */}
+      {/*               Manager Detail table → Centre Activity Summary          */}
       {role === 'managers' && (
         <ErrorBoundary label="Managers">
           <div className="space-y-8">
 
-            {/* 1. Metric cards + 2. Pending Manager Actions */}
+            {/* 1. Metric cards */}
             <ManagerChart
               managers={managers}
               summary={managerSummary}
@@ -373,12 +389,15 @@ export default function TeamTab({
               hideCentreActivity
             />
 
+            {/* 2. Pending manager actions */}
+            <PendingManagerActions filters={filters} onDrillDown={onDrillDown} />
+
             {/* 3. Manager Detail table */}
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2 justify-between">
                 <div>
                   <h2 className="text-[15px] font-medium text-gray-900">Manager detail</h2>
-                  <p className="text-[12px] text-gray-500 mt-0.5">One row per manager · click name to view full profile</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5">Click any name to view full profile</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {managerSearch && (
@@ -445,7 +464,7 @@ export default function TeamTab({
               <div className="mb-3 flex flex-wrap items-center gap-2 justify-between">
                 <div>
                   <h2 className="text-[15px] font-medium text-gray-900">Centre admin detail</h2>
-                  <p className="text-[12px] text-gray-500 mt-0.5">One row per centre admin · click name to view full profile</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5">Click any name to view full profile</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {adminSearch && (
@@ -496,6 +515,8 @@ export default function TeamTab({
             filters={filters}
             workload={workload}
             workloadLoading={workloadLoading}
+            workloadError={workloadError}
+            onWorkloadRetry={onWorkloadRetry}
             onDrillDown={onDrillDown}
           />
         </ErrorBoundary>

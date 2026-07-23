@@ -19,20 +19,21 @@ export function useTopPerformers(
   filters: TopPerformersFilters,
   enabled = true,
 ): UseTopPerformersResult {
-  const [data, setData]       = useState<TopPerformersResponse | null>(null);
+  const [data,    setData]    = useState<TopPerformersResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const doFetch = useCallback(async () => {
+  const doFetch = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchTopPerformers(filtersRef.current);
+      const result = await fetchTopPerformers(filtersRef.current, signal);
       setData(result);
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to load top performers data');
     } finally {
       setLoading(false);
@@ -41,7 +42,9 @@ export function useTopPerformers(
 
   useEffect(() => {
     if (!enabled) return;
-    doFetch();
+    const controller = new AbortController();
+    doFetch(controller.signal);
+    return () => controller.abort();
   }, [enabled, doFetch, filters.centreId, filters.dateFrom, filters.dateTo]);
 
   return { data, loading, error, refetch: doFetch };

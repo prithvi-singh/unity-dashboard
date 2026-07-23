@@ -18,6 +18,7 @@ import ScrollRegion from '@/components/shared/ScrollRegion';
 import { KpiTooltip } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
 import PeriodSummary from '@/components/overview/PeriodSummary';
+import RoleBadge from '@/components/shared/RoleBadge';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,20 +29,6 @@ function navFor(id: keyof typeof ACTION_SIGNAL_NAV): ActionNavigationTarget {
 
 function fmtTime(d: Date) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// ── Role badges ───────────────────────────────────────────────────────────────
-
-function RoleBadge({ role }: { role: 'Centre Admin (Ops)' | 'Clinician' | 'Manager' }) {
-  const cls =
-    role === 'Manager'           ? 'bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-200' :
-    role === 'Clinician'         ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-200' :
-                                   'bg-teal-500/15 text-teal-700 ring-1 ring-teal-200';
-  return (
-    <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${cls}`}>
-      {role}
-    </span>
-  );
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────

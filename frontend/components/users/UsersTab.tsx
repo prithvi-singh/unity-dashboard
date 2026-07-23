@@ -12,7 +12,7 @@ import type {
 import { useMetrics } from '@/lib/metricsContext';
 import { KpiTooltip, type KpiDefinition } from '@/components/shared/KpiTooltip';
 import { KPI } from '@/lib/kpiDefinitions';
-import SharedRoleBadge, { formatRoleName } from '@/components/shared/RoleBadge';
+import RoleBadge, { formatRoleName } from '@/components/shared/RoleBadge';
 import UserProfileDrawer from './UserProfileDrawer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -67,10 +67,6 @@ function exportCsv(filename: string, headers: string[], rows: string[][]): void 
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function RoleBadge({ roleName }: { roleName: string }) {
-  return <SharedRoleBadge role={roleName} />;
 }
 
 // ── Role accent colours ───────────────────────────────────────────────────────
@@ -588,7 +584,12 @@ function RosterUserDrawer({ title, subtitle, users, isOpen, onClose, onUserClick
               <th className="py-2.5 px-3 text-left hidden sm:table-cell" style={{ width: 110 }}>Role</th>
               <th className="py-2.5 px-3 text-left hidden sm:table-cell" style={{ width: 160 }}>Centre</th>
               <th className="py-2.5 px-3 text-right" style={{ width: 60 }}>Actions</th>
-              <th className="py-2.5 pl-3 pr-6 text-right hidden md:table-cell" style={{ width: 100 }}>Last Active</th>
+              <th className="py-2.5 pl-3 pr-6 text-right hidden md:table-cell" style={{ width: 100 }}>
+                <span className="inline-flex items-center justify-end gap-0.5">
+                  Last Active
+                  <InfoTooltip text="Last audit action performed by this user — ever, not limited to the selected period. Login alone does not count as activity." />
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -619,7 +620,13 @@ function RosterUserDrawer({ title, subtitle, users, isOpen, onClose, onUserClick
                     <p className="text-[11px] text-gray-400 truncate" title={u.email}>{u.email}</p>
                   </td>
                   <td className="py-0 px-3 hidden sm:table-cell" style={{ verticalAlign: 'middle' }}>
-                    {u.roleName && <RoleBadge roleName={u.roleName} />}
+                    {u.roleName && (
+                      <RoleBadge
+                        role={u.roleName}
+                        firstName={u.firstName}
+                        lastName={u.lastName}
+                      />
+                    )}
                   </td>
                   <td className="py-0 px-3 text-xs text-gray-600 hidden sm:table-cell overflow-hidden" style={{ verticalAlign: 'middle' }}>
                     <span className="block truncate" title={u.centreName ?? undefined}>{u.centreName ?? '—'}</span>
@@ -779,7 +786,13 @@ function NeverActiveDrawer({
                   <p className="text-[11px] text-gray-400 truncate" title={u.email}>{u.email}</p>
                 </td>
                 <td className="py-0 px-3 hidden sm:table-cell" style={{ verticalAlign: 'middle' }}>
-                  {u.roleName && <RoleBadge roleName={u.roleName} />}
+                  {u.roleName && (
+                    <RoleBadge
+                      role={u.roleName}
+                      firstName={u.firstName}
+                      lastName={u.lastName}
+                    />
+                  )}
                 </td>
                 <td className="py-0 px-3 text-xs text-gray-600 hidden sm:table-cell overflow-hidden" style={{ verticalAlign: 'middle' }}>
                   <span className="block truncate" title={u.centreName ?? undefined}>{u.centreName ?? '—'}</span>
@@ -819,7 +832,7 @@ function AttentionRow({
         <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[180px]">{email}</p>
       </td>
       <td className="py-3 px-3">
-        <RoleBadge roleName={roleName} />
+        <RoleBadge role={roleName} firstName={firstName} lastName={lastName} />
       </td>
       <td className="py-3 px-3 text-xs text-gray-600 max-w-[120px] truncate" title={centreName ?? ''}>
         {centreName ?? '—'}
@@ -963,7 +976,12 @@ function AttentionList({
               <th className="py-[10px] px-3 text-left">Centre</th>
               {renderExtra ? (
                 <>
-                  <th className="py-[10px] px-3 text-left">Last Active</th>
+                  <th className="py-[10px] px-3 text-left">
+                    <span className="inline-flex items-center gap-0.5">
+                      Last Active
+                      <InfoTooltip text="Last audit action performed by this user — ever, not limited to the selected period. Login alone does not count as activity." />
+                    </span>
+                  </th>
                   <th className="py-[10px] pl-3 pr-4 text-left">Idle</th>
                 </>
               ) : (

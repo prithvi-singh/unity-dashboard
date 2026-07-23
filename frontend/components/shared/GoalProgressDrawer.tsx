@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { GoalProgressSummary, GoalProgressByAssessmentType, GoalProgressUndocumented } from '@/lib/types';
+import RoleBadge from '@/components/shared/RoleBadge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -278,7 +279,7 @@ export default function GoalProgressDrawer({ dateFrom, dateTo, centreId, onClose
                               <p className="text-[11px] text-gray-400">{u.userEmail}</p>
                             </td>
                             <td className="px-4 py-3">
-                              <RoleBadgeInline role={u.role} />
+                              <RoleBadge role={u.role} name={u.userName} />
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
                               {u.notesAdded}
@@ -343,22 +344,3 @@ export default function GoalProgressDrawer({ dateFrom, dateTo, centreId, onClose
   );
 }
 
-// ── Inline role badge ─────────────────────────────────────────────────────────
-
-function RoleBadgeInline({ role }: { role: string }) {
-  const cfg =
-    role === 'Clinician'
-      ? { bg: '#E6F1FB', color: '#0C447C' }
-      : role === 'CentreManager'
-      ? { bg: '#EAF3DE', color: '#3B6D11' }
-      : { bg: '#F3F4F6', color: '#6B7280' };
-
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap"
-      style={{ backgroundColor: cfg.bg, color: cfg.color }}
-    >
-      {role === 'CentreManager' ? 'Centre Manager' : role}
-    </span>
-  );
-}

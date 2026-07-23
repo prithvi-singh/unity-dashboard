@@ -15,21 +15,20 @@ export function useClinicalPipeline(filters: FilterParams, enabled = true) {
 
   useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    fetchClinicalPipeline(filtersRef.current)
-      .then((result) => { if (!cancelled) setData(result); })
+    fetchClinicalPipeline(filtersRef.current, controller.signal)
+      .then((result) => setData(result))
       .catch((e) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load clinical pipeline');
-          setData(null);
-        }
+        if (e instanceof Error && e.name === 'AbortError') return;
+        setError(e instanceof Error ? e.message : 'Failed to load clinical pipeline');
+        setData(null);
       })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
 
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [enabled, filters.centreId, filters.dateFrom, filters.dateTo]);
 
   return { data, loading, error };

@@ -57,32 +57,52 @@ router.get('/', async (req, res, next) => {
     const dateFilter = buildDateFilter('pal.CreatedDateTime', '@dateFrom', '@dateTo');
 
     const [rosterResult, consistencyResult] = await Promise.all([
+      // Roster: one row per ops-admin × centre.
+      // Case counts are pre-aggregated per (AdminUserId, CentreId) in a CTE to avoid
+      // the fan-out that occurs when PatientAuditLog is joined directly against the
+      // multi-centre AdminUserCentre rows.
       pool.request()
         .input('centreId', sql.BigInt, centreId)
         .input('dateFrom', sql.DateTimeOffset, dateFrom)
         .input('dateTo',   sql.DateTimeOffset, dateTo)
         .query(`
+          WITH case_counts AS (
+            SELECT
+              pal.AdminUserId,
+              p.CentreId,
+              COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered' THEN pal.PatientId END) AS casesRegistered,
+              COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'   THEN pal.PatientId END) AS casesAssignedToClinical,
+              MAX(pal.CreatedDateTime) AS lastActivityDate
+            FROM PatientAuditLog pal WITH (NOLOCK)
+            JOIN Patient p WITH (NOLOCK) ON p.Id = pal.PatientId
+            JOIN Centre  c WITH (NOLOCK) ON c.Id = p.CentreId
+            WHERE pal.Type IN ('CaseRegistered', 'CaseAssigned')
+              AND ${dateFilter}
+              AND ${centreExclusion}
+              AND (@centreId IS NULL OR c.Id = @centreId)
+              AND p.FirstName NOT LIKE '%test%'
+              AND p.LastName  NOT LIKE '%test%'
+            GROUP BY pal.AdminUserId, p.CentreId
+          )
           SELECT
             au.Id,
             au.FirstName,
             au.LastName,
             au.Email,
             au.LastLoginDateTimeUtc,
-            ar.Name      AS roleName,
-            c.Id         AS centreId,
+            ar.Name  AS roleName,
+            c.Id     AS centreId,
             c.CentreName,
-            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered' AND p.CentreId = c.Id THEN p.Id END) AS casesRegistered,
-            COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'   AND p.CentreId = c.Id THEN p.Id END) AS casesAssignedToClinical,
-            SUM(CASE WHEN p.CentreId = c.Id THEN 1 ELSE 0 END) AS totalActions,
-            MAX(CASE WHEN p.CentreId = c.Id THEN pal.CreatedDateTime END) AS lastActivityDate
-          FROM AdminUser au
-          JOIN AdminUserRole aur ON aur.UserId = au.Id
-          JOIN AdminRole ar      ON ar.Id = aur.RoleId AND ar.Name != 'Clinician'
-          JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
-          JOIN Centre c            ON c.Id = auc.CentreId
-          LEFT JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id
-            AND ${dateFilter}
-          LEFT JOIN Patient p ON p.Id = pal.PatientId
+            ISNULL(cc.casesRegistered,        0) AS casesRegistered,
+            ISNULL(cc.casesAssignedToClinical, 0) AS casesAssignedToClinical,
+            cc.lastActivityDate
+          FROM AdminUser au WITH (NOLOCK)
+          JOIN AdminUserRole   aur WITH (NOLOCK) ON aur.UserId    = au.Id
+          JOIN AdminRole       ar  WITH (NOLOCK) ON ar.Id         = aur.RoleId
+            AND ar.Name != 'Clinician'
+          JOIN AdminUserCentre auc WITH (NOLOCK) ON auc.AdminUserId = au.Id
+          JOIN Centre          c   WITH (NOLOCK) ON c.Id            = auc.CentreId
+          LEFT JOIN case_counts cc ON cc.AdminUserId = au.Id AND cc.CentreId = c.Id
           WHERE (
               au.FirstName LIKE '%(Ops)%'
               OR au.LastName  LIKE '%(Ops)%'
@@ -93,13 +113,10 @@ router.get('/', async (req, res, next) => {
             AND LOWER(au.FirstName) NOT LIKE '%test%'
             AND LOWER(au.LastName)  NOT LIKE '%test%'
             AND LOWER(au.Email)     NOT LIKE '%@webority.com'
-          GROUP BY
-            au.Id, au.FirstName, au.LastName, au.Email,
-            au.LastLoginDateTimeUtc, ar.Name, c.Id, c.CentreName
           ORDER BY ar.Name, au.LastName, au.FirstName, c.CentreName
         `),
 
-      // Per-ops-admin core-job day counts
+      // Per-ops-admin core-job day counts (grouped by user only, not per-centre)
       pool.request()
         .input('centreId', sql.BigInt, centreId)
         .input('dateFrom', sql.DateTimeOffset, dateFrom)
@@ -113,14 +130,16 @@ router.get('/', async (req, res, next) => {
             ) AS coreJobDays,
             COUNT(DISTINCT CASE WHEN pal.Type = 'CaseRegistered' THEN pal.PatientId END) AS casesRegistered,
             COUNT(DISTINCT CASE WHEN pal.Type = 'CaseAssigned'   THEN pal.PatientId END) AS cliniciansAssigned,
-            MAX(pal.CreatedDateTime) AS lastActiveDate
-          FROM AdminUser au
-          JOIN AdminUserRole aur ON aur.UserId = au.Id
-          JOIN AdminRole ar      ON ar.Id = aur.RoleId AND ar.Name != 'Clinician'
-          JOIN AdminUserCentre auc ON auc.AdminUserId = au.Id
-          JOIN Centre c            ON c.Id = auc.CentreId
-          LEFT JOIN PatientAuditLog pal ON pal.AdminUserId = au.Id
+            MAX(pal_all.CreatedDateTime) AS lastActiveDate
+          FROM AdminUser au WITH (NOLOCK)
+          JOIN AdminUserRole   aur WITH (NOLOCK) ON aur.UserId    = au.Id
+          JOIN AdminRole       ar  WITH (NOLOCK) ON ar.Id         = aur.RoleId
+            AND ar.Name != 'Clinician'
+          JOIN AdminUserCentre auc WITH (NOLOCK) ON auc.AdminUserId = au.Id
+          JOIN Centre          c   WITH (NOLOCK) ON c.Id            = auc.CentreId
+          LEFT JOIN PatientAuditLog pal     WITH (NOLOCK) ON pal.AdminUserId     = au.Id
             AND ${dateFilter}
+          LEFT JOIN PatientAuditLog pal_all WITH (NOLOCK) ON pal_all.AdminUserId = au.Id
           WHERE (
               au.FirstName LIKE '%(Ops)%'
               OR au.LastName  LIKE '%(Ops)%'
@@ -159,7 +178,6 @@ router.get('/', async (req, res, next) => {
         centreName:              abbreviateCentre(r.CentreName) || null,
         casesRegistered:         r.casesRegistered ?? 0,
         casesAssignedToClinical: r.casesAssignedToClinical ?? 0,
-        totalActions:            r.totalActions ?? 0,
         lastActivityDate:        r.lastActivityDate || null,
         lastLoginDate:           r.LastLoginDateTimeUtc || null,
         // ── Consistency data ────────────────────────────────────────────────

@@ -23,5 +23,8 @@
     "morgan": "^1.10.0",
     "mssql": "^11.0.1",
     "node-cron": "^4.5.0"
+  },
+  "devDependencies": {
+    "exceljs": "^4.4.0"
   }
 }

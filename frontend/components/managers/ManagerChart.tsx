@@ -62,190 +62,19 @@ function KpiCard({
   );
 }
 
-// ─── Pending Assignments table ────────────────────────────────────────────────
-
-interface PendingRow {
-  centreId:   number;
-  centreName: string;
-  registered: number;
-  unassigned: number;
-}
-
-const PENDING_DEFAULT_VISIBLE = 10;
-
-function PendingAssignmentsTable({
-  rows,
-  loading,
-  onDrillDown,
-}: {
-  rows: PendingRow[];
-  loading: boolean;
-  onDrillDown?: OnRoleDrillDown;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [scrollCaptured, setScrollCaptured] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const collapse = useCallback(() => {
-    setExpanded(false);
-    setScrollCaptured(false);
-  }, []);
-
-  useEffect(() => {
-    if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') collapse(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [expanded, collapse]);
-
-  const sorted = [...rows].sort((a, b) => b.unassigned - a.unassigned);
-  const visible = expanded ? sorted : sorted.slice(0, PENDING_DEFAULT_VISIBLE);
-  const hiddenCount = sorted.length - PENDING_DEFAULT_VISIBLE;
-
-  if (!loading && rows.length === 0) return null;
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-3 border-b border-gray-100">
-        <h2 className="text-[15px] font-medium text-gray-900">Pending assignments</h2>
-        <p className="text-[12px] text-gray-500 mt-0.5">
-          Cases registered but not yet assigned to a clinician
-        </p>
-      </div>
-
-      {/* Table */}
-      <div
-        ref={containerRef}
-        className={[
-          'overflow-x-auto',
-          expanded && scrollCaptured ? 'overflow-y-auto max-h-[480px]' : '',
-        ].join(' ')}
-        style={expanded && !scrollCaptured ? { cursor: 'pointer' } : undefined}
-        onClick={() => { if (expanded && !scrollCaptured) setScrollCaptured(true); }}
-      >
-        <table className="w-full text-sm min-w-[480px]" role="table" aria-label="Pending assignments by centre">
-          <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
-            <tr>
-              <th className="px-5 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em] w-6">#</th>
-              <th className="px-4 py-[10px] text-left text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Centre</th>
-              <th className="px-4 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]">Registered</th>
-              <th
-                className="px-4 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]"
-                title="Cases registered but not yet assigned to a clinician"
-              >
-                Unassigned
-              </th>
-              <th
-                className="px-4 py-[10px] text-right text-[11px] font-medium text-gray-500 uppercase tracking-[0.03em]"
-                title="Average days the unassigned cases have been waiting"
-              >
-                Avg days waiting
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 5 }).map((__, j) => (
-                    <td key={j} className="px-4 py-3.5">
-                      <div className="h-4 bg-gray-100 rounded w-16" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : visible.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-gray-400">
-                  No pending assignments
-                </td>
-              </tr>
-            ) : (
-              visible.map((row, idx) => {
-                const unassignedColor =
-                  row.unassigned > 0
-                    ? 'text-rose-600 font-bold'
-                    : 'text-gray-300';
-
-                return (
-                  <tr key={row.centreId} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="px-5 py-3.5 text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</td>
-                    <td
-                      className="px-4 py-3.5 text-gray-700 font-medium max-w-[200px] truncate"
-                      title={row.centreName}
-                    >
-                      {shortCentreName(row.centreName)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-gray-600">
-                      {row.registered.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      {row.unassigned > 0 && onDrillDown ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDrillDown({
-                              type: 'manager-stuck-onboarding',
-                              drillCentreId: row.centreId,
-                              label: `Unassigned · ${row.centreName}`,
-                            });
-                          }}
-                          className={`tabular-nums rounded hover:bg-gray-100 px-1 -mx-1 py-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${unassignedColor}`}
-                        >
-                          {row.unassigned.toLocaleString()}
-                        </button>
-                      ) : (
-                        <span className={`tabular-nums ${unassignedColor}`}>
-                          {row.unassigned > 0 ? row.unassigned.toLocaleString() : '—'}
-                        </span>
-                      )}
-                    </td>
-                    {/* Avg days waiting — not available from current data */}
-                    <td className="px-4 py-3.5 text-right tabular-nums text-gray-300">
-                      —
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Expand/collapse */}
-      {!loading && sorted.length > PENDING_DEFAULT_VISIBLE && (
-        <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => { setExpanded((p) => !p); setScrollCaptured(false); }}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
-          >
-            {expanded ? 'Show fewer ↑' : `Show all ${sorted.length} centres ↓`}
-          </button>
-          {expanded && (
-            <p className="text-[11px] text-gray-400 flex-shrink-0">
-              {scrollCaptured
-                ? '↕ Scrolling active · Esc to collapse'
-                : '↕ Click table to scroll · Esc to collapse'}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Centre Activity Summary ──────────────────────────────────────────────────
+// ─── Centre Activity — Manager Output ────────────────────────────────────────
 
 interface ManagerCentreRow {
-  centreId:           number;
-  centreName:         string;
-  casesRegistered:    number;
-  assessmentsAssigned: number;
-  reportsApproved:    number | null;
-  goalsApproved:      number | null;
+  centreId:             number;
+  centreName:           string;
+  reportsToApprove:     number;
+  goalsToApprove:       number;
+  casesRegistered:      number;
+  assessmentsAssigned:  number;
+  reportsApproved:      number | null;
+  goalsApproved:        number | null;
+  avgApprovalDays:      number | null;
+  progressNotes:        number;
 }
 
 function buildManagerCentreRows(
@@ -254,38 +83,72 @@ function buildManagerCentreRows(
 ): ManagerCentreRow[] {
   const byCentre = aggregateManagersByCentre(managers);
   const wMap = new Map(workload?.map((r) => [r.centreId, r]) ?? []);
+
+  // Aggregate pending counts and progressNotes from manager data by primaryCentreId
+  const pendingMap = new Map<number, { reportsToApprove: number; goalsToApprove: number; progressNotes: number }>();
+  const visible = managers.filter((m) => m.roleName !== 'Super Admin');
+  for (const m of visible) {
+    if (m.centreId == null) continue;
+    const ex = pendingMap.get(m.centreId);
+    if (ex) {
+      ex.reportsToApprove += m.reportsToApprove ?? 0;
+      ex.goalsToApprove   += m.goalsToApprove   ?? 0;
+      ex.progressNotes    += m.progressNotes     ?? 0;
+    } else {
+      pendingMap.set(m.centreId, {
+        reportsToApprove: m.reportsToApprove ?? 0,
+        goalsToApprove:   m.goalsToApprove   ?? 0,
+        progressNotes:    m.progressNotes     ?? 0,
+      });
+    }
+  }
+
   return byCentre.map((r) => {
-    const w = wMap.get(r.centreId);
+    const w    = wMap.get(r.centreId);
+    const pend = pendingMap.get(r.centreId) ?? { reportsToApprove: 0, goalsToApprove: 0, progressNotes: 0 };
     return {
-      centreId:            r.centreId,
-      centreName:          r.centreName,
-      casesRegistered:     r.metric1,
-      assessmentsAssigned: r.metric2,
-      reportsApproved:     w != null ? w.managerReportsApproved : null,
-      goalsApproved:       w != null ? w.managerGoalsApproved   : null,
+      centreId:             r.centreId,
+      centreName:           r.centreName,
+      reportsToApprove:     pend.reportsToApprove,
+      goalsToApprove:       pend.goalsToApprove,
+      casesRegistered:      r.metric1,
+      assessmentsAssigned:  r.metric2,
+      reportsApproved:      w != null ? w.managerReportsApproved : null,
+      goalsApproved:        w != null ? w.managerGoalsApproved   : null,
+      avgApprovalDays:      w?.avgApprovalDays ?? null,
+      progressNotes:        pend.progressNotes,
     };
   });
 }
 
 const CENTRE_DEFAULT_VISIBLE = 10;
 
-type CentreColKey = 'centreName' | 'casesRegistered' | 'assessmentsAssigned' | 'reportsApproved' | 'goalsApproved';
+type CentreColKey =
+  | 'centreName'
+  | 'reportsToApprove'
+  | 'goalsToApprove'
+  | 'reportsApproved'
+  | 'goalsApproved'
+  | 'avgApprovalDays'
+  | 'casesRegistered'
+  | 'assessmentsAssigned'
+  | 'progressNotes';
+
 type SortDir = 'asc' | 'desc';
 
 interface CentreSortThProps {
-  col:      CentreColKey;
-  label:    string;
-  tip?:     string;
-  align?:   'left' | 'right';
-  active:   boolean;
-  dir:      SortDir;
-  onSort:   (col: CentreColKey) => void;
+  col:    CentreColKey;
+  label:  string;
+  tip?:   string;
+  align?: 'left' | 'right';
+  active: boolean;
+  dir:    SortDir;
+  onSort: (col: CentreColKey) => void;
 }
 
 function CentreSortTh({ col, label, tip, align = 'right', active, dir, onSort }: CentreSortThProps) {
   return (
     <th
-      title={tip}
       onClick={(e) => { e.stopPropagation(); onSort(col); }}
       aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       className={[
@@ -297,6 +160,11 @@ function CentreSortTh({ col, label, tip, align = 'right', active, dir, onSort }:
     >
       <span className="inline-flex items-center gap-0.5">
         {label}
+        {tip && (
+          <span className="text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal" title={tip}>
+            ⓘ
+          </span>
+        )}
         {active && (
           <span className="text-[10px] text-gray-600">{dir === 'asc' ? '↑' : '↓'}</span>
         )}
@@ -305,6 +173,20 @@ function CentreSortTh({ col, label, tip, align = 'right', active, dir, onSort }:
   );
 }
 
+// ── CSV export ─────────────────────────────────────────────────────────────────
+function exportCsv(filename: string, headers: string[], rows: string[][]): void {
+  const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [headers, ...rows].map((r) => r.map(escape).join(','));
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function todayStr(): string { return new Date().toISOString().slice(0, 10); }
+
 function ManagerCentreActivityTableInner({
   rows,
   loading,
@@ -312,7 +194,7 @@ function ManagerCentreActivityTableInner({
   rows: ManagerCentreRow[];
   loading: boolean;
 }) {
-  const [sort, setSort]         = useState<{ col: CentreColKey; dir: SortDir }>({ col: 'casesRegistered', dir: 'desc' });
+  const [sort, setSort]         = useState<{ col: CentreColKey; dir: SortDir }>({ col: 'reportsToApprove', dir: 'desc' });
   const [expanded, setExpanded] = useState(false);
   const [scrollCaptured, setScrollCaptured] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -337,9 +219,15 @@ function ManagerCentreActivityTableInner({
     );
   }, []);
 
+  const getRowVal = (row: ManagerCentreRow, col: CentreColKey): number | string => {
+    if (col === 'centreName') return row.centreName;
+    if (col === 'avgApprovalDays') return row.avgApprovalDays ?? -1;
+    return (row[col] as number | null) ?? -1;
+  };
+
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sort.col] ?? (sort.col === 'centreName' ? '' : -1);
-    const bv = b[sort.col] ?? (sort.col === 'centreName' ? '' : -1);
+    const av = getRowVal(a, sort.col);
+    const bv = getRowVal(b, sort.col);
     if (av === bv) return 0;
     if (typeof av === 'string' && typeof bv === 'string') {
       return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -350,13 +238,40 @@ function ManagerCentreActivityTableInner({
   const visible = expanded ? sorted : sorted.slice(0, CENTRE_DEFAULT_VISIBLE);
   const { col: sortCol, dir: sortDir } = sort;
 
+  const handleExport = useCallback(() => {
+    exportCsv(
+      `unity-centre-manager-activity-${todayStr()}.csv`,
+      ['Centre', 'Reports to Approve', 'Goals to Approve', 'Reports Approved', 'Goals Approved', 'Avg Approval Time', 'Cases Registered', 'Assessments Assigned', 'Progress Notes'],
+      rows.map((r) => [
+        r.centreName,
+        String(r.reportsToApprove),
+        String(r.goalsToApprove),
+        String(r.reportsApproved ?? 0),
+        String(r.goalsApproved ?? 0),
+        r.avgApprovalDays != null ? `${r.avgApprovalDays.toFixed(1)}d` : 'N/A',
+        String(r.casesRegistered),
+        String(r.assessmentsAssigned),
+        String(r.progressNotes),
+      ]),
+    );
+  }, [rows]);
+
+  const colCount = 10; // # + 9 data cols
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
-        <h2 className="text-[15px] font-medium text-gray-900">Centre Activity Summary</h2>
-        <p className="text-[12px] text-gray-500 mt-0.5">
-          Manager activity by centre · sorted by cases registered
-        </p>
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-[15px] font-medium text-gray-900">Centre activity — manager output</h2>
+          <p className="text-[12px] text-gray-500 mt-0.5">Manager KPIs aggregated by centre</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleExport}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors shrink-0"
+        >
+          ↓ Export CSV
+        </button>
       </div>
 
       <div
@@ -367,24 +282,36 @@ function ManagerCentreActivityTableInner({
         ].join(' ')}
         style={expanded && !scrollCaptured ? { cursor: 'pointer' } : undefined}
         onClick={() => { if (expanded && !scrollCaptured) setScrollCaptured(true); }}
-        aria-label="Centre activity summary table region"
+        aria-label="Centre activity — manager output table region"
       >
-        <table className="w-full text-sm min-w-[580px]" role="table" aria-label="Centre Activity Summary">
+        <table className="w-full text-sm min-w-[860px]" role="table" aria-label="Centre activity — manager output">
           <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
             <tr>
               <th className="px-5 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.03em] text-gray-500 w-8">#</th>
-              <CentreSortTh col="centreName"          label="Centre"               tip=""                                                     align="left" active={sortCol === 'centreName'}          dir={sortDir} onSort={toggleSort} />
-              <CentreSortTh col="casesRegistered"     label="Cases Registered"     tip="Cases registered by managers at this centre"          active={sortCol === 'casesRegistered'}     dir={sortDir} onSort={toggleSort} />
-              <CentreSortTh col="assessmentsAssigned" label="Assessments Assigned" tip="Assessments assigned to clinicians by managers"       active={sortCol === 'assessmentsAssigned'} dir={sortDir} onSort={toggleSort} />
-              <CentreSortTh col="reportsApproved"     label="Reports Approved"     tip="Report PDFs approved by managers at this centre"     active={sortCol === 'reportsApproved'}     dir={sortDir} onSort={toggleSort} />
-              <CentreSortTh col="goalsApproved"       label="Goals Approved"       tip="Goals approved by managers at this centre"           active={sortCol === 'goalsApproved'}       dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="centreName"          label="Centre"               align="left" active={sortCol === 'centreName'}          dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="reportsToApprove"    label="Reports to Approve"   tip="Reports drafted by clinicians awaiting manager approval at this centre."
+                            active={sortCol === 'reportsToApprove'} dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="goalsToApprove"      label="Goals to Approve"     tip="Goals awaiting manager approval at this centre."
+                            active={sortCol === 'goalsToApprove'}   dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="reportsApproved"     label="Reports Approved"     tip="Reports signed off by managers at this centre in the period."
+                            active={sortCol === 'reportsApproved'}  dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="goalsApproved"       label="Goals Approved"       tip="Goals signed off by managers at this centre in the period."
+                            active={sortCol === 'goalsApproved'}    dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="avgApprovalDays"     label="Avg Approval Time"    tip="Average days from report draft to manager approval in the period."
+                            active={sortCol === 'avgApprovalDays'}  dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="casesRegistered"     label="Cases Registered"     tip="Cases registered by managers at this centre in the period."
+                            active={sortCol === 'casesRegistered'}  dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="assessmentsAssigned" label="Assessments Assigned" tip="Assessments routed to clinicians by managers at this centre in the period."
+                            active={sortCol === 'assessmentsAssigned'} dir={sortDir} onSort={toggleSort} />
+              <CentreSortTh col="progressNotes"       label="Progress Notes"       tip="Therapy progress notes added at this centre in the period."
+                            active={sortCol === 'progressNotes'}    dir={sortDir} onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse border-b border-gray-50">
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: colCount }).map((__, j) => (
                     <td key={j} className="px-4 py-3.5">
                       <div className="h-4 bg-gray-100 rounded" style={{ width: j === 1 ? 140 : 48 }} />
                     </td>
@@ -393,7 +320,7 @@ function ManagerCentreActivityTableInner({
               ))
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-gray-400 text-sm">
+                <td colSpan={colCount} className="px-6 py-10 text-center text-gray-400 text-sm">
                   No centre data
                 </td>
               </tr>
@@ -403,19 +330,35 @@ function ManagerCentreActivityTableInner({
                   key={row.centreId}
                   className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
                 >
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-[10px]">
                     <span className="text-[11px] font-bold text-gray-300 tabular-nums">{idx + 1}</span>
                   </td>
-                  <td
-                    className="px-4 py-3.5 font-semibold text-gray-800 max-w-[180px] truncate"
-                    title={row.centreName}
-                  >
+                  <td className="px-4 py-[10px] font-semibold text-gray-800 max-w-[180px] truncate" title={row.centreName}>
                     {shortCentreName(row.centreName)}
+                  </td>
+                  {/* Reports to Approve — red if > 0 */}
+                  <td className="px-4 py-[10px] text-right">
+                    <span className={`tabular-nums font-bold ${row.reportsToApprove > 0 ? 'text-[#A32D2D]' : 'text-gray-300'}`}>
+                      {row.reportsToApprove > 0 ? row.reportsToApprove.toLocaleString() : '—'}
+                    </span>
+                  </td>
+                  {/* Goals to Approve — red if > 0 */}
+                  <td className="px-4 py-[10px] text-right">
+                    <span className={`tabular-nums font-bold ${row.goalsToApprove > 0 ? 'text-[#A32D2D]' : 'text-gray-300'}`}>
+                      {row.goalsToApprove > 0 ? row.goalsToApprove.toLocaleString() : '—'}
+                    </span>
+                  </td>
+                  <NumCell value={row.reportsApproved} />
+                  <NumCell value={row.goalsApproved} />
+                  {/* Avg Approval Time */}
+                  <td className={`px-4 py-[10px] text-right tabular-nums whitespace-nowrap ${avgDaysColor(row.avgApprovalDays)}`}>
+                    {row.avgApprovalDays != null
+                      ? `${row.avgApprovalDays.toFixed(1)}d`
+                      : <span className="text-gray-300">N/A</span>}
                   </td>
                   <NumCell value={row.casesRegistered} />
                   <NumCell value={row.assessmentsAssigned} />
-                  <NumCell value={row.reportsApproved} />
-                  <NumCell value={row.goalsApproved} />
+                  <NumCell value={row.progressNotes} />
                 </tr>
               ))
             )}
@@ -430,7 +373,7 @@ function ManagerCentreActivityTableInner({
             onClick={() => { setExpanded((p) => !p); setScrollCaptured(false); }}
             className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
           >
-            {expanded ? 'Show fewer ↑' : `Show all ${sorted.length} centres ↓`}
+            {expanded ? 'Show fewer ↑' : `Show all ${sorted.length} rows ↓`}
           </button>
           {expanded && (
             <p className="text-[11px] text-gray-400 flex-shrink-0">
@@ -445,12 +388,19 @@ function ManagerCentreActivityTableInner({
   );
 }
 
+function avgDaysColor(days: number | null | undefined): string {
+  if (days == null) return 'text-gray-400';
+  if (days < 2)  return 'text-[#1D9E75] font-semibold';
+  if (days <= 5) return 'text-[#BA7517]';
+  return 'text-[#A32D2D] font-semibold';
+}
+
 function NumCell({ value }: { value: number | null }) {
   if (value == null) {
-    return <td className="px-4 py-3.5 text-right tabular-nums text-gray-300">—</td>;
+    return <td className="px-4 py-[10px] text-right tabular-nums text-gray-300">—</td>;
   }
   return (
-    <td className="px-4 py-3.5 text-right tabular-nums font-bold text-gray-900">
+    <td className="px-4 py-[10px] text-right tabular-nums font-bold text-gray-900">
       {value > 0 ? value.toLocaleString() : <span className="text-gray-300 font-normal">—</span>}
     </td>
   );
@@ -527,16 +477,6 @@ export default function ManagerChart({
     totalProgressNotes   += m.progressNotes   ?? 0;
     totalGoalsDocumented += m.goalsDocumented ?? 0;
   }
-
-  // Pending assignments rows — per centre, sorted by unassigned desc
-  const pendingRows: PendingRow[] = byCentre
-    .filter((r) => r.metric1 > 0)
-    .map((r) => ({
-      centreId:   r.centreId,
-      centreName: r.centreName,
-      registered: r.metric1,
-      unassigned: Math.max(0, r.metric1 - r.metric2),
-    }));
 
   // Centre activity summary — merge manager aggregation with workload data
   const centreActivityRows = buildManagerCentreRows(managers, workload ?? null);
@@ -632,13 +572,6 @@ export default function ManagerChart({
           onClose={() => setActiveManagersOpen(false)}
         />
       )}
-
-      {/* ── Pending assignments table ──────────────────────────────────────── */}
-      <PendingAssignmentsTable
-        rows={pendingRows}
-        loading={loading}
-        onDrillDown={drill}
-      />
 
       {/* ── Centre Activity Summary — only when not deferred to parent ─────── */}
       {!hideCentreActivity && (

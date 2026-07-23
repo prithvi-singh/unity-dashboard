@@ -19,13 +19,14 @@ export function useWorkload(filters: FilterParams, enabled = true): UseWorkloadR
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const doFetch = useCallback(async () => {
+  const doFetch = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchWorkload(filtersRef.current);
+      const result = await fetchWorkload(filtersRef.current, signal);
       setData(result);
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to load workload data');
     } finally {
       setLoading(false);
@@ -34,7 +35,9 @@ export function useWorkload(filters: FilterParams, enabled = true): UseWorkloadR
 
   useEffect(() => {
     if (!enabled) return;
-    doFetch();
+    const controller = new AbortController();
+    doFetch(controller.signal);
+    return () => controller.abort();
   }, [enabled, doFetch, filters.centreId, filters.dateFrom, filters.dateTo]);
 
   return { data, loading, error, refetch: doFetch };

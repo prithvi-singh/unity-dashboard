@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useUserSummaryProfile } from '@/hooks/useUserSummaryProfile';
 import type { UserSummaryAssessmentBreakdown, UserSummaryActivity } from '@/lib/types';
+import RoleBadge from '@/components/shared/RoleBadge';
+import { resolveRoleSlug } from '@/lib/resolveRole';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,28 +27,6 @@ function fmtDaysAgo(iso: string | null | undefined): string {
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
   return `${diff}d ago`;
-}
-
-function isClinician(roleName: string | null | undefined): boolean {
-  return (roleName ?? '').toLowerCase().includes('clinician');
-}
-
-// ── Role badge ────────────────────────────────────────────────────────────────
-
-const ROLE_STYLES: Record<string, string> = {
-  clinician:   'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-  manager:     'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
-  'centre admin': 'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
-  admin:       'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
-};
-
-function roleBadgeStyle(roleName: string | null): string {
-  if (!roleName) return 'bg-gray-50 text-gray-500 ring-1 ring-gray-200';
-  const lower = roleName.toLowerCase();
-  for (const [key, style] of Object.entries(ROLE_STYLES)) {
-    if (lower.includes(key)) return style;
-  }
-  return 'bg-gray-50 text-gray-500 ring-1 ring-gray-200';
 }
 
 // ── Audit-based activity status ───────────────────────────────────────────────
@@ -206,7 +186,9 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
 
   if (!isOpen) return null;
 
-  const clinician = data ? isClinician(data.roleName) : false;
+  const clinician = data
+    ? resolveRoleSlug({ firstName: data.firstName, lastName: data.lastName, roleName: data.roleName }) === 'clinician'
+    : false;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
@@ -252,11 +234,11 @@ export default function UserProfileDrawer({ userId, onClose }: Props) {
                     const badge = ACTIVITY_BADGE[activityStatus];
                     return (
                       <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                        {data.roleName && (
-                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadgeStyle(data.roleName)}`}>
-                            {data.roleName}
-                          </span>
-                        )}
+                        <RoleBadge
+                          firstName={data.firstName}
+                          lastName={data.lastName}
+                          roleName={data.roleName}
+                        />
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.ring}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                           {badge.label}

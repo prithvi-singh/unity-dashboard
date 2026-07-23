@@ -40,7 +40,7 @@ const config = {
     // Keep 2 warm connections at all times so the first requests after a
     // period of low traffic don't pay the TCP handshake + TLS cost.
     min: 2,
-    idleTimeoutMillis: 30000,
+    idleTimeoutMillis: 60000,
     // Fail fast if all connections are busy rather than queuing indefinitely.
     acquireTimeoutMillis: 15000,
   },

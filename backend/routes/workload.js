@@ -47,9 +47,10 @@ router.get('/', async (req, res, next) => {
     const centreExcl      = buildCentreExclusion('c');
     const patExclP        = buildPatientExclusion('p');
     const patExclPt       = buildPatientExclusion('pt');
-    const dateFilterPal        = buildDateFilter('pal.CreatedDateTime',    '@dateFrom', '@dateTo');
-    const dateFilterGoalsAdded = buildDateFilter('pgarg.CreatedDateTimeUtc', '@dateFrom', '@dateTo');
-    const dateFilterGoals      = buildDateFilter('pgarg.UpdatedDateTimeUtc', '@dateFrom', '@dateTo');
+    const dateFilterPal        = buildDateFilter('pal.CreatedDateTime',       '@dateFrom', '@dateTo');
+    const dateFilterPdfPal     = buildDateFilter('pdf_pal.CreatedDateTime',   '@dateFrom', '@dateTo');
+    const dateFilterGoalsAdded = buildDateFilter('pgarg.CreatedDateTimeUtc',  '@dateFrom', '@dateTo');
+    const dateFilterGoals      = buildDateFilter('pgarg.UpdatedDateTimeUtc',  '@dateFrom', '@dateTo');
 
     const result = await pool.request()
       .input('centreId', sql.BigInt, centreId)
@@ -63,8 +64,11 @@ router.get('/', async (req, res, next) => {
             AND ${centreFilter}
         ),
         -- Active (non-closed) caseload — live snapshot, not date-filtered
+        -- COUNT(DISTINCT PatientId) matches source of truth: one patient can have
+        -- multiple AllocatePatient rows (e.g. multiple assessments) so counting
+        -- ap.Id would inflate the figure relative to unique cases.
         caseload_cte AS (
-          SELECT pt.CentreId, COUNT(ap.Id) AS caseload
+          SELECT pt.CentreId, COUNT(DISTINCT ap.PatientId) AS caseload
           FROM AllocatePatient ap
           JOIN Patient pt ON pt.Id = ap.PatientId
           JOIN Centre  c  ON c.Id  = pt.CentreId
@@ -74,61 +78,51 @@ router.get('/', async (req, res, next) => {
             AND ${centreFilterPt}
           GROUP BY pt.CentreId
         ),
-        -- Reports Drafted: distinct AllocatePatientId per centre so the card
-        -- matches the drill-down drawer which groups by AllocatePatient.Id.
-        -- Multiple ReportAdded events for the same assessment (re-drafts) are
-        -- deduped; NULL AllocatePatientId rows are excluded by COUNT DISTINCT.
-        drafted_cte AS (
-          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS reportsDrafted
-          FROM PatientAuditLog pal
-          JOIN Patient p ON p.Id = pal.PatientId
-          JOIN Centre  c ON c.Id = p.CentreId
-          WHERE pal.Type = 'ReportAdded'
-            AND pal.AllocatePatientId IS NOT NULL
+        -- Combined single-pass scan of PatientAuditLog for all date-filtered metrics.
+        -- Replaces 5 separate CTEs (drafted, edits, scored, progressNotes, approved)
+        -- with one table scan, reducing query cost ~5×.
+        pal_metrics_cte AS (
+          SELECT
+            p.CentreId,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'ReportAdded'             AND pal.AllocatePatientId IS NOT NULL THEN pal.AllocatePatientId END) AS reportsDrafted,
+            SUM(CASE WHEN pal.Type = 'UpdateReport'              THEN 1 ELSE 0 END) AS reportEdits,
+            SUM(CASE WHEN pal.Type = 'AssessmentResultGenerated' THEN 1 ELSE 0 END) AS assessmentsScored,
+            SUM(CASE WHEN pal.Type = 'ProgressAdded'             THEN 1 ELSE 0 END) AS progressNotes,
+            COUNT(DISTINCT CASE WHEN pal.Type = 'ReportPDFGenerated' AND pal.AllocatePatientId IS NOT NULL THEN pal.AllocatePatientId END) AS reportsApproved
+          FROM PatientAuditLog pal WITH (NOLOCK)
+          JOIN Patient p WITH (NOLOCK) ON p.Id = pal.PatientId
+          JOIN Centre  c WITH (NOLOCK) ON c.Id = p.CentreId
+          WHERE pal.Type IN ('ReportAdded', 'UpdateReport', 'AssessmentResultGenerated', 'ProgressAdded', 'ReportPDFGenerated')
             AND ${centreExcl}
             AND ${patExclP}
             AND ${centreFilter}
             AND ${dateFilterPal}
           GROUP BY p.CentreId
         ),
-        -- Report Edits: UpdateReport events (informational — flags potential padding)
-        edits_cte AS (
-          SELECT p.CentreId, COUNT(*) AS reportEdits
-          FROM PatientAuditLog pal
-          JOIN Patient p ON p.Id = pal.PatientId
-          JOIN Centre  c ON c.Id = p.CentreId
-          WHERE pal.Type = 'UpdateReport'
+        -- Avg Approval Time: avg days from first ReportAdded to ReportPDFGenerated per centre.
+        -- Inner draft_sub bounded to 180 days before @dateFrom to prevent full-table scan.
+        avg_approval_cte AS (
+          SELECT
+            p.CentreId,
+            AVG(CAST(DATEDIFF(day, draft_sub.firstDraftDate, pdf_pal.CreatedDateTime) AS FLOAT)) AS avgApprovalDays
+          FROM PatientAuditLog pdf_pal WITH (NOLOCK)
+          JOIN (
+            SELECT AllocatePatientId, MIN(CreatedDateTime) AS firstDraftDate
+            FROM PatientAuditLog WITH (NOLOCK)
+            WHERE Type = 'ReportAdded'
+              AND AllocatePatientId IS NOT NULL
+              AND CreatedDateTime >= DATEADD(day, -180, @dateFrom)
+            GROUP BY AllocatePatientId
+          ) draft_sub ON draft_sub.AllocatePatientId = pdf_pal.AllocatePatientId
+                      AND draft_sub.firstDraftDate <= pdf_pal.CreatedDateTime
+          JOIN Patient p WITH (NOLOCK) ON p.Id = pdf_pal.PatientId
+          JOIN Centre  c WITH (NOLOCK) ON c.Id = p.CentreId
+          WHERE pdf_pal.Type = 'ReportPDFGenerated'
+            AND pdf_pal.AllocatePatientId IS NOT NULL
             AND ${centreExcl}
             AND ${patExclP}
             AND ${centreFilter}
-            AND ${dateFilterPal}
-          GROUP BY p.CentreId
-        ),
-        -- Reports Approved: distinct ReportPDFGenerated events per assessment
-        approved_cte AS (
-          SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS reportsApproved
-          FROM PatientAuditLog pal
-          JOIN Patient p ON p.Id = pal.PatientId
-          JOIN Centre  c ON c.Id = p.CentreId
-          WHERE pal.Type = 'ReportPDFGenerated'
-            AND pal.AllocatePatientId IS NOT NULL
-            AND ${centreExcl}
-            AND ${patExclP}
-            AND ${centreFilter}
-            AND ${dateFilterPal}
-          GROUP BY p.CentreId
-        ),
-        -- Goals Added: GoalAdded events
-        goals_added_cte AS (
-          SELECT p.CentreId, COUNT(*) AS goalsAdded
-          FROM PatientAuditLog pal
-          JOIN Patient p ON p.Id = pal.PatientId
-          JOIN Centre  c ON c.Id = p.CentreId
-          WHERE pal.Type = 'GoalAdded'
-            AND ${centreExcl}
-            AND ${patExclP}
-            AND ${centreFilter}
-            AND ${dateFilterPal}
+            AND ${dateFilterPdfPal}
           GROUP BY p.CentreId
         ),
         -- Goals Added: distinct assessments + individual item count (by submission date).
@@ -137,11 +131,11 @@ router.get('/', async (req, res, next) => {
             pt.CentreId,
             COUNT(DISTINCT pgar.AllocatePatientId) AS goalsAdded,
             COUNT(*)                               AS goalsAddedItems
-          FROM PatientGoalApprovalRequestGoal pgarg
-          JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
-          JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
-          JOIN Patient pt                      ON pt.Id   = ap.PatientId
-          JOIN Centre  c                       ON c.Id    = pt.CentreId
+          FROM PatientGoalApprovalRequestGoal pgarg WITH (NOLOCK)
+          JOIN PatientGoalApprovalRequest pgar WITH (NOLOCK) ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+          JOIN AllocatePatient ap              WITH (NOLOCK) ON ap.Id   = pgar.AllocatePatientId
+          JOIN Patient pt                      WITH (NOLOCK) ON pt.Id   = ap.PatientId
+          JOIN Centre  c                       WITH (NOLOCK) ON c.Id    = pt.CentreId
           WHERE ${centreExcl}
             AND ${patExclPt}
             AND ${centreFilterPt}
@@ -154,11 +148,11 @@ router.get('/', async (req, res, next) => {
             pt.CentreId,
             COUNT(DISTINCT pgar.AllocatePatientId) AS goalsApproved,
             COUNT(*)                               AS goalsApprovedItems
-          FROM PatientGoalApprovalRequestGoal pgarg
-          JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
-          JOIN AllocatePatient ap              ON ap.Id   = pgar.AllocatePatientId
-          JOIN Patient pt                      ON pt.Id   = ap.PatientId
-          JOIN Centre  c                       ON c.Id    = pt.CentreId
+          FROM PatientGoalApprovalRequestGoal pgarg WITH (NOLOCK)
+          JOIN PatientGoalApprovalRequest pgar WITH (NOLOCK) ON pgar.Id = pgarg.PatientGoalApprovalRequestId
+          JOIN AllocatePatient ap              WITH (NOLOCK) ON ap.Id   = pgar.AllocatePatientId
+          JOIN Patient pt                      WITH (NOLOCK) ON pt.Id   = ap.PatientId
+          JOIN Centre  c                       WITH (NOLOCK) ON c.Id    = pt.CentreId
           WHERE pgarg.Status = 'Approved'
             AND ${centreExcl}
             AND ${patExclPt}
@@ -170,12 +164,12 @@ router.get('/', async (req, res, next) => {
         -- (excludes Clinician and Super Admin roles)
         mgr_reports_cte AS (
           SELECT p.CentreId, COUNT(DISTINCT pal.AllocatePatientId) AS managerReportsApproved
-          FROM PatientAuditLog pal
-          JOIN Patient p   ON p.Id  = pal.PatientId
-          JOIN Centre  c   ON c.Id  = p.CentreId
-          JOIN AdminUser au        ON au.Id  = pal.AdminUserId
-          JOIN AdminUserRole aur   ON aur.UserId = au.Id
-          JOIN AdminRole ar        ON ar.Id  = aur.RoleId
+          FROM PatientAuditLog pal WITH (NOLOCK)
+          JOIN Patient p   WITH (NOLOCK) ON p.Id  = pal.PatientId
+          JOIN Centre  c   WITH (NOLOCK) ON c.Id  = p.CentreId
+          JOIN AdminUser au              ON au.Id  = pal.AdminUserId
+          JOIN AdminUserRole aur         ON aur.UserId = au.Id
+          JOIN AdminRole ar              ON ar.Id  = aur.RoleId
             AND ar.Name NOT IN ('Clinician', 'Super Admin')
           WHERE pal.Type = 'ReportPDFGenerated'
             AND pal.AllocatePatientId IS NOT NULL
@@ -240,9 +234,10 @@ router.get('/', async (req, res, next) => {
           cb.centreId,
           cb.CentreName,
           ISNULL(cl.caseload,                       0) AS caseload,
-          ISNULL(d.reportsDrafted,                  0) AS reportsDrafted,
-          ISNULL(e.reportEdits,                     0) AS reportEdits,
-          ISNULL(a.reportsApproved,                 0) AS reportsApproved,
+          ISNULL(pm.assessmentsScored,              0) AS assessmentsScored,
+          ISNULL(pm.reportsDrafted,                 0) AS reportsDrafted,
+          ISNULL(pm.reportEdits,                    0) AS reportEdits,
+          ISNULL(pm.reportsApproved,                0) AS reportsApproved,
           ISNULL(ga.goalsAdded,                     0) AS goalsAdded,
           ISNULL(ga.goalsAddedItems,                0) AS goalsAddedItems,
           ISNULL(gap.goalsApproved,                 0) AS goalsApproved,
@@ -251,17 +246,18 @@ router.get('/', async (req, res, next) => {
           ISNULL(mg.managerGoalsApproved,           0) AS managerGoalsApproved,
           ISNULL(mg.managerGoalsApprovedItems,      0) AS managerGoalsApprovedItems,
           ISNULL(mga.managerGoalsAdded,             0) AS managerGoalsAdded,
-          ISNULL(mga.managerGoalsAddedItems,        0) AS managerGoalsAddedItems
+          ISNULL(mga.managerGoalsAddedItems,        0) AS managerGoalsAddedItems,
+          ISNULL(pm.progressNotes,                  0) AS progressNotes,
+          aa.avgApprovalDays
         FROM centre_base cb
         LEFT JOIN caseload_cte          cl  ON cl.CentreId  = cb.centreId
-        LEFT JOIN drafted_cte           d   ON d.CentreId   = cb.centreId
-        LEFT JOIN edits_cte             e   ON e.CentreId   = cb.centreId
-        LEFT JOIN approved_cte          a   ON a.CentreId   = cb.centreId
+        LEFT JOIN pal_metrics_cte       pm  ON pm.CentreId  = cb.centreId
         LEFT JOIN goals_added_cte       ga  ON ga.CentreId  = cb.centreId
         LEFT JOIN goals_approved_cte    gap ON gap.CentreId = cb.centreId
         LEFT JOIN mgr_reports_cte       mr  ON mr.CentreId  = cb.centreId
         LEFT JOIN mgr_goals_cte         mg  ON mg.CentreId  = cb.centreId
         LEFT JOIN mgr_goals_added_cte   mga ON mga.CentreId = cb.centreId
+        LEFT JOIN avg_approval_cte      aa  ON aa.CentreId  = cb.centreId
         ORDER BY ISNULL(cl.caseload, 0) DESC, cb.CentreName
       `);
 
@@ -269,6 +265,7 @@ router.get('/', async (req, res, next) => {
       centreId:                    r.centreId,
       centreName:                  abbreviateCentre(r.CentreName),
       caseload:                    r.caseload,
+      assessmentsScored:           r.assessmentsScored,
       reportsDrafted:              r.reportsDrafted,
       reportEdits:                 r.reportEdits,
       reportsApproved:             r.reportsApproved,
@@ -281,6 +278,8 @@ router.get('/', async (req, res, next) => {
       managerGoalsApprovedItems:   r.managerGoalsApprovedItems,
       managerGoalsAdded:           r.managerGoalsAdded,
       managerGoalsAddedItems:      r.managerGoalsAddedItems,
+      progressNotes:               r.progressNotes,
+      avgApprovalDays:             r.avgApprovalDays != null ? Math.round(r.avgApprovalDays * 10) / 10 : null,
     })));
   } catch (err) {
     next(err);

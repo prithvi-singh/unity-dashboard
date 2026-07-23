@@ -32,6 +32,8 @@ const VALID_TYPES = new Set([
   'manager-registered',
   'manager-assigned',
   'manager-stuck-onboarding',
+  'manager-pending-reports',
+  'manager-pending-goals',
   'admin-registered',
   'admin-assigned',
   'admin-unassigned',
@@ -53,6 +55,8 @@ const TYPE_LABELS = {
   'manager-registered': 'Cases registered',
   'manager-assigned': 'Assessments assigned',
   'manager-stuck-onboarding': 'Stuck onboarding (>48h)',
+  'manager-pending-reports': 'Reports awaiting approval',
+  'manager-pending-goals': 'Goals awaiting approval',
   'admin-registered': 'Cases registered',
   'admin-assigned': 'Routed to clinical',
   'admin-unassigned': 'Awaiting clinical assignment',
@@ -658,6 +662,114 @@ async function queryManagerStuckOnboarding(ctx) {
   return result.recordset.map(mapPatientRow);
 }
 
+async function queryManagerPendingReports(ctx) {
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr, dateFilterPal } = ctx;
+  const apNotTerminal = terminalStatusExclusion('ap');
+  const pool = await poolPromise;
+  const result = await bindAll(pool.request()).query(`
+    WITH ReportDrafted AS (
+      SELECT
+        ap.Id              AS apId,
+        ap.PatientId,
+        ap.Status,
+        ap.Assessment,
+        ap.ClinicianUserId,
+        MIN(pal.CreatedDateTime) AS reportAddedAt
+      FROM AllocatePatient ap
+      JOIN PatientAuditLog pal
+        ON pal.AllocatePatientId = ap.Id
+       AND pal.Type = 'ReportAdded'
+       AND ${dateFilterPal}
+      WHERE ap.Assessment IN ('SPM', 'DP3', 'REELS', 'ISAA')
+        AND ${apNotTerminal}
+      GROUP BY ap.Id, ap.PatientId, ap.Status, ap.Assessment, ap.ClinicianUserId
+    )
+    SELECT TOP (${MAX_ITEMS})
+      'Awaiting approval' AS category,
+      pt.Id    AS patientId,
+      pt.PatientID AS patientCode,
+      ${patientNameExpr} AS patientName,
+      c.Id     AS centreId,
+      c.CentreName AS centreName,
+      rd.reportAddedAt AS eventAt,
+      CAST(DATEDIFF(minute, rd.reportAddedAt, SYSDATETIMEOFFSET()) AS FLOAT) / 60.0 AS waitingHours,
+      rd.Assessment AS status,
+      CONCAT(rd.Assessment, ' · Clinician: ', ISNULL(clin.FirstName, ''), ' ', ISNULL(clin.LastName, '')) AS detail
+    FROM ReportDrafted rd
+    JOIN Patient pt ON pt.Id = rd.PatientId
+    JOIN Centre c   ON c.Id  = pt.CentreId
+    LEFT JOIN AdminUser clin ON clin.Id = rd.ClinicianUserId
+    WHERE (@centreId IS NULL OR c.Id = @centreId)
+      AND ${centreExclusion}
+      AND ${patientExclusion}
+      AND NOT EXISTS (
+        SELECT 1 FROM PatientAuditLog pdf
+        WHERE pdf.AllocatePatientId = rd.apId
+          AND pdf.Type = 'ReportPDFGenerated'
+      )
+      AND pt.FirstName NOT LIKE '%test%'
+      AND pt.LastName  NOT LIKE '%test%'
+      AND (clin.FirstName IS NULL OR LOWER(clin.FirstName) NOT LIKE '%test%')
+      AND (clin.LastName  IS NULL OR LOWER(clin.LastName)  NOT LIKE '%test%')
+    ORDER BY rd.reportAddedAt ASC
+  `);
+  return result.recordset.map(mapPatientRow);
+}
+
+async function queryManagerPendingGoals(ctx) {
+  const { bindAll, centreExclusion, patientExclusion, patientNameExpr } = ctx;
+  const apNotTerminal = terminalStatusExclusion('ap');
+  const pool = await poolPromise;
+  const result = await bindAll(pool.request()).query(`
+    WITH PendingGoalRequests AS (
+      SELECT
+        ap.Id    AS apId,
+        ap.PatientId,
+        ap.Status,
+        ap.Assessment,
+        ap.ClinicianUserId,
+        MIN(pgar.CreatedDateTimeUtc) AS submittedAt
+      FROM AllocatePatient ap
+      JOIN PatientGoalApprovalRequest pgar
+        ON pgar.AllocatePatientId = ap.Id
+      WHERE ap.Assessment IN ('SPM', 'DP3', 'REELS', 'ISAA')
+        AND ${apNotTerminal}
+        AND (@dateFrom IS NULL OR pgar.CreatedDateTimeUtc >= @dateFrom)
+        AND (@dateTo   IS NULL OR pgar.CreatedDateTimeUtc <  DATEADD(day, 1, @dateTo))
+        AND NOT EXISTS (
+          SELECT 1 FROM PatientGoalApprovalRequestGoal pgarg2
+          WHERE pgarg2.PatientGoalApprovalRequestId = pgar.Id
+            AND pgarg2.Status = 'Approved'
+        )
+      GROUP BY ap.Id, ap.PatientId, ap.Status, ap.Assessment, ap.ClinicianUserId
+    )
+    SELECT TOP (${MAX_ITEMS})
+      'Awaiting approval'  AS category,
+      pt.Id    AS patientId,
+      pt.PatientID AS patientCode,
+      ${patientNameExpr} AS patientName,
+      c.Id     AS centreId,
+      c.CentreName AS centreName,
+      pgr.submittedAt AS eventAt,
+      CAST(DATEDIFF(minute, pgr.submittedAt, SYSDATETIMEOFFSET()) AS FLOAT) / 60.0 AS waitingHours,
+      pgr.Assessment AS status,
+      CONCAT(pgr.Assessment, ' · Clinician: ', ISNULL(clin.FirstName, ''), ' ', ISNULL(clin.LastName, '')) AS detail
+    FROM PendingGoalRequests pgr
+    JOIN Patient pt ON pt.Id = pgr.PatientId
+    JOIN Centre c   ON c.Id  = pt.CentreId
+    LEFT JOIN AdminUser clin ON clin.Id = pgr.ClinicianUserId
+    WHERE (@centreId IS NULL OR c.Id = @centreId)
+      AND ${centreExclusion}
+      AND ${patientExclusion}
+      AND pt.FirstName NOT LIKE '%test%'
+      AND pt.LastName  NOT LIKE '%test%'
+      AND (clin.FirstName IS NULL OR LOWER(clin.FirstName) NOT LIKE '%test%')
+      AND (clin.LastName  IS NULL OR LOWER(clin.LastName)  NOT LIKE '%test%')
+    ORDER BY pgr.submittedAt ASC
+  `);
+  return result.recordset.map(mapPatientRow);
+}
+
 async function queryAdminRegistered(ctx) {
   const { bindAll, centreExclusion, patientExclusion, dateFilterPal, patientNameExpr, adminFilter } = ctx;
   const pool = await poolPromise;
@@ -781,6 +893,8 @@ const QUERY_HANDLERS = {
   'manager-registered': queryManagerRegistered,
   'manager-assigned': queryManagerAssigned,
   'manager-stuck-onboarding': queryManagerStuckOnboarding,
+  'manager-pending-reports': queryManagerPendingReports,
+  'manager-pending-goals': queryManagerPendingGoals,
   'admin-registered': queryAdminRegistered,
   'admin-assigned': queryAdminAssigned,
   'admin-unassigned': queryAdminUnassigned,

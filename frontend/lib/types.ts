@@ -459,6 +459,10 @@ export interface Manager {
   reportsToApprove?: number;
   goalsToApprove?: number;
   pendingApprovals?: number;
+  // Clinician-like output (when manager personally scores/drafts)
+  assessmentsScored?: number;
+  reportsDrafted?: number;
+  avgApprovalDays?: number | null;
   // Goal progress (period-scoped)
   progressNotes?: number;
   goalsDocumented?: number;
@@ -1121,8 +1125,12 @@ export interface WorkloadCentreRow {
   managerGoalsAdded: number;
   /** Individual goal items submitted at manager-assigned centres (for N(total) format) */
   managerGoalsAddedItems: number;
-  /** ProgressAdded audit events for clinicians at this centre in the selected period */
+  /** AssessmentResultGenerated events at this centre in the selected period */
+  assessmentsScored?: number;
+  /** ProgressAdded audit events at this centre in the selected period */
   progressNotes?: number;
+  /** Average days from first ReportAdded to ReportPDFGenerated for this centre in the period */
+  avgApprovalDays?: number | null;
 }
 
 // ── Centres tab ───────────────────────────────────────────────────────────────
@@ -1227,20 +1235,22 @@ export interface CentreDetailStaff {
 }
 
 export interface CentreDetailActiveCase {
-  patientId:          number;
-  patientDisplayId:   string | null;
-  patientName:        string;
-  clinicianName:      string | null;
-  status:             string;
-  daysOpen:           number;
-  lastAssessmentType: string | null;
+  patientId:        number;
+  patientDisplayId: string | null;
+  patientName:      string;
+  clinicianName:    string | null;
+  status:           string;
+  daysOpen:         number;
+  assessmentType:   string | null;
 }
 
 export interface CentreDetailOverdueAssessment {
   patientId:        number;
   patientDisplayId: string | null;
+  patientName:      string;
   clinicianName:    string | null;
   assessmentStatus: string;
+  assessmentType:   string | null;
   daysPending:      number;
 }
 

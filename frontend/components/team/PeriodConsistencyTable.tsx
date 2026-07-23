@@ -158,11 +158,11 @@ function sortRows(rows: RoleData[], col: SortCol, dir: SortDir, role: UserProfil
 // ── SortHeader sub-component ──────────────────────────────────────────────────
 
 function SortHeader({
-  col, active, dir, onSort, children, className,
+  col, active, dir, onSort, children, className, title,
 }: {
   col: SortCol; active: boolean; dir: SortDir;
   onSort: (c: SortCol) => void;
-  children: React.ReactNode; className?: string;
+  children: React.ReactNode; className?: string; title?: string;
 }) {
   return (
     <th
@@ -173,6 +173,11 @@ function SortHeader({
       <span className={`inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.04em] transition-colors
         ${active ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700'}`}>
         {children}
+        {title && (
+          <span className="text-[9px] text-gray-400 hover:text-gray-600 cursor-help font-normal normal-case tracking-normal" title={title}>
+            ⓘ
+          </span>
+        )}
         <span className={`text-[10px] transition-opacity leading-none
           ${active ? 'opacity-100 text-gray-700' : 'opacity-0 group-hover:opacity-40 text-gray-400'}`}>
           {active ? (dir === 'asc' ? '↑' : '↓') : '↕'}
@@ -184,10 +189,14 @@ function SortHeader({
 
 // ── LastActiveCell sub-component ──────────────────────────────────────────────
 
-function LastActiveCell({ daysAgo }: { daysAgo: number | null | undefined }) {
+function LastActiveCell({ daysAgo, hasLogin }: { daysAgo: number | null | undefined; hasLogin?: boolean }) {
   const [tooltip, setTooltip] = useState(false);
 
   if (daysAgo == null) {
+    const label   = hasLogin ? 'Zero activity' : 'Never active';
+    const tipText = hasLogin
+      ? 'This user has logged in but has no audit log history. They have not completed any clinical actions.'
+      : 'This account has no login or audit log history. It may be a duplicate or unused account.';
     return (
       <div className="relative inline-block">
         <span
@@ -195,14 +204,14 @@ function LastActiveCell({ daysAgo }: { daysAgo: number | null | undefined }) {
           onMouseEnter={() => setTooltip(true)}
           onMouseLeave={() => setTooltip(false)}
         >
-          Never active
+          {label}
         </span>
         {tooltip && (
           <div
             className="absolute bottom-full left-0 mb-1.5 z-50 bg-gray-900 text-white text-[11px] rounded-lg px-2.5 py-2 shadow-lg pointer-events-none leading-relaxed"
             style={{ width: 210 }}
           >
-            This account has no audit log history. It may be a duplicate or unused account.
+            {tipText}
           </div>
         )}
       </div>
@@ -373,7 +382,8 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
                   <span title="Total therapy progress notes added in the selected period">Progress Notes</span>
                 </SortHeader>
               )}
-              <SortHeader col="lastActive"  active={sortCol === 'lastActive'}  dir={sortDir} onSort={handleSort}>Last Active</SortHeader>
+              <SortHeader col="lastActive"  active={sortCol === 'lastActive'}  dir={sortDir} onSort={handleSort}
+                title="Last audit action performed by this user — ever, not limited to the selected period. Login alone does not count as activity.">Last Active</SortHeader>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -470,7 +480,7 @@ export default function PeriodConsistencyTable({ role, data, loading, linkParams
 
                     {/* Last active */}
                     <td className="px-4">
-                      <LastActiveCell daysAgo={person.lastActiveDaysAgo} />
+                      <LastActiveCell daysAgo={person.lastActiveDaysAgo} hasLogin={!!person.lastLoginDate} />
                     </td>
                   </tr>
                 );

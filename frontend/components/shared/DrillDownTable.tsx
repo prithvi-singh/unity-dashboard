@@ -14,6 +14,14 @@ import { formatEventAt, formatWaitingHours } from '@/lib/bottleneckDrillDown';
 import { shortCentreName } from '@/lib/centreNames';
 import { hasUnityPatientLinks, unityPatientUrl } from '@/lib/unityLinks';
 
+function waitingDaysColor(hours: number | null): string {
+  if (hours == null) return '#9ca3af';
+  const days = hours / 24;
+  if (days > 7)  return '#A32D2D';
+  if (days > 2)  return '#BA7517';
+  return 'var(--color-text-primary, #111827)';
+}
+
 export interface DrillDownTableItem {
   category: string | null;
   patientId: number;
@@ -276,7 +284,12 @@ export default function DrillDownTable({ items, isUserList = false, showUnityLin
               </td>
               {showWaiting && (
                 <td className="px-2 py-0 text-right text-xs" style={{ verticalAlign: 'middle' }}>
-                  <span className="tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatWaitingHours(item.waitingHours)}</span>
+                  <span
+                    className="tabular-nums font-semibold whitespace-nowrap"
+                    style={{ color: waitingDaysColor(item.waitingHours) }}
+                  >
+                    {formatWaitingHours(item.waitingHours)}
+                  </span>
                 </td>
               )}
               {showOpen && (

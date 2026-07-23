@@ -40,12 +40,16 @@ interface GroupedClinician {
   activeCaseload:   number;
   totalAuditActions: number;
   lastActivityDate: string | null;
+  lastActiveDate:   string | null;
   lastLoginDate:    string | null;
   // Pipeline state counts (point-in-time)
   pipelineScoring:    number;
   pipelineReports:    number;
   pipelineGoals:      number;
   stuckCases:         number;
+  // Goal progress (period-scoped)
+  progressNotes:      number;
+  goalsDocumented:    number;
 }
 
 /** Merge per-centre assignment rows into one row per clinician. */
@@ -64,11 +68,16 @@ function groupByClinician(rows: Clinician[]): GroupedClinician[] {
       existing.reportEdits      += c.reportEdits      ?? 0;
       existing.activeCaseload   += c.activeCaseload;
       existing.totalAuditActions += c.totalAuditActions;
+      existing.progressNotes    += c.progressNotes    ?? 0;
+      existing.goalsDocumented  += c.goalsDocumented  ?? 0;
       if (c.lastActivityDate && (!existing.lastActivityDate || c.lastActivityDate > existing.lastActivityDate)) {
         existing.lastActivityDate = c.lastActivityDate;
       }
       if (c.lastLoginDate && (!existing.lastLoginDate || c.lastLoginDate > existing.lastLoginDate)) {
         existing.lastLoginDate = c.lastLoginDate;
+      }
+      if (c.lastActiveDate && (!existing.lastActiveDate || c.lastActiveDate > existing.lastActiveDate)) {
+        existing.lastActiveDate = c.lastActiveDate;
       }
     } else {
       map.set(c.id, {
@@ -83,12 +92,15 @@ function groupByClinician(rows: Clinician[]): GroupedClinician[] {
         activeCaseload:   c.activeCaseload,
         totalAuditActions: c.totalAuditActions,
         lastActivityDate: c.lastActivityDate,
+        lastActiveDate:   c.lastActiveDate ?? null,
         lastLoginDate:    c.lastLoginDate,
         // Pipeline: aggregated by userId in backend, same value across all centre rows
         pipelineScoring:  c.pipelineBreakdown?.scoring ?? 0,
         pipelineReports:  (c.pipelineBreakdown?.reportsToWrite ?? 0) + (c.pipelineBreakdown?.pendingApproval ?? 0),
         pipelineGoals:    c.pipelineBreakdown?.goalsToAdd ?? 0,
         stuckCases:       c.stuckCases ?? 0,
+        progressNotes:    c.progressNotes   ?? 0,
+        goalsDocumented:  c.goalsDocumented ?? 0,
       });
     }
   }
@@ -98,8 +110,8 @@ function groupByClinician(rows: Clinician[]): GroupedClinician[] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+function timeAgo(iso: string | null, hasLogin?: boolean): string {
+  if (!iso) return hasLogin ? 'Zero activity' : 'Never active';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
@@ -110,11 +122,13 @@ function timeAgo(iso: string | null): string {
 }
 
 function lastActiveClass(iso: string | null): string {
-  if (!iso) return 'text-gray-300';
+  if (!iso) return 'text-[#A32D2D] font-bold';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days === 0) return 'text-green-600 font-medium';
-  if (days <= 3)  return 'text-amber-500';
-  return 'text-rose-500';
+  if (days === 0) return 'text-[#1D9E75]';
+  if (days === 1) return 'text-gray-900';
+  if (days <= 3)  return 'text-gray-500';
+  if (days <= 6)  return 'text-[#BA7517]';
+  return 'text-[#A32D2D]';
 }
 
 function getVal(g: GroupedClinician, col: string): number | string {
@@ -129,7 +143,9 @@ function getVal(g: GroupedClinician, col: string): number | string {
     case 'pipelineReports':   return g.pipelineReports;
     case 'pipelineGoals':     return g.pipelineGoals;
     case 'stuckCases':        return g.stuckCases;
-    case 'lastActivityDate':  return g.lastActivityDate ?? '';
+    case 'progressNotes':     return g.progressNotes;
+    case 'goalsDocumented':   return g.goalsDocumented;
+    case 'lastActivityDate':  return g.lastActiveDate ?? '';
     case 'lastLoginDate':     return g.lastLoginDate ?? '';
     default:                  return 0;
   }
@@ -204,8 +220,8 @@ export default function ClinicianTable({ clinicians, loading, error, linkParams,
   const grouped = useMemo(() => groupByClinician(clinicians ?? []), [clinicians]);
   const rows    = useMemo(() => applySort(grouped, sort), [grouped, sort]);
 
-  // col count: # Clinician Centre Scored Drafted Edits Cases Scoring Reports Goals LastActive LastLogin
-  const colCount = 12;
+  // col count: # Clinician Centre Scored Drafted Edits Cases Scoring Reports Goals ProgressNotes GoalsDocumented LastActive LastLogin
+  const colCount = 14;
 
   if (error) {
     return (
@@ -222,16 +238,21 @@ export default function ClinicianTable({ clinicians, loading, error, linkParams,
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-          {rows.length} clinician{rows.length !== 1 ? 's' : ''}
-        </span>
-        {multiCentreCount > 0 && (
-          <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-full">
-            {multiCentreCount} across multiple centres
-          </span>
+      <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap min-h-[40px]">
+        {loading ? (
+          <div className="h-6 w-24 bg-gray-100 rounded-full animate-pulse" />
+        ) : (
+          <>
+            <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+              {rows.length} clinician{rows.length !== 1 ? 's' : ''}
+            </span>
+            {multiCentreCount > 0 && (
+              <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-full">
+                {multiCentreCount} across multiple centres
+              </span>
+            )}
+          </>
         )}
-        <span className="text-xs text-gray-400 ml-auto">Scroll horizontally for more columns</span>
       </div>
 
       <ScrollRegion maxHeightClass="max-h-[520px]" label="table">
@@ -245,56 +266,68 @@ export default function ClinicianTable({ clinicians, loading, error, linkParams,
                 col="scoringComplete"
                 label="Assessments Scored"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="Assessments scored in the selected period, summed across all centres"
+                title="Assessments completed by this clinician in the selected period."
               />
               <SortableTh
                 col="reportsDrafted"
                 label="Reports Drafted"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="ReportAdded events in the selected period, summed across all centres"
+                title="Reports written by this clinician in the selected period. Initial drafts only."
               />
               <SortableTh
                 col="reportEdits"
                 label="Report Edits"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
                 className="text-gray-400"
-                title="UpdateReport events — informational only, not a performance metric"
+                title="Edits made to existing reports. Informational only — grey text."
               />
               <SortableTh
                 col="activeCaseload"
                 label="Active Cases"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="Active cases currently assigned to this clinician, summed across all centres"
+                title="Non-closed cases currently assigned to this clinician."
               />
               <SortableTh
                 col="pipelineScoring"
                 label="Scoring"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="Cases where assessment scoring is pending (not_started or in_progress state)"
+                title="Assessments currently in scoring — not yet completed."
               />
               <SortableTh
                 col="pipelineReports"
                 label="Reports"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="Cases where report needs drafting or approval (report_not_drafted + report_pending_approval)"
+                title="Reports currently pending approval by a manager."
               />
               <SortableTh
                 col="pipelineGoals"
                 label="Goals"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
-                title="Cases where report is approved but goals not yet added (goals_not_added state)"
+                title="Approved reports with no goals added yet."
+              />
+              <SortableTh
+                col="progressNotes"
+                label="Progress Notes"
+                sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
+                title="Therapy progress notes added in the selected period."
+              />
+              <SortableTh
+                col="goalsDocumented"
+                label="Goals Documented"
+                sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} align="right"
+                title="Distinct goals with at least one progress note in the period."
               />
               <SortableTh
                 col="lastActivityDate"
                 label="Last Active"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} defaultDir="desc"
-                title="Most recent action across all centres"
+                title="Last audit action performed by this user — ever, not limited to the selected period. Login alone does not count as activity."
               />
               <SortableTh
                 col="lastLoginDate"
                 label="Last Login"
                 sortCol={sort.col} sortDir={sort.dir} onSort={handleSort} defaultDir="desc"
-                title="Last time this clinician logged into Unity"
+                title="Last login to Unity."
               />
             </tr>
           </thead>
@@ -411,16 +444,26 @@ export default function ClinicianTable({ clinicians, loading, error, linkParams,
                       </span>
                     </td>
 
-                    {/* Goals (goals_not_added) */}
+                    {/* Goals (goals_not_added) — red if > 0 per spec */}
                     <td className="px-5 py-3.5 text-right">
-                      <span className={`tabular-nums font-bold ${g.pipelineGoals > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                      <span className={`tabular-nums font-bold ${g.pipelineGoals > 0 ? 'text-[#A32D2D]' : 'text-gray-300'}`}>
                         {g.pipelineGoals > 0 ? g.pipelineGoals.toLocaleString() : '—'}
                       </span>
                     </td>
 
+                    {/* Progress Notes */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={g.progressNotes} />
+                    </td>
+
+                    {/* Goals Documented */}
+                    <td className="px-5 py-3.5 text-right">
+                      <NumCell value={g.goalsDocumented} />
+                    </td>
+
                     {/* Last Active — colour coded */}
-                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveClass(g.lastActivityDate)}`}>
-                      {timeAgo(g.lastActivityDate)}
+                    <td className={`px-5 py-3.5 whitespace-nowrap text-sm ${lastActiveClass(g.lastActiveDate ?? null)}`}>
+                      {timeAgo(g.lastActiveDate ?? null, !!g.lastLoginDate)}
                     </td>
 
                     {/* Last Login */}

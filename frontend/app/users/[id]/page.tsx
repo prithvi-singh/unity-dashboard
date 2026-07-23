@@ -10,7 +10,6 @@ import RecentActionsTable from '@/components/users/RecentActionsTable';
 import ActiveCaseloadTable from '@/components/users/ActiveCaseloadTable';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useOverview } from '@/hooks/useOverview';
-import { ROLE_LABELS } from '@/lib/userProfile';
 import RoleBadge from '@/components/shared/RoleBadge';
 import type {
   UserProfileRole,
@@ -307,9 +306,6 @@ function UserProfileContent({ id }: { id: string }) {
                       </span>
                     );
                   })()}
-                  {user.roleName && user.roleName !== ROLE_LABELS[role] && (
-                    <span className="text-xs text-gray-400">({user.roleName})</span>
-                  )}
                 </div>
 
                 {/* Core job definition */}

@@ -66,24 +66,24 @@ export function fetchReportPdfs(params: FilterParams = {}): Promise<ReportPdfCen
   return get<ReportPdfCentre[]>(`/api/overview/report-pdfs${buildQuery(params)}`);
 }
 
-export function fetchClinicians(params: FilterParams = {}): Promise<Clinician[]> {
-  return get<Clinician[]>(`/api/clinicians${buildQuery(params)}`);
+export function fetchClinicians(params: FilterParams = {}, signal?: AbortSignal): Promise<Clinician[]> {
+  return get<Clinician[]>(`/api/clinicians${buildQuery(params)}`, signal);
 }
 
-export function fetchManagers(params: FilterParams = {}): Promise<Manager[]> {
-  return get<Manager[]>(`/api/managers${buildQuery(params)}`);
+export function fetchManagers(params: FilterParams = {}, signal?: AbortSignal): Promise<Manager[]> {
+  return get<Manager[]>(`/api/managers${buildQuery(params)}`, signal);
 }
 
-export function fetchCentreAdmins(params: FilterParams = {}): Promise<CentreAdmin[]> {
-  return get<CentreAdmin[]>(`/api/centre-admins${buildQuery(params)}`);
+export function fetchCentreAdmins(params: FilterParams = {}, signal?: AbortSignal): Promise<CentreAdmin[]> {
+  return get<CentreAdmin[]>(`/api/centre-admins${buildQuery(params)}`, signal);
 }
 
 export function fetchMonitoring(date: string): Promise<MonitoringData> {
   return get<MonitoringData>(`/api/monitoring?date=${encodeURIComponent(date)}`);
 }
 
-export function fetchBottlenecks(params: FilterParams = {}): Promise<BottleneckData> {
-  return get<BottleneckData>(`/api/bottlenecks${buildQuery(params)}`);
+export function fetchBottlenecks(params: FilterParams = {}, signal?: AbortSignal): Promise<BottleneckData> {
+  return get<BottleneckData>(`/api/bottlenecks${buildQuery(params)}`, signal);
 }
 
 function buildProfileQuery(params: UserProfileParams): string {
@@ -99,8 +99,8 @@ export function fetchUserProfile(userId: number, params: UserProfileParams): Pro
   return get<UserProfileData>(`/api/users/${userId}/profile${buildProfileQuery(params)}`);
 }
 
-export function fetchUserBreakdown(params: FilterParams = {}): Promise<UserBreakdownData> {
-  return get<UserBreakdownData>(`/api/users/breakdown${buildQuery(params)}`);
+export function fetchUserBreakdown(params: FilterParams = {}, signal?: AbortSignal): Promise<UserBreakdownData> {
+  return get<UserBreakdownData>(`/api/users/breakdown${buildQuery(params)}`, signal);
 }
 
 export function fetchUserSummaryProfile(userId: number): Promise<UserSummaryProfile> {
@@ -141,34 +141,34 @@ export function fetchRoleDrillDown(params: RoleDrillDownParams): Promise<RoleDri
   return get<RoleDrillDownResponse>(`/api/role/drill-down${buildRoleDrillDownQuery(params)}`);
 }
 
-export function fetchAssessments(params: FilterParams = {}): Promise<AssessmentOverviewData> {
-  return get<AssessmentOverviewData>(`/api/assessments/overview${buildQuery(params)}`);
+export function fetchAssessments(params: FilterParams = {}, signal?: AbortSignal): Promise<AssessmentOverviewData> {
+  return get<AssessmentOverviewData>(`/api/assessments/overview${buildQuery(params)}`, signal);
 }
 
-export function fetchRoleSummary(role: RoleKind, params: FilterParams = {}): Promise<RoleSummary> {
+export function fetchRoleSummary(role: RoleKind, params: FilterParams = {}, signal?: AbortSignal): Promise<RoleSummary> {
   const q = new URLSearchParams();
   q.set('role', role);
   if (params.centreId != null) q.set('centreId', String(params.centreId));
   if (params.dateFrom) q.set('dateFrom', params.dateFrom);
   if (params.dateTo) q.set('dateTo', params.dateTo);
   const str = q.toString();
-  return get<RoleSummary>(`/api/role/summary?${str}`);
+  return get<RoleSummary>(`/api/role/summary?${str}`, signal);
 }
 
-export function fetchClinicalPipeline(params: FilterParams = {}): Promise<ClinicalPipelineData> {
-  return get<ClinicalPipelineData>(`/api/role/clinical-pipeline${buildQuery(params)}`);
+export function fetchClinicalPipeline(params: FilterParams = {}, signal?: AbortSignal): Promise<ClinicalPipelineData> {
+  return get<ClinicalPipelineData>(`/api/role/clinical-pipeline${buildQuery(params)}`, signal);
 }
 
 export function fetchPipeline(params: FilterParams = {}): Promise<PipelineData> {
   return get<PipelineData>(`/api/pipeline${buildQuery(params)}`);
 }
 
-export function fetchWorkload(params: FilterParams = {}): Promise<WorkloadCentreRow[]> {
-  return get<WorkloadCentreRow[]>(`/api/workload${buildQuery(params)}`);
+export function fetchWorkload(params: FilterParams = {}, signal?: AbortSignal): Promise<WorkloadCentreRow[]> {
+  return get<WorkloadCentreRow[]>(`/api/workload${buildQuery(params)}`, signal);
 }
 
-export function fetchCentresOverview(params: FilterParams = {}): Promise<CentresOverviewData> {
-  return get<CentresOverviewData>(`/api/centres/overview${buildQuery(params)}`);
+export function fetchCentresOverview(params: FilterParams = {}, signal?: AbortSignal): Promise<CentresOverviewData> {
+  return get<CentresOverviewData>(`/api/centres/overview${buildQuery(params)}`, signal);
 }
 
 export function fetchCentreDetail(centreId: number, params: FilterParams = {}): Promise<CentreDetailData> {
@@ -190,7 +190,7 @@ export function fetchIssues(): Promise<IssuesData> {
   return get<IssuesData>('/api/issues');
 }
 
-export function fetchTopPerformers(params: TopPerformersParams = {}): Promise<TopPerformersResponse> {
+export function fetchTopPerformers(params: TopPerformersParams = {}, signal?: AbortSignal): Promise<TopPerformersResponse> {
   const q = new URLSearchParams();
   if (params.centreId != null) q.set('centreId', String(params.centreId));
   if (params.dateFrom)         q.set('dateFrom', params.dateFrom);
@@ -198,5 +198,5 @@ export function fetchTopPerformers(params: TopPerformersParams = {}): Promise<To
   if (params.role)             q.set('role',     params.role);
   if (params.limit != null)    q.set('limit',    String(params.limit));
   const str = q.toString();
-  return get<TopPerformersResponse>(`/api/monitoring/top-performers${str ? `?${str}` : ''}`);
+  return get<TopPerformersResponse>(`/api/monitoring/top-performers${str ? `?${str}` : ''}`, signal);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type {
   CentresOverviewData,
   CentreOverviewRow,
@@ -17,6 +17,7 @@ import PersonLink from '@/components/PersonLink';
 import { inferProfileRole } from '@/lib/userProfile';
 import type { OnRoleDrillDown } from '@/lib/roleDrillDown';
 import { goalsDisplay } from '@/lib/roleStats';
+import RoleBadge from '@/components/shared/RoleBadge';
 
 // ── Colour constants (spec) ────────────────────────────────────────────────────
 const STATUS_COLOUR: Record<CentreStatus, { dot: string; badge: string; text: string }> = {
@@ -24,6 +25,62 @@ const STATUS_COLOUR: Record<CentreStatus, { dot: string; badge: string; text: st
   'needs-attention': { dot: '#BA7517', badge: 'bg-amber-50  text-amber-700  border-amber-200',       text: 'Needs attention' },
   'blocked':         { dot: '#A32D2D', badge: 'bg-rose-50   text-rose-700   border-rose-200',        text: 'Blocked' },
 };
+
+// ── Assessment status display ──────────────────────────────────────────────────
+const ASSESSMENT_STATUS_LABEL: Record<string, string> = {
+  NotStarted:  'Not Started',
+  InProgress:  'In Progress',
+  Completed:   'Completed',
+  OnHold:      'On Hold',
+  not_started: 'Not Started',
+  in_progress: 'In Progress',
+};
+function formatAssessmentStatus(status: string): string {
+  return ASSESSMENT_STATUS_LABEL[status] ?? status;
+}
+function assessmentStatusColour(status: string): string {
+  if (status === 'InProgress' || status === 'in_progress') return '#BA7517';
+  if (status === 'Completed')                               return '#1D9E75';
+  return 'var(--color-text-secondary, #6b7280)';
+}
+
+// ── Assessment type badge ──────────────────────────────────────────────────────
+const ASSESSMENT_TYPE_STYLE: Record<string, { bg: string; color: string }> = {
+  SPM:   { bg: '#E6F1FB', color: '#0C447C' },
+  ISAA:  { bg: '#EAF3DE', color: '#3B6D11' },
+  REELS: { bg: '#FEF3C7', color: '#92400E' },
+  DP3:   { bg: '#F3E8FF', color: '#6B21A8' },
+};
+function AssessmentTypeBadge({ type }: { type: string | null }) {
+  if (!type) return <span className="text-gray-300">—</span>;
+  const style = ASSESSMENT_TYPE_STYLE[type.toUpperCase()] ?? {
+    bg:    'var(--color-background-secondary, #f3f4f6)',
+    color: 'var(--color-text-secondary, #6b7280)',
+  };
+  return (
+    <span
+      style={{
+        background: style.bg,
+        color:      style.color,
+        fontSize:   11,
+        padding:    '2px 8px',
+        borderRadius: 99,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        display:    'inline-block',
+      }}
+    >
+      {type}
+    </span>
+  );
+}
+
+// ── Days open colour ───────────────────────────────────────────────────────────
+function daysOpenStyle(days: number): React.CSSProperties {
+  if (days > 14) return { color: '#A32D2D', fontWeight: 700 };
+  if (days > 7)  return { color: '#BA7517' };
+  return { color: 'var(--color-text-primary, #111827)' };
+}
 
 // ── Pipeline owner badge config ────────────────────────────────────────────────
 const OWNER_BADGE: Record<string, { bg: string; fg: string; label: string }> = {
@@ -167,9 +224,10 @@ function StatusDrawer({ title, centres, onClose, onSelect }: StatusDrawerProps) 
 
 // ── Centre Detail Drawer ──────────────────────────────────────────────────────
 interface DetailDrawerProps {
-  centre:     CentreOverviewRow;
-  filters:    FilterParams;
-  onClose:    () => void;
+  centre:       CentreOverviewRow;
+  filters:      FilterParams;
+  onClose:      () => void;
+  onDrillDown?: OnRoleDrillDown;
 }
 
 // Pipeline snapshot row ───────────────────────────────────────────────────────
@@ -263,12 +321,30 @@ function PipelineSnapshotRow({ step, isLast }: { step: PipelineStepDef; isLast: 
   );
 }
 
-function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
+function DetailDrawer({ centre, filters, onClose, onDrillDown }: DetailDrawerProps) {
   const [detail, setDetail]   = useState<CentreDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
-  const [activeCasesOpen, setActiveCasesOpen]       = useState(false);
-  const [overdueOpen, setOverdueOpen]               = useState(false);
+  const [activeCasesOpen, setActiveCasesOpen] = useState(false);
+  const [overdueOpen, setOverdueOpen]         = useState(false);
+
+  type ACSort  = 'patientName' | 'assessmentType' | 'clinicianName' | 'status' | 'daysOpen';
+  type OASort  = 'patientName' | 'assessmentType' | 'clinicianName' | 'assessmentStatus' | 'daysPending';
+  type SortDir = 'asc' | 'desc';
+
+  const [acSort, setAcSort]       = useState<ACSort>('daysOpen');
+  const [acDir,  setAcDir]        = useState<SortDir>('desc');
+  const [oaSort, setOaSort]       = useState<OASort>('daysPending');
+  const [oaDir,  setOaDir]        = useState<SortDir>('desc');
+
+  function toggleAcSort(col: ACSort) {
+    if (acSort === col) setAcDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setAcSort(col); setAcDir(col === 'daysOpen' ? 'desc' : 'asc'); }
+  }
+  function toggleOaSort(col: OASort) {
+    if (oaSort === col) setOaDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setOaSort(col); setOaDir(col === 'daysPending' ? 'desc' : 'asc'); }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -299,6 +375,32 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
 
   const staffSortOrder = (s: string) => ({ active: 0, idle: 1, silent: 2, 'never-active': 3 })[s] ?? 4;
   const sortedStaff = detail ? [...detail.staff].sort((a, b) => staffSortOrder(a.status) - staffSortOrder(b.status)) : [];
+
+  const sortedActiveCases = useMemo(() => {
+    if (!detail) return [];
+    return [...detail.activeCases].sort((a, b) => {
+      let cmp = 0;
+      if (acSort === 'patientName')    cmp = (a.patientName ?? '').localeCompare(b.patientName ?? '');
+      else if (acSort === 'assessmentType') cmp = (a.assessmentType ?? '').localeCompare(b.assessmentType ?? '');
+      else if (acSort === 'clinicianName')  cmp = (a.clinicianName ?? '').localeCompare(b.clinicianName ?? '');
+      else if (acSort === 'status')         cmp = (a.status ?? '').localeCompare(b.status ?? '');
+      else if (acSort === 'daysOpen')       cmp = a.daysOpen - b.daysOpen;
+      return acDir === 'desc' ? -cmp : cmp;
+    });
+  }, [detail, acSort, acDir]);
+
+  const sortedOverdueAssessments = useMemo(() => {
+    if (!detail) return [];
+    return [...detail.overdueAssessments].sort((a, b) => {
+      let cmp = 0;
+      if (oaSort === 'patientName')       cmp = (a.patientName ?? '').localeCompare(b.patientName ?? '');
+      else if (oaSort === 'assessmentType')    cmp = (a.assessmentType ?? '').localeCompare(b.assessmentType ?? '');
+      else if (oaSort === 'clinicianName')     cmp = (a.clinicianName ?? '').localeCompare(b.clinicianName ?? '');
+      else if (oaSort === 'assessmentStatus')  cmp = (a.assessmentStatus ?? '').localeCompare(b.assessmentStatus ?? '');
+      else if (oaSort === 'daysPending')       cmp = a.daysPending - b.daysPending;
+      return oaDir === 'desc' ? -cmp : cmp;
+    });
+  }, [detail, oaSort, oaDir]);
 
   // ── Pipeline snapshot data (period-based, from centre prop) ─────────────────
   const reg = centre.intake.casesRegistered;
@@ -469,6 +571,13 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                   label="Stuck unassigned"
                   value={centre.intake.stuckUnassigned}
                   colour={centre.intake.stuckUnassigned > 0 ? '#A32D2D' : undefined}
+                  onClick={centre.intake.stuckUnassigned > 0 && onDrillDown
+                    ? () => onDrillDown({
+                        type: 'manager-stuck-onboarding',
+                        drillCentreId: centre.centreId,
+                        label: `Stuck unassigned · ${centre.centreName}`,
+                      })
+                    : undefined}
                 />
                 <MetricCell
                   label="Cases assigned"
@@ -543,7 +652,7 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                   <tbody className="divide-y divide-gray-50">
                     {sortedStaff.map((s) => {
                       const st = staffStatusLabel[s.status] ?? { label: s.status || '—', className: 'bg-gray-100 text-gray-500' };
-                      const profileRole: UserProfileRole | null = inferProfileRole(s.roleName);
+                      const profileRole: UserProfileRole | null = inferProfileRole(s.roleName, s.email, s.firstName, s.lastName);
                       return (
                         <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
                           <td className="px-4 py-2.5 whitespace-nowrap">
@@ -565,15 +674,11 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                           </td>
                           <td className="px-4 py-2.5">
                             {s.roleName ? (
-                              <span
-                                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                                style={{
-                                  background: s.roleName === 'Clinician' ? '#E6F1FB' : s.roleName === 'CentreManager' ? '#EAF3DE' : '#E1F5EE',
-                                  color:      s.roleName === 'Clinician' ? '#0C447C' : s.roleName === 'CentreManager' ? '#3B6D11' : '#0F6E56',
-                                }}
-                              >
-                                {s.roleName}
-                              </span>
+                              <RoleBadge
+                                role={s.roleName}
+                                firstName={s.firstName}
+                                lastName={s.lastName}
+                              />
                             ) : (
                               <span className="text-xs text-gray-400">—</span>
                             )}
@@ -610,26 +715,62 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                 Show {detail.activeCases.length} active case{detail.activeCases.length !== 1 ? 's' : ''}
               </button>
               {activeCasesOpen && (
-                <div className="mt-3 rounded-xl border border-gray-100 overflow-hidden">
+                <div className="mt-3 rounded-xl border border-gray-100 overflow-x-auto">
                   {detail.activeCases.length === 0 ? (
                     <p className="px-4 py-3 text-sm text-gray-400">No active cases</p>
                   ) : (
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-100">
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Patient ID</th>
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Clinician</th>
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                          <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Days Open</th>
+                          {(
+                            [
+                              { key: 'patientName',    label: 'Patient',         align: 'left'  },
+                              { key: 'assessmentType', label: 'Assessment Type', align: 'left'  },
+                              { key: 'clinicianName',  label: 'Clinician',       align: 'left'  },
+                              { key: 'status',         label: 'Status',          align: 'left'  },
+                              { key: 'daysOpen',       label: 'Days Open',       align: 'right' },
+                            ] as { key: ACSort; label: string; align: 'left' | 'right' }[]
+                          ).map(({ key, label, align }) => (
+                            <th
+                              key={key}
+                              onClick={() => toggleAcSort(key)}
+                              className={`px-4 py-2.5 text-[11px] font-medium text-gray-400 uppercase tracking-[0.03em] cursor-pointer select-none whitespace-nowrap hover:text-gray-600 transition-colors text-${align}`}
+                            >
+                              {label}
+                              {acSort === key && (
+                                <span className="ml-1 opacity-60">{acDir === 'desc' ? '↓' : '↑'}</span>
+                              )}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {detail.activeCases.map((ac) => (
-                          <tr key={ac.patientId} className="hover:bg-gray-50/60">
-                            <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{ac.patientDisplayId || ac.patientId}</td>
-                            <td className="px-4 py-2.5 text-gray-700">{ac.clinicianName || '—'}</td>
-                            <td className="px-4 py-2.5 text-xs text-gray-500">{ac.status}</td>
-                            <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${ac.daysOpen > 30 ? 'text-rose-600' : 'text-gray-700'}`}>
+                        {sortedActiveCases.map((ac) => (
+                          <tr key={`${ac.patientId}-${ac.assessmentType}`} className="hover:bg-gray-50/60">
+                            <td className="px-4 py-2.5">
+                              <span className="font-medium text-[13px]" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                                {ac.patientName}
+                              </span>
+                              {ac.patientDisplayId && (
+                                <span className="ml-1.5 text-[12px]" style={{ color: 'var(--color-text-secondary, #6b7280)' }}>
+                                  #{ac.patientDisplayId}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <AssessmentTypeBadge type={ac.assessmentType} />
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px]" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                              {ac.clinicianName ? (
+                                <span className="border-b border-dotted border-gray-400 cursor-default" title={`View ${ac.clinicianName}'s profile →`}>
+                                  {ac.clinicianName}
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-[12px]" style={{ color: assessmentStatusColour(ac.status) }}>
+                              {formatAssessmentStatus(ac.status)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-[13px]" style={daysOpenStyle(ac.daysOpen)}>
                               {ac.daysOpen}
                             </td>
                           </tr>
@@ -663,26 +804,64 @@ function DetailDrawer({ centre, filters, onClose }: DetailDrawerProps) {
                 )}
               </button>
               {overdueOpen && (
-                <div className="mt-3 rounded-xl border border-rose-100 overflow-hidden">
+                <div className="mt-3 rounded-xl border border-rose-100 overflow-x-auto">
                   {detail.overdueAssessments.length === 0 ? (
                     <p className="px-4 py-3 text-sm text-gray-400">No overdue assessments</p>
                   ) : (
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-rose-50 border-b border-rose-100">
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-rose-400 uppercase tracking-wider">Patient ID</th>
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-rose-400 uppercase tracking-wider">Clinician</th>
-                          <th className="px-4 py-2.5 text-left text-[10px] font-bold text-rose-400 uppercase tracking-wider">Status</th>
-                          <th className="px-4 py-2.5 text-right text-[10px] font-bold text-rose-400 uppercase tracking-wider">Days Pending</th>
+                          {(
+                            [
+                              { key: 'patientName',      label: 'Patient',         align: 'left'  },
+                              { key: 'assessmentType',   label: 'Assessment Type', align: 'left'  },
+                              { key: 'clinicianName',    label: 'Clinician',       align: 'left'  },
+                              { key: 'assessmentStatus', label: 'Status',          align: 'left'  },
+                              { key: 'daysPending',      label: 'Days Open',       align: 'right' },
+                            ] as { key: OASort; label: string; align: 'left' | 'right' }[]
+                          ).map(({ key, label, align }) => (
+                            <th
+                              key={key}
+                              onClick={() => toggleOaSort(key)}
+                              className={`px-4 py-2.5 text-[11px] font-medium text-rose-400 uppercase tracking-[0.03em] cursor-pointer select-none whitespace-nowrap hover:text-rose-600 transition-colors text-${align}`}
+                            >
+                              {label}
+                              {oaSort === key && (
+                                <span className="ml-1 opacity-60">{oaDir === 'desc' ? '↓' : '↑'}</span>
+                              )}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-rose-50">
-                        {detail.overdueAssessments.map((oa) => (
-                          <tr key={oa.patientId} className="text-rose-700 hover:bg-rose-50/40">
-                            <td className="px-4 py-2.5 font-mono text-xs">{oa.patientDisplayId || oa.patientId}</td>
-                            <td className="px-4 py-2.5">{oa.clinicianName || '—'}</td>
-                            <td className="px-4 py-2.5 text-xs">{oa.assessmentStatus}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-bold">{oa.daysPending}</td>
+                        {sortedOverdueAssessments.map((oa) => (
+                          <tr key={`${oa.patientId}-${oa.assessmentType}`} className="hover:bg-rose-50/40">
+                            <td className="px-4 py-2.5">
+                              <span className="font-medium text-[13px]" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                                {oa.patientName}
+                              </span>
+                              {oa.patientDisplayId && (
+                                <span className="ml-1.5 text-[12px]" style={{ color: 'var(--color-text-secondary, #6b7280)' }}>
+                                  #{oa.patientDisplayId}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <AssessmentTypeBadge type={oa.assessmentType} />
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px]" style={{ color: 'var(--color-text-primary, #111827)' }}>
+                              {oa.clinicianName ? (
+                                <span className="border-b border-dotted border-gray-400 cursor-default" title={`View ${oa.clinicianName}'s profile →`}>
+                                  {oa.clinicianName}
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-[12px]" style={{ color: assessmentStatusColour(oa.assessmentStatus) }}>
+                              {formatAssessmentStatus(oa.assessmentStatus)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-[13px]" style={daysOpenStyle(oa.daysPending)}>
+                              {oa.daysPending}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -714,13 +893,23 @@ function MetricCell({
   label,
   value,
   colour,
+  onClick,
 }: {
-  label:   string;
-  value:   string | number;
-  colour?: string;
+  label:    string;
+  value:    string | number;
+  colour?:  string;
+  onClick?: () => void;
 }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2.5">
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={[
+        'rounded-lg bg-gray-50 px-3 py-2.5 text-left w-full',
+        onClick ? 'cursor-pointer hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : '',
+      ].join(' ')}
+    >
       <p
         style={{
           fontSize: 10,
@@ -732,6 +921,7 @@ function MetricCell({
         }}
       >
         {label}
+        {onClick && <span style={{ marginLeft: 4, opacity: 0.5 }}>↗</span>}
       </p>
       <p
         className="tabular-nums"
@@ -743,7 +933,7 @@ function MetricCell({
       >
         {value}
       </p>
-    </div>
+    </Tag>
   );
 }
 
@@ -754,12 +944,14 @@ interface CentresTabProps {
   loading:         boolean;
   error:           string | null;
   filters:         FilterParams;
-  workload:        WorkloadCentreRow[] | null;
-  workloadLoading: boolean;
-  onDrillDown?:    OnRoleDrillDown;
+  workload:         WorkloadCentreRow[] | null;
+  workloadLoading:  boolean;
+  workloadError?:   string | null;
+  onWorkloadRetry?: () => void;
+  onDrillDown?:     OnRoleDrillDown;
 }
 
-export default function CentresTab({ data, loading, error, filters, workload, workloadLoading, onDrillDown }: CentresTabProps) {
+export default function CentresTab({ data, loading, error, filters, workload, workloadLoading, workloadError, onWorkloadRetry, onDrillDown }: CentresTabProps) {
   const [statusDrawer, setStatusDrawer] = useState<{ title: string; centres: CentreOverviewRow[] } | null>(null);
   const [detailCentre, setDetailCentre] = useState<CentreOverviewRow | null>(null);
   const [search, setSearch]             = useState('');
@@ -994,7 +1186,7 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
       </div>
 
       {/* ── Workload by centre ─────────────────────────────────────────────── */}
-      <WorkloadByCentreTable rows={workload} loading={workloadLoading} />
+      <WorkloadByCentreTable rows={workload} loading={workloadLoading} error={workloadError ?? null} onRetry={onWorkloadRetry} />
 
       {/* ── Status drawer ─────────────────────────────────────────────────── */}
       {statusDrawer && (
@@ -1012,6 +1204,7 @@ export default function CentresTab({ data, loading, error, filters, workload, wo
           centre={detailCentre}
           filters={filters}
           onClose={() => setDetailCentre(null)}
+          onDrillDown={onDrillDown}
         />
       )}
     </div>

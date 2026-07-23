@@ -70,7 +70,11 @@ jobs:
             --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv)
           echo "Latest revision: $LATEST"
           echo "LATEST_REVISION=$LATEST" >> "$GITHUB_ENV"
-          az containerapp revision activate --name unity-dashboard-api --resource-group unity-dashboard-rg --revision "$LATEST"
+          # "Already active" is the desired state, not an error — tolerate ONLY that.
+          ACTIVATE_OUT=$(az containerapp revision activate --name unity-dashboard-api --resource-group unity-dashboard-rg --revision "$LATEST" 2>&1) \
+            || { echo "$ACTIVATE_OUT" | grep -q "RevisionAlreadyInRequestedState" \
+                 && echo "Revision already active — continuing." \
+                 || { echo "$ACTIVATE_OUT"; exit 1; }; }
           # NOTE: traffic is NOT shifted here. The gate below verifies the new
           # revision is Healthy FIRST, then shifts traffic — never route prod
           # to an unverified revision.

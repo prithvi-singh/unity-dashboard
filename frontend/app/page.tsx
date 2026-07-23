@@ -22,6 +22,9 @@ import TeamTab, { type TeamRole } from '@/components/team/TeamTab';
 
 // Issues — redesigned triage view
 import IssuesTab from '@/components/issues/IssuesTab';
+
+// Business — Zoho Creator data (self-contained module)
+import BusinessTab from '@/components/zoho/BusinessTab';
 import BottleneckDrillDownPanel from '@/components/bottlenecks/BottleneckDrillDownPanel';
 import RoleDrillDownPanel from '@/components/shared/RoleDrillDownPanel';
 import type { BottleneckDrillDownRequest } from '@/lib/bottleneckDrillDown';
@@ -150,7 +153,7 @@ function Dashboard() {
   const needClinicianExtras = tabActive(2) && teamRole === 'clinicians';
   const needManagerExtras   = tabActive(2) && teamRole === 'managers';
   const needAdminExtras     = tabActive(2) && teamRole === 'admins';
-  const needWorkload        = tabActive(2) && teamRole === 'clinicians';
+  const needWorkload        = tabActive(2) && (teamRole === 'clinicians' || teamRole === 'managers' || teamRole === 'centres');
 
   // ── Action feed navigation ────────────────────────────────────────────────
   const [pendingActionFocus, setPendingActionFocus] = useState<ActionNavigationTarget | null>(null);
@@ -278,7 +281,7 @@ function Dashboard() {
       if (tab === 3) issuesRef.current.refetch();
       if (tab === 2) {
         if (role === 'clinicians') { cliniciansRef.current.refetch(); workloadRef.current.refetch(); }
-        if (role === 'managers')   managersRef.current.refetch();
+        if (role === 'managers')   { managersRef.current.refetch(); workloadRef.current.refetch(); }
         if (role === 'admins')     centreAdminsRef.current.refetch();
         if (role === 'centres')    centresOverviewRef.current.refetch();
         if (role === 'roster')     userBreakdownRef.current.refetch();
@@ -382,7 +385,7 @@ function Dashboard() {
             setDateFrom(defaultPeriod.from);
             setDateTo(defaultPeriod.to);
           }}
-          hidePeriod={activeTab === 3}
+          hidePeriod={activeTab === 3 || activeTab === 4}
         />
 
         {/* ── Overview ─────────────────────────────────────────────────── */}
@@ -480,6 +483,8 @@ function Dashboard() {
             clinicalPipelineLoading={clinicalPipeline.loading}
             workload={workload.data}
             workloadLoading={workload.loading}
+            workloadError={workload.error}
+            onWorkloadRetry={workload.refetch}
             managers={managers.data ?? []}
             managersLoading={managers.loading}
             managersError={managers.error}
@@ -510,6 +515,9 @@ function Dashboard() {
             error={issues.error}
           />
         )}
+
+        {/* ── Business (Zoho) — fully self-contained, fetches its own data ── */}
+        {activeTab === 4 && <BusinessTab />}
 
         {/* ── Shared slide-over panels ──────────────────────────────────── */}
         <BottleneckDrillDownPanel

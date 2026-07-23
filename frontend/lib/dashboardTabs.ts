@@ -3,6 +3,7 @@ export const DASHBOARD_TABS = [
   'Live',
   'Team',
   'Issues',
+  'Business',
 ] as const;
 
 export const TAB_SLUGS = [
@@ -10,6 +11,7 @@ export const TAB_SLUGS = [
   'live',
   'team',
   'issues',
+  'business',
 ] as const;
 
 export type DashboardTabSlug = (typeof TAB_SLUGS)[number];

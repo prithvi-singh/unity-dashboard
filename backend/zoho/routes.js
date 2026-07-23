@@ -47,15 +47,43 @@ router.get('/summary', (_req, res) => {
   res.json({ source: 'zoho', summary });
 });
 
-// GET /api/zoho/:module — full mapped list
-router.get('/:module', async (req, res, next) => {
+// GET /api/zoho/:module — paginated mapped list
+// Query params: limit (default 50, max 200), offset (default 0),
+//               search (case-insensitive substring across all string fields)
+// Never ships the full 20k+ record set — the browser fails the same way the
+// container did.
+router.get('/:module', async (req, res) => {
   const key = req.params.module;
   if (!REPORTS[key]) {
     return res.status(404).json({ error: `Unknown Zoho module '${key}'`, modules: Object.keys(REPORTS) });
   }
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  const search = (req.query.search || '').toString().trim().toLowerCase();
+
   try {
     const { data, asOf, stale } = await loadModule(key);
-    res.json({ source: 'zoho', module: key, asOf, stale, count: data.length, data });
+
+    let filtered = data;
+    if (search) {
+      filtered = data.filter((rec) =>
+        Object.values(rec).some(
+          (v) => typeof v === 'string' && v.toLowerCase().includes(search)
+        )
+      );
+    }
+
+    res.json({
+      source: 'zoho',
+      module: key,
+      asOf,
+      stale,
+      total: filtered.length,
+      limit,
+      offset,
+      data: filtered.slice(offset, offset + limit),
+    });
   } catch (err) {
     console.error(`[zoho/routes] ${key} failed:`, err.message);
     res.status(503).json({ source: 'zoho', module: key, error: 'Zoho data unavailable' });

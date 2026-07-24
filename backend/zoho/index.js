@@ -70,4 +70,12 @@ function startWarmLoop() {
   console.log('[zoho] sync loop scheduled (incremental, sequential)');
 }
 
-module.exports = { router: buildRouter() };
+// ── Sanctioned import surface ────────────────────────────────────────────────
+// The `api` object is the ONLY sanctioned import surface for code outside
+// backend/zoho/. It exposes a narrow, stable contract so external route files
+// never reach into zoho internals (store, mappers, client, etc.).
+const { findByCode, indexStats } = require('./crosswalk');
+const { getModule } = require('./store');
+const api = { findByCode, indexStats, getModule };
+
+module.exports = { router: buildRouter(), api };

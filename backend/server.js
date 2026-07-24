@@ -58,6 +58,7 @@ const dailyReviewRouter   = _safeRequire('./routes/dailyReview', 'daily-review')
 const centresRouter       = _safeRequire('./routes/centres', 'centres');
 const issuesRouter        = _safeRequire('./routes/issues', 'issues');
 const goalProgressRouter  = _safeRequire('./routes/goal-progress', 'goal-progress');
+const patientLinkRouter   = _safeRequire('./routes/patientLink', 'patient-link');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -196,6 +197,7 @@ app.use('/api/workload', workloadRouter);
 app.use('/api/centres', centresRouter);
 app.use('/api/issues',  issuesRouter);
 app.use('/api/goal-progress', goalProgressRouter);
+app.use('/api/patient-link', patientLinkRouter);
 
 // Zoho integration — fully isolated module (/backend/zoho). Mounts a stub
 // router if ZOHO_* env vars are missing; failure here never affects the app.

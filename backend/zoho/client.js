@@ -54,11 +54,14 @@ async function fetchReport(linkName, { fieldConfig = 'quick_view' } = {}) {
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      throw new Error(`[zoho/client] ${linkName} HTTP ${res.status} code=${json.code || '?'}`);
+      throw new Error(`[zoho/client] ${linkName} HTTP ${res.status} code=${json.code || '?'} msg=${JSON.stringify(json.message || json.description || json).slice(0, 300)}`);
     }
     if (json.code === 3100) break; // "no records found"
     if (json.code !== 3000) {
-      throw new Error(`[zoho/client] ${linkName} unexpected code ${json.code}`);
+      // Log the FULL body — the code alone is useless for diagnosis
+      // (e.g. code 4000 covers everything from bad params to daily API
+      // limit exceeded).
+      throw new Error(`[zoho/client] ${linkName} code=${json.code} body=${JSON.stringify(json).slice(0, 300)}`);
     }
 
     records.push(...(json.data || []));

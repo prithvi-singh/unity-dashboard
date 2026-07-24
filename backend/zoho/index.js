@@ -26,54 +26,48 @@ function buildRouter() {
   return router;
 }
 
-// Background warm loop: refresh each module on its TTL so user requests
-// (almost) never hit Zoho directly.
-// STRICTLY SEQUENTIAL — exactly one module fetch in flight at any time.
-// Modules run 20k+ records each; concurrent full fetches OOM-kill a 1Gi
-// container (learned in production, 2026-07-23).
+// Background sync loop: incremental sync per module on its TTL.
+// - Snapshots load at boot (0 API calls after a restart)
+// - Delta fetches (Modified_Time criteria) cost ~1 call vs ~22 for full
+// - STRICTLY SEQUENTIAL — one fetch in flight (concurrent full fetches
+//   OOM-kill a 1Gi container; learned in production 2026-07-23)
+// - Exponential backoff on failure: 5m→15m→45m→2h (without it, a persistent
+//   failure like quota exhaustion got hammered 10k×/night, killing the next
+//   day's quota too; learned in production 2026-07-24)
 function startWarmLoop() {
-  const { getOrRefresh } = require('./cache');
-  const { fetchReport } = require('./client');
-  const { mapRecords } = require('./mappers');
+  const store = require('./store');
+  const { syncModule } = require('./sync');
 
-  const entries = Object.entries(REPORTS);
-  const lastWarmed = new Map();  // key → ts of last successful warm
-  const failures = new Map();    // key → { count, nextTryAt }
+  const keys = Object.keys(REPORTS);
+  store.loadSnapshots(keys);
 
-  // Exponential backoff on failure: 5m, 15m, 45m, then capped at 2h.
-  // Without this, a persistent failure (e.g. daily API limit exceeded)
-  // gets retried every cycle — 10k+ calls overnight, guaranteeing the
-  // next day's quota dies too (happened 2026-07-23→24).
+  const failures = new Map(); // key → { count, nextTryAt }
   const BACKOFF_MS = [5 * 60_000, 15 * 60_000, 45 * 60_000, 120 * 60_000];
 
-  const warmOne = async ([key, { linkName, ttlMs }]) => {
+  const syncOne = async (key) => {
     const now = Date.now();
-    const due = !lastWarmed.has(key) || now - lastWarmed.get(key) >= ttlMs;
-    if (!due) return;
     const fail = failures.get(key);
     if (fail && now < fail.nextTryAt) return; // backing off
     try {
-      await getOrRefresh(key, ttlMs, async () => mapRecords(key, await fetchReport(linkName)));
-      lastWarmed.set(key, now);
-      failures.delete(key);
-      console.log(`[zoho/warm] ${key} warmed`);
+      const result = await syncModule(key); // TTL-aware; skips if fresh
+      if (result.mode !== 'skip') failures.delete(key);
     } catch (err) {
       const count = (fail?.count ?? 0) + 1;
       const backoff = BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)];
       failures.set(key, { count, nextTryAt: now + backoff });
-      console.warn(`[zoho/warm] ${key} failed (attempt ${count}, next try in ${Math.round(backoff / 60000)}m):`, err.message);
+      console.warn(`[zoho/sync] ${key} failed (attempt ${count}, next try in ${Math.round(backoff / 60000)}m):`, err.message);
     }
   };
 
   const cycle = async () => {
-    for (const entry of entries) {
-      await warmOne(entry); // sequential — never parallel
+    for (const key of keys) {
+      await syncOne(key); // sequential — never parallel
     }
-    setTimeout(cycle, 60_000); // re-check due-ness every minute after a full pass
+    setTimeout(cycle, 60_000);
   };
 
   setTimeout(cycle, 60_000); // first pass 1 min after boot
-  console.log('[zoho] warm loop scheduled (sequential)');
+  console.log('[zoho] sync loop scheduled (incremental, sequential)');
 }
 
 module.exports = { router: buildRouter() };

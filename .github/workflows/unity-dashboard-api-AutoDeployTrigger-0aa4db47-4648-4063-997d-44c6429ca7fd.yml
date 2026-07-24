@@ -112,6 +112,18 @@ jobs:
           echo "::error::DEPLOY GATE FAILED: traffic shifted but public health check never confirmed. Investigate immediately."
           exit 1
 
+      # Deactivate all revisions except the one now serving traffic.
+      # In Multiple-revision mode each Active revision holds a warm replica
+      # (min-replicas applies per revision) — old ones silently cost money.
+      - name: Clean up old revisions
+        run: |
+          for REV in $(az containerapp revision list --name unity-dashboard-api --resource-group unity-dashboard-rg \
+            --query "[?name!='$LATEST_REVISION' && properties.active].name" -o tsv); do
+            echo "Deactivating $REV..."
+            az containerapp revision deactivate --name unity-dashboard-api --resource-group unity-dashboard-rg \
+              --revision "$REV" || echo "Could not deactivate $REV (non-fatal)"
+          done
+      
       # Warm up API endpoints so the in-memory caches are hot.
       - name: Warm up API endpoints
         run: |

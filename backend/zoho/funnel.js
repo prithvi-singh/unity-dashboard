@@ -24,6 +24,30 @@ const DEFAULT_MONTHS = 6;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * Determine whether a lead is converted.
+ * Prefers the explicit boolean field `convertedAsPatient` (confirmed field:
+ * Converted_as_patient, a Zoho string "true"/"false" normalized to boolean
+ * by the leads mapper). Falls back to `status === 'Converted'` for leads
+ * that pre-date the field.
+ *
+ * Logs a warning when the two signals disagree — disagreement is itself
+ * useful ops signal (inconsistent data entry).
+ */
+function _isConverted(lead) {
+  const byField = lead.convertedAsPatient === true;
+  const byStatus = lead.status === 'Converted';
+
+  if (byField !== byStatus && (byField || byStatus)) {
+    console.warn(
+      `[zoho/funnel] conversion signal mismatch for lead ${lead.id}: ` +
+      `convertedAsPatient=${lead.convertedAsPatient} status="${lead.status}"`
+    );
+  }
+
+  return byField || byStatus;
+}
+
 function _monthKey(dateStr) {
   if (!dateStr) return null;
   // Accept YYYY-MM-DD or DD-MMM-YYYY (Zoho date formats)
@@ -128,7 +152,7 @@ function buildFunnel(months = DEFAULT_MONTHS) {
     const bucket = acc.get(key);
     bucket.leads++;
 
-    if (lead.status === 'Converted') {
+    if (_isConverted(lead)) {
       bucket.converted++;
 
       // Check crosswalk match via patientCode
@@ -151,7 +175,7 @@ function buildFunnel(months = DEFAULT_MONTHS) {
     for (const lead of leads) {
       const key = _monthKey(lead.registrationDate);
       if (!key || !windowSet.has(key)) continue;
-      if (lead.status !== 'Converted') continue;
+      if (!_isConverted(lead)) continue;
 
       const match = _matchByName(lead.childName);
       if (match) acc.get(key).registeredInUnity++;
@@ -188,7 +212,7 @@ function getConversionGap(months = DEFAULT_MONTHS) {
   for (const lead of leads) {
     const key = _monthKey(lead.registrationDate);
     if (!key || !windowSet.has(key)) continue;
-    if (lead.status !== 'Converted') continue;
+    if (!_isConverted(lead)) continue;
 
     convertedLeads.push(lead);
     if (lead.patientCode) hasPatientCode = true;
@@ -231,4 +255,4 @@ function getConversionGap(months = DEFAULT_MONTHS) {
   };
 }
 
-module.exports = { buildFunnel, getConversionGap };
+module.exports = { buildFunnel, getConversionGap, _isConverted };

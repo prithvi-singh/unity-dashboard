@@ -15,18 +15,16 @@ const therapyJoin = (arr) =>
 
 // Candidate fields that may contain the patient code on a converted lead.
 // Inspected in priority order; first non-empty value wins.
-// PATIENT LINK INVESTIGATION (2026-07-27): Zoho credentials not available
-// locally during implementation. These candidates cover the most common
-// Zoho Creator patterns for lead→patient/contact linking:
-//   - Patient_ID / PatientID: direct patient code (same as patient mapper)
-//   - Converted_Contact: lookup object on converted leads
-//   - Related_Patient / Contact_ID / Contact: common alternative names
-// If NONE of these fields exist on the lead records in production, the
-// funnel module's getConversionGap() falls back to name-based matching
-// (childName vs Zoho patient name) — a weaker join flagged in the PR.
+//
+// PATIENT LINK FIELD (verified 2026-07-27 against 2 real Converted leads):
+//   Patient_ID1 is THE correct field — shaped as a Zoho lookup object:
+//   { "Patient_ID": "24612", "ID": "...", "zc_display_value": "24612" }
+//   The flat Patient_ID field also exists on lead records but is ALWAYS
+//   empty string — it's a decoy, do not use it.
+//   Detection order: Patient_ID1 lookup first, then fallback candidates.
 const PATIENT_LINK_CANDIDATES = [
-  'Patient_ID', 'PatientID',
-  'Converted_Contact', 'Contact', 'Patient_Contact', 'Converted_Patient',
+  'PatientID', 'Converted_Patient',
+  'Converted_Contact', 'Contact', 'Patient_Contact',
   'Related_Patient', 'Contact_ID',
 ];
 
@@ -34,10 +32,11 @@ const DIGIT_RE = /\D/g;
 
 function _normalizePatientCode(raw) {
   if (raw === undefined || raw === null || raw === '') return null;
-  // If it's a lookup object (Zoho nested type), try zc_display_value first,
-  // then fall back to ID.
+  // If it's a lookup object (Zoho nested type), prefer inner Patient_ID
+  // (the actual patient code in Patient_ID1.Patient_ID), then
+  // zc_display_value, then ID.
   if (typeof raw === 'object') {
-    const str = raw.zc_display_value ?? raw.ID ?? raw.id ?? null;
+    const str = raw.Patient_ID ?? raw.zc_display_value ?? raw.ID ?? raw.id ?? null;
     if (str == null || str === '') return null;
     raw = String(str);
   }
@@ -48,10 +47,17 @@ function _normalizePatientCode(raw) {
 }
 
 function _detectPatientCode(r) {
+  // Check Patient_ID1 FIRST — this is the confirmed linking field.
+  // Shaped as { Patient_ID: "24612", ID: "...", zc_display_value: "24612" }.
+  // _normalizePatientCode extracts Patient_ID from the lookup object.
+  const code = _normalizePatientCode(r.Patient_ID1);
+  if (code) return code;
+
+  // Fall back to the flat-field candidate list (deprioritized, harmless).
   for (const candidate of PATIENT_LINK_CANDIDATES) {
     const raw = r[candidate];
-    const code = _normalizePatientCode(raw);
-    if (code) return code;
+    const result = _normalizePatientCode(raw);
+    if (result) return result;
   }
   return null;
 }
@@ -82,6 +88,10 @@ module.exports = (r) => {
     address2: r.Address_2 || null,
     alternatePhone: r.Alternate_Phone || null,
     status: r.Status || null,
+    // Converted_as_patient is a string "true"/"false" in Zoho, not a real boolean.
+    // Normalize to actual boolean for downstream consumers.
+    convertedAsPatient: r.Converted_as_patient === 'true',
+    enrollmentDate: r.Enrollment_Date || null,
     patientCode: _detectPatientCode(r),
     addedTime: r.Added_Time || null,
     modifiedTime: r.Modified_Time || null,

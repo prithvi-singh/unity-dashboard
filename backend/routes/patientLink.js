@@ -187,17 +187,23 @@ router.get('/:code/journey', async (req, res, next) => {
           detail: lead.consultationType || null,
         });
       }
-      // If status is "Converted", use modifiedTime as proxy conversion date.
-      // NOTE: Zoho does not expose an explicit "converted at" timestamp;
-      // modifiedTime is the closest proxy — it may reflect later edits
-      // rather than the actual conversion moment.
-      if (lead.status === 'Converted' && lead.modifiedTime) {
-        timeline.push({
-          date: lead.modifiedTime,
-          source: 'zoho',
-          label: 'Lead converted (proxy)',
-          detail: 'Status changed to Converted; modifiedTime as proxy — may not be exact',
-        });
+      // Conversion event: prefer enrollmentDate (the actual date the lead
+      // converted to a patient per Zoho's Converted_as_patient field).
+      // Fall back to modifiedTime only if enrollmentDate is empty.
+      // NOTE: modifiedTime is a weaker proxy — it reflects ANY edit to the
+      // lead record, not just the conversion. enrollmentDate is authoritative.
+      if (lead.status === 'Converted' || lead.convertedAsPatient === true) {
+        const conversionDate = lead.enrollmentDate || lead.modifiedTime;
+        if (conversionDate) {
+          timeline.push({
+            date: conversionDate,
+            source: 'zoho',
+            label: 'Lead converted',
+            detail: lead.enrollmentDate
+              ? `Enrolled as patient${lead.enrollmentAmount ? ` (${lead.enrollmentAmount})` : ''}`
+              : `Status changed to Converted; modifiedTime as fallback proxy`,
+          });
+        }
       }
     }
 

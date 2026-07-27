@@ -8,7 +8,7 @@ const { classifyAssessment } = require('../utils/assessmentState');
 // Access Zoho via the sanctioned api surface only.
 const zoho = require('../zoho');
 const api = zoho.api;
-const { buildFunnel, getConversionGap } = require('../zoho/funnel');
+const { buildFunnel, getConversionGap, _isConverted } = require('../zoho/funnel');
 
 const router = Router();
 
@@ -159,7 +159,7 @@ router.get('/summary', async (req, res, next) => {
     const convertedWithMatch = [];
 
     for (const lead of leads) {
-      if (lead.status !== 'Converted' || !lead.patientCode) continue;
+      if (!_isConverted(lead) || !lead.patientCode) continue;
       const zohoPatient = api.findByCode(lead.patientCode);
       if (!zohoPatient) continue;
 
@@ -263,7 +263,7 @@ router.get('/summary', async (req, res, next) => {
 
     // For each converted+registered lead, tally its Unity stage under its cohort month
     for (const lead of leads) {
-      if (lead.status !== 'Converted') continue;
+      if (!_isConverted(lead)) continue;
       const stage = leadStage.get(lead.id);
       if (!stage || stage === 'none') continue;
 

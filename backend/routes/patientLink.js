@@ -63,8 +63,6 @@ router.get('/:code', async (req, res, next) => {
         p.PatientID,
         p.FirstName,
         p.LastName,
-        p.Email,
-        p.Phone,
         p.Gender,
         p.DateOfBirth,
         p.Status,

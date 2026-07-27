@@ -12,16 +12,20 @@
 const leads = require('./leads');
 const crmLeads = require('./crmLeads');
 const patients = require('./patients');
+const invoices = require('./invoices');
+const appointments = require('./appointments');
+const receipts = require('./receipts');
+const cycles = require('./cycles');
 
-// Default: passthrough with the Zoho record ID normalised.
+// Dead-code fallback — no module currently uses passthrough.
 const passthrough = (record) => ({ id: record.ID || record.id || null, ...record });
 
 const MAPPERS = {
   patients,
-  invoices: passthrough,
-  appointments: passthrough,
-  receipts: passthrough,
-  cycles: passthrough,
+  invoices,
+  appointments,
+  receipts,
+  cycles,
   leads,
   'crm-leads': crmLeads,
 };

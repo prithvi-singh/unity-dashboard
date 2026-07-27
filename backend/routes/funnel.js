@@ -12,16 +12,7 @@ const { buildFunnel, getConversionGap, _isConverted } = require('../zoho/funnel'
 
 const router = Router();
 
-const DIGIT_RE = /\D/g;
-
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function normalize(code) {
-  if (typeof code !== 'string' && typeof code !== 'number') return '';
-  const str = typeof code === 'number' ? String(code) : code;
-  const digits = str.trim().replace(DIGIT_RE, '');
-  return digits.replace(/^0+/, '');
-}
 
 /** Check whether the Zoho store has leads or patients loaded yet. */
 function zohoWarming() {
@@ -34,6 +25,58 @@ function parseMonthsParam(val) {
   const n = parseInt(val, 10);
   if (isNaN(n) || n < 1 || n > 24) return 6;
   return n;
+}
+
+// ── Unity Patient Code Set + ID Map (5-min cache) ─────────────────────────
+// The registeredInUnity count and gap list must check Unity's actual Patient
+// table — NOT the Zoho crosswalk index (which checks Zoho's own Patients
+// module, auto-created on conversion, nearly always present). Same 5-min TTL
+// pattern as patientLink.js's report/summary cache.
+let _unityCache = null;      // { codeSet: Set<string>, idMap: Map<normalizedCode, PatientId> }
+let _unityCacheTime = 0;
+const UNITY_CACHE_TTL = 5 * 60 * 1000;
+
+const DIGIT_RE = /\D/g;
+
+function _normalizeCode(raw) {
+  if (typeof raw !== 'string' && typeof raw !== 'number') return '';
+  const str = typeof raw === 'number' ? String(raw) : String(raw);
+  const digits = str.trim().replace(DIGIT_RE, '');
+  return digits.replace(/^0+/, '') || null;
+}
+
+/**
+ * Returns { codeSet: Set<string>, idMap: Map<normalizedCode, PatientId> }
+ * from Unity's Patient table, cached for 5 min.
+ * Applies standard centre/patient exclusion filters.
+ */
+async function _getUnityPatientCache(pool) {
+  const now = Date.now();
+  if (_unityCache && (now - _unityCacheTime) < UNITY_CACHE_TTL) {
+    return _unityCache;
+  }
+
+  const result = await pool.request().query(`
+    SELECT p.Id, p.PatientID
+    FROM Patient p
+    LEFT JOIN Centre c ON c.Id = p.CentreId
+    WHERE ${FILTERS.centreExclusion('c')}
+      AND ${FILTERS.patientExclusion('p')}
+  `);
+
+  const codeSet = new Set();
+  const idMap = new Map();
+  for (const row of result.recordset) {
+    const norm = _normalizeCode(row.PatientID);
+    if (norm) {
+      codeSet.add(norm);
+      idMap.set(norm, row.Id);
+    }
+  }
+
+  _unityCache = { codeSet, idMap };
+  _unityCacheTime = now;
+  return _unityCache;
 }
 
 // ── Unity-side stage classification (per-lead) ─────────────────────────────
@@ -143,27 +186,36 @@ router.get('/summary', async (req, res, next) => {
     }
 
     const months = parseMonthsParam(req.query.months);
-    const funnel = buildFunnel(months);
+    const pool = await poolPromise;
+
+    // ── Unity patient code set (5-min cached) ────────────────────────────
+    // Must be queried BEFORE buildFunnel so the registeredInUnity count
+    // checks Unity's actual Patient table, not the Zoho crosswalk index.
+    const { codeSet, idMap } = await _getUnityPatientCache(pool);
+
+    const funnel = buildFunnel(months, codeSet);
 
     if (funnel.warming) {
       return res.status(503).json({ warming: true });
     }
 
-    const pool = await poolPromise;
-
     // ── Get all leads, find which converted ones have Unity matches ────────
     const leadsMod = api.getModule('leads');
     const leads = leadsMod.data;
 
-    // Build: normalizedPatientCode → { leadMonth, unityPatientId }
+    // Build: normalizedPatientCode → { leadId, normCode, registrationDate }
     const convertedWithMatch = [];
 
     for (const lead of leads) {
       if (!_isConverted(lead) || !lead.patientCode) continue;
+      // Check Unity patient match via cached Set (same normalization).
+      if (!codeSet.has(lead.patientCode)) continue;
+
+      // Find the Zoho patient to get its patientCode for norm lookup.
       const zohoPatient = api.findByCode(lead.patientCode);
       if (!zohoPatient) continue;
 
-      const normCode = normalize(zohoPatient.patientCode);
+      const normCode = _normalizeCode(zohoPatient.patientCode);
       if (!normCode) continue;
 
       convertedWithMatch.push({
@@ -173,27 +225,11 @@ router.get('/summary', async (req, res, next) => {
       });
     }
 
-    // ── Query Unity patients matching those codes ──────────────────────────
-    const unityResult = await pool.request().query(`
-      SELECT p.Id, p.PatientID
-      FROM Patient p
-      LEFT JOIN Centre c ON c.Id = p.CentreId
-      WHERE ${FILTERS.centreExclusion('c')}
-        AND ${FILTERS.patientExclusion('p')}
-    `);
-
-    // Build normalized PatientID → Unity Patient.Id map
-    const normToUnityId = new Map();
-    for (const row of unityResult.recordset) {
-      const norm = normalize(row.PatientID);
-      if (norm) normToUnityId.set(norm, row.Id);
-    }
-
-    // Resolve: lead → Unity Patient.Id
+    // Resolve: lead → Unity Patient.Id via cached idMap
     const patientIds = [];
     const unityPatientIdByLead = new Map(); // leadId → unityPatientId
     for (const item of convertedWithMatch) {
-      const unityId = normToUnityId.get(item.normCode);
+      const unityId = idMap.get(item.normCode);
       if (unityId) {
         patientIds.push(unityId);
         unityPatientIdByLead.set(item.leadId, unityId);
@@ -310,7 +346,12 @@ router.get('/gap', async (req, res, next) => {
     }
 
     const months = parseMonthsParam(req.query.months);
-    const result = getConversionGap(months);
+    const pool = await poolPromise;
+
+    // Pass the Unity code set so getConversionGap checks Unity's actual
+    // Patient table, not the Zoho crosswalk index.
+    const { codeSet } = await _getUnityPatientCache(pool);
+    const result = getConversionGap(months, codeSet);
 
     if (result.warming) {
       return res.status(503).json({ warming: true });

@@ -18,7 +18,7 @@
 // false positives/negatives. Flag this clearly in the PR description.
 
 const store = require('./store');
-const { findByCode, indexStats } = require('./crosswalk');
+const { findByCode } = require('./crosswalk');
 
 const DEFAULT_MONTHS = 6;
 
@@ -128,10 +128,17 @@ function _matchByName(childName) {
 /**
  * Build conversion funnel data, cohorted by lead registrationDate month.
  *
- * @param {number} [months=6] Number of trailing months to include
+ * @param {number}     [months=6]        Number of trailing months to include
+ * @param {Set<string>} [unityCodeSet]   Normalized Unity Patient.PatientID values.
+ *                                       When provided, registeredInUnity checks this
+ *                                       Set instead of the Zoho crosswalk index —
+ *                                       because the business question is "does a Unity
+ *                                       Patient record exist," not "does a Zoho patient
+ *                                       record exist." Without this Set the function
+ *                                       falls back to crosswalk.findByCode().
  * @returns {object} { cohorts: [{ month, leads, converted, registeredInUnity }], asOf }
  */
-function buildFunnel(months = DEFAULT_MONTHS) {
+function buildFunnel(months = DEFAULT_MONTHS, unityCodeSet) {
   const mod = store.getModule('leads');
   if (!mod) return { cohorts: [], asOf: null, warming: true };
 
@@ -155,11 +162,16 @@ function buildFunnel(months = DEFAULT_MONTHS) {
     if (_isConverted(lead)) {
       bucket.converted++;
 
-      // Check crosswalk match via patientCode
       if (lead.patientCode) {
         hasPatientCode = true;
-        const zohoPatient = findByCode(lead.patientCode);
-        if (zohoPatient) bucket.registeredInUnity++;
+        // Prefer Unity SQL Set when available — this is the real business
+        // question ("does the patient exist in Unity's database?").
+        // Fall back to the Zoho crosswalk index (which only checks Zoho's
+        // own Patients module — auto-created on conversion, always present).
+        const inUnity = unityCodeSet
+          ? unityCodeSet.has(lead.patientCode)
+          : findByCode(lead.patientCode) !== null;
+        if (inUnity) bucket.registeredInUnity++;
       }
     }
   }
@@ -193,12 +205,13 @@ function buildFunnel(months = DEFAULT_MONTHS) {
  * Return the actual list of converted leads with NO Unity match.
  * This is the ops-actionable gap list — the entire point of the feature.
  *
- * @param {number} [months=6] Number of trailing months to include
+ * @param {number}     [months=6]        Number of trailing months to include
+ * @param {Set<string>} [unityCodeSet]   Normalized Unity Patient.PatientID values
  * @returns {object} { gap: Array<{ childName, patientCode, registrationDate,
  *                    centreHeadName, leadGeneratedBy, enrollmentAmount }>,
  *                    totalConverted, asOf, fallbackNameMatch }
  */
-function getConversionGap(months = DEFAULT_MONTHS) {
+function getConversionGap(months = DEFAULT_MONTHS, unityCodeSet) {
   const mod = store.getModule('leads');
   if (!mod) return { gap: [], totalConverted: 0, asOf: null, warming: true };
 
@@ -223,10 +236,20 @@ function getConversionGap(months = DEFAULT_MONTHS) {
   let fallbackNameMatch = false;
 
   if (hasPatientCode) {
-    matchFn = (lead) => {
-      if (!lead.patientCode) return false;
-      return findByCode(lead.patientCode) !== null;
-    };
+    if (unityCodeSet) {
+      // Unity SQL check: does a matching Patient row exist in Unity's database?
+      matchFn = (lead) => {
+        if (!lead.patientCode) return false;
+        return unityCodeSet.has(lead.patientCode);
+      };
+    } else {
+      // Fallback: Zoho crosswalk index (weaker — checks Zoho's own Patients
+      // module, not Unity's database).
+      matchFn = (lead) => {
+        if (!lead.patientCode) return false;
+        return findByCode(lead.patientCode) !== null;
+      };
+    }
   } else {
     // FALLBACK: name-based matching — weaker join.
     // Each converted lead is matched to a Zoho patient by childName.

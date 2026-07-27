@@ -10,7 +10,6 @@ const { getAccessToken } = require('./auth');
 const { reportUrl } = require('./config');
 
 const MAX_RECORDS = 1000;   // v2.1 max per call (default is 200)
-const MAX_PAGES = 50;       // hard safety stop: 50k records
 const RETRY_BACKOFF_MS = [1000, 3000];
 
 // ── Daily call budget ────────────────────────────────────────────────────────
@@ -21,6 +20,9 @@ const RETRY_BACKOFF_MS = [1000, 3000];
 const DAILY_BUDGET = parseInt(process.env.ZOHO_DAILY_CALL_BUDGET, 10) || 180;
 let _callCount = 0;
 let _budgetDay = _istDay();
+
+// ── Truncation tracking (per-report) ─────────────────────────────────────────
+const _truncated = new Map();
 
 function _istDay() {
   return new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
@@ -40,6 +42,12 @@ function _spendCall() {
 
 function budgetStatus() {
   return { used: _callCount, budget: DAILY_BUDGET, day: _budgetDay };
+}
+
+function truncatedStatus() {
+  const out = {};
+  for (const [linkName, count] of _truncated) out[linkName] = { truncated: true, count };
+  return out;
 }
 
 async function _get(url, headers) {
@@ -62,15 +70,23 @@ async function _get(url, headers) {
  * Fetch records of a report (paginated). Pass `criteria` for incremental
  * fetches, e.g. `Modified_Time > '23-Jul-2026 00:00:00'` — a delta fetch
  * usually costs 1 API call vs ~22 for a 21k-record full fetch.
+ *
+ * @param {string} linkName   Zoho report link name
+ * @param {object} [opts]
+ * @param {string} [opts.fieldConfig='quick_view']
+ * @param {string} [opts.criteria]                Zoho Creator criteria expression
+ * @param {number} [opts.maxRecords=60000]        Records to fetch before stopping
  * @returns {Promise<Array<object>>} raw Zoho records
  */
-async function fetchReport(linkName, { fieldConfig = 'quick_view', criteria = null } = {}) {
+async function fetchReport(linkName, { fieldConfig = 'quick_view', criteria = null, maxRecords = 60000 } = {}) {
   let base = `${reportUrl(linkName)}?max_records=${MAX_RECORDS}&field_config=${fieldConfig}`;
   if (criteria) base += `&criteria=${encodeURIComponent(criteria)}`;
   const records = [];
   let cursor = null;
 
-  for (let page = 0; page < MAX_PAGES; page++) {
+  const maxPages = Math.ceil(maxRecords / MAX_RECORDS);
+
+  for (let page = 0; page < maxPages; page++) {
     const headers = cursor ? { record_cursor: cursor } : {};
     let res;
 
@@ -103,6 +119,14 @@ async function fetchReport(linkName, { fieldConfig = 'quick_view', criteria = nu
     if (!cursor) break;
   }
 
+  // If we broke because of the page cap (not cursor exhaustion), log and record.
+  if (cursor && records.length >= maxRecords) {
+    console.warn(`[zoho/client] ${linkName}: TRUNCATED — hit maxRecords cap of ${maxRecords} (fetched ${records.length} records, more remain)`);
+    _truncated.set(linkName, records.length);
+  } else {
+    _truncated.delete(linkName);
+  }
+
   return records;
 }
 
@@ -117,4 +141,4 @@ async function fetchRecord(linkName, id) {
   return json.data || null;
 }
 
-module.exports = { fetchReport, fetchRecord, budgetStatus };
+module.exports = { fetchReport, fetchRecord, budgetStatus, truncatedStatus };

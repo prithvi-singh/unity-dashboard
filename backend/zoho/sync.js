@@ -42,7 +42,7 @@ function formatCriteriaTime(ts) {
  * Throws on fetch failure (caller handles backoff).
  */
 async function syncModule(key) {
-  const { linkName, ttlMs } = REPORTS[key];
+  const { linkName, ttlMs, windowMonths } = REPORTS[key];
   const existing = store.getModule(key);
   const now = Date.now();
 
@@ -54,10 +54,20 @@ async function syncModule(key) {
   const needFull = !existing || now - existing.lastFullSync > FULL_REFRESH_MS;
 
   if (needFull) {
-    const raw = await fetchReport(linkName);
+    const opts = {};
+    if (windowMonths != null) {
+      const cutoff = now - windowMonths * 30 * 24 * 3600_000;
+      opts.criteria = `Added_Time >= '${formatCriteriaTime(cutoff)}'`;
+      opts.maxRecords = 150000;
+    }
+    const raw = await fetchReport(linkName, opts);
     const mapped = mapRecords(key, raw);
     store.replaceAll(key, mapped, now);
-    console.log(`[zoho/sync] ${key}: FULL sync — ${mapped.length} records`);
+    if (windowMonths != null) {
+      console.log(`[zoho/sync] ${key}: FULL sync (window since ${formatCriteriaTime(now - windowMonths * 30 * 24 * 3600_000)}) — ${mapped.length} records`);
+    } else {
+      console.log(`[zoho/sync] ${key}: FULL sync — ${mapped.length} records`);
+    }
     return { mode: 'full', changed: mapped.length };
   }
 

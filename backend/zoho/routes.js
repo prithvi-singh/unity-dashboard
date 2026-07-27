@@ -6,7 +6,7 @@
 
 const { Router } = require('express');
 const { REPORTS } = require('./config');
-const { budgetStatus } = require('./client');
+const { budgetStatus, truncatedStatus } = require('./client');
 const { tokenStatus } = require('./auth');
 const store = require('./store');
 
@@ -19,6 +19,7 @@ router.get('/health', (_req, res) => {
     configured: true,
     token: tokenStatus(),
     apiBudget: budgetStatus(),
+    truncated: truncatedStatus(),
     snapshots: store.snapshotsEnabled(),
     store: store.status(),
     modules: Object.keys(REPORTS),

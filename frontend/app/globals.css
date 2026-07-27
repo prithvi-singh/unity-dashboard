@@ -121,6 +121,25 @@
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ── Patient code link — clickable patient code with dotted underline ────── */
+.patient-code-link {
+  display: inline;
+  cursor: pointer;
+  border-bottom: 1px dotted currentColor;
+  text-decoration: none !important;
+  transition: border-bottom-color 0.15s ease, color 0.15s ease;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  padding: 0;
+  font: inherit;
+}
+.patient-code-link:hover {
+  border-bottom: 1px solid currentColor;
+  color: #374151;
+}
+
 /* ── Section click hint — appears below section title ──────────────────────
    Usage: <p className="section-click-hint">Click any name to view their full profile</p>
 ────────────────────────────────────────────────────────────────────────────── */

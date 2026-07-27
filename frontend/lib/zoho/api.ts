@@ -34,3 +34,50 @@ export function fetchZohoModule(
   if (search) q.set('search', search);
   return get<ZohoListResponse>(`/api/zoho/${module}?${q.toString()}`, signal);
 }
+
+// ── Patient-link types ─────────────────────────────────────────────────────
+
+export interface PatientLinkUnity {
+  Id: number;
+  PatientID: string;
+  FirstName: string;
+  LastName: string;
+  Gender: string;
+  DateOfBirth: string;
+  Status: string;
+  CentreId: number;
+  CentreName: string;
+}
+
+export interface PatientLinkZoho {
+  id: string;
+  patientCode: string | null;
+  name: string | null;
+  status: string | null;
+  holdReason: string | null;
+  registrationDate: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  fatherName: string | null;
+  motherName: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  centreName: string | null;
+  centreAdmin: string | null;
+  childUin: string | null;
+  addedTime: string | null;
+  modifiedTime: string | null;
+}
+
+export interface PatientLinkResponse {
+  unity: PatientLinkUnity | null;
+  zoho: PatientLinkZoho | null;
+}
+
+export function fetchPatientLink(code: string, signal?: AbortSignal): Promise<PatientLinkResponse> {
+  return get<PatientLinkResponse>(`/api/patient-link/${encodeURIComponent(code)}`, signal);
+}

@@ -34,6 +34,45 @@ function zohoWarming() {
   return !mod || mod.data.length === 0;
 }
 
+/**
+ * Shared lookup: finds Unity and Zoho records for a normalized patient code.
+ * Extracted so the :code and :code/journey endpoints share the same lookup
+ * logic without duplication.
+ */
+async function _lookupPatient(pool, normalizedCode) {
+  // Unity lookup: find the Patient row whose PatientID normalizes to the
+  // same digits. Join Centre for the centre name.
+  const unityResult = await pool.request().query(`
+    SELECT
+      p.Id,
+      p.PatientID,
+      p.FirstName,
+      p.LastName,
+      p.Gender,
+      p.DateOfBirth,
+      p.Status,
+      c.Id AS CentreId,
+      c.CentreName
+    FROM Patient p
+    LEFT JOIN Centre c ON c.Id = p.CentreId
+    WHERE ${FILTERS.centreExclusion('c')}
+      AND ${FILTERS.patientExclusion('p')}
+    ORDER BY p.Id
+  `);
+
+  let unityPatient = null;
+  for (const row of unityResult.recordset) {
+    if (normalize(row.PatientID) === normalizedCode) {
+      unityPatient = row;
+      break;
+    }
+  }
+
+  const zohoPatient = api.findByCode(normalizedCode);
+
+  return { unity: unityPatient || null, zoho: zohoPatient || null };
+}
+
 // ── Endpoints ──────────────────────────────────────────────────────────────
 
 /**
@@ -54,40 +93,151 @@ router.get('/:code', async (req, res, next) => {
     }
 
     const pool = await poolPromise;
+    const result = await _lookupPatient(pool, normalized);
 
-    // Unity lookup: find the Patient row whose PatientID normalizes to the
-    // same digits. Join Centre for the centre name.
-    const unityResult = await pool.request().query(`
-      SELECT
-        p.Id,
-        p.PatientID,
-        p.FirstName,
-        p.LastName,
-        p.Gender,
-        p.DateOfBirth,
-        p.Status,
-        c.Id AS CentreId,
-        c.CentreName
-      FROM Patient p
-      LEFT JOIN Centre c ON c.Id = p.CentreId
-      WHERE ${FILTERS.centreExclusion('c')}
-        AND ${FILTERS.patientExclusion('p')}
-      ORDER BY p.Id
-    `);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    let unityPatient = null;
-    for (const row of unityResult.recordset) {
-      if (normalize(row.PatientID) === normalized) {
-        unityPatient = row;
-        break;
+/**
+ * GET /api/patient-link/:code/journey
+ * Single chronological timeline merging Zoho and Unity events for a patient:
+ * - Zoho lead added/consultation date
+ * - Zoho conversion (modifiedTime as proxy conversion date)
+ * - Zoho patient registration
+ * - Unity PatientAuditLog events (ordered chronologically)
+ */
+router.get('/:code/journey', async (req, res, next) => {
+  try {
+    if (zohoWarming()) {
+      return res.status(503).json({ warming: true });
+    }
+
+    const inputCode = req.params.code;
+    const normalized = normalize(inputCode);
+    if (!normalized) {
+      return res.json({ code: inputCode, timeline: [], unity: null, zoho: null });
+    }
+
+    const pool = await poolPromise;
+
+    // Reuse the shared patient lookup.
+    const { unity, zoho } = await _lookupPatient(pool, normalized);
+
+    // ── Zoho leads: find leads linked to this patient ─────────────────────
+    // A lead is linked if its patientCode (normalized) matches the input code.
+    const leadsMod = api.getModule('leads');
+    const leads = [];
+    if (leadsMod && leadsMod.data.length > 0) {
+      for (const lead of leadsMod.data) {
+        if (lead.patientCode && normalize(lead.patientCode) === normalized) {
+          leads.push(lead);
+        }
+      }
+      // FALLBACK: if no leads were found by patientCode, search by childName
+      // matching the Zoho patient's name. This is a best-effort join.
+      if (leads.length === 0 && zoho && zoho.name) {
+        const zohoName = zoho.name.toString().trim().toLowerCase();
+        for (const lead of leadsMod.data) {
+          const leadName = (lead.childName || '').toString().trim().toLowerCase();
+          if (leadName === zohoName) {
+            leads.push(lead);
+          }
+        }
       }
     }
 
-    const zohoPatient = api.findByCode(inputCode);
+    // ── Unity PatientAuditLog events ─────────────────────────────────────
+    let auditEvents = [];
+    if (unity) {
+      const auditReq = pool.request();
+      auditReq.input('patientId', sql.BigInt, unity.Id);
+      const auditResult = await auditReq.query(`
+        SELECT
+          pal.Type,
+          pal.Description,
+          pal.CreatedDateTime
+        FROM PatientAuditLog pal
+        WHERE pal.PatientId = @patientId
+        ORDER BY pal.CreatedDateTime ASC
+      `);
+      auditEvents = auditResult.recordset;
+    }
+
+    // ── Build the unified timeline ───────────────────────────────────────
+    const timeline = [];
+
+    // Zoho lead events
+    for (const lead of leads) {
+      if (lead.addedTime) {
+        timeline.push({
+          date: lead.addedTime,
+          source: 'zoho',
+          label: 'Lead added',
+          detail: lead.childName || null,
+        });
+      }
+      if (lead.consultationDate) {
+        timeline.push({
+          date: lead.consultationDate,
+          source: 'zoho',
+          label: 'Consultation',
+          detail: lead.consultationType || null,
+        });
+      }
+      // If status is "Converted", use modifiedTime as proxy conversion date.
+      // NOTE: Zoho does not expose an explicit "converted at" timestamp;
+      // modifiedTime is the closest proxy — it may reflect later edits
+      // rather than the actual conversion moment.
+      if (lead.status === 'Converted' && lead.modifiedTime) {
+        timeline.push({
+          date: lead.modifiedTime,
+          source: 'zoho',
+          label: 'Lead converted (proxy)',
+          detail: 'Status changed to Converted; modifiedTime as proxy — may not be exact',
+        });
+      }
+    }
+
+    // Zoho patient registration
+    if (zoho && zoho.registrationDate) {
+      timeline.push({
+        date: zoho.registrationDate,
+        source: 'zoho',
+        label: 'Patient registered (Zoho)',
+        detail: zoho.name || null,
+      });
+    }
+
+    // Unity PatientAuditLog events
+    for (const evt of auditEvents) {
+      timeline.push({
+        date: evt.CreatedDateTime instanceof Date
+          ? evt.CreatedDateTime.toISOString()
+          : String(evt.CreatedDateTime),
+        source: 'unity',
+        label: evt.Type,
+        detail: evt.Description || null,
+      });
+    }
+
+    // Sort chronologically (string comparison works for ISO dates and Zoho date formats)
+    timeline.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      if (isNaN(da) && isNaN(db)) return 0;
+      if (isNaN(da)) return 1;
+      if (isNaN(db)) return -1;
+      return da - db;
+    });
 
     res.json({
-      unity: unityPatient || null,
-      zoho: zohoPatient || null,
+      code: inputCode,
+      timeline,
+      unity: unity || null,
+      zoho: zoho || null,
     });
   } catch (err) {
     next(err);

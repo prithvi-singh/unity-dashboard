@@ -8,7 +8,7 @@
 const store = require('./store');
 
 const MODULE_KEY = 'patients';
-const ID_CANDIDATES = ['Patient_ID', 'PatientID', 'Patient_ID1'];
+const ID_CANDIDATES = ['patientCode', 'Patient_ID', 'PatientID', 'Patient_ID1'];
 const DIGIT_RE = /\D/g;
 
 let _detectedField = null;

@@ -10,12 +10,13 @@
 // passthrough to the frontend long-term — it forfeits the firewall.
 
 const leads = require('./leads');
+const patients = require('./patients');
 
 // Default: passthrough with the Zoho record ID normalised.
 const passthrough = (record) => ({ id: record.ID || record.id || null, ...record });
 
 const MAPPERS = {
-  patients: passthrough,
+  patients,
   invoices: passthrough,
   appointments: passthrough,
   receipts: passthrough,

@@ -1,5 +1,5 @@
 'use strict';
-// Whitelist mapper for Zoho lead records — explicit field mapping firewall.
+// Whitelist mapper for Zoho CRM lead records — explicit field mapping firewall.
 // Zoho Creator renames break this file, never the frontend.
 //
 // Rules:
@@ -25,20 +25,19 @@ module.exports = (r) => {
   return {
     id,
     childName: name,
+    parentsName: r.Parents_Name || null,
+    phone: r.Phone_Number || null,
+    email: r.Email || null,
+    leadNumber: r.Lead_Number || null,
+    leadStatus: r.Lead_Status || null,
+    leadStage: r.Lead_Stage1 || null,
+    leadSource: r.CRM_Lead_Source || r.Lead_Source || null,
     therapy: therapyJoin(r.Therapy),
-    consultationDate: r.Consultation_Date || null,
-    consultationType: r.Consultation_Type || null,
-    registrationDate: r.Registration_Date || null,
-    leadGeneratedBy: r.Lead_Generated_By || null,
+    centerName: r.Center_Name?.zc_display_value ?? null,
+    franchiseeAdmin: r.Franchisee_Admin?.zc_display_value ?? null,
     centreHeadName: r.Centre_Head_Name || null,
-    schoolName: r.School_Name || null,
-    motherName: r.Mother_Name1?.zc_display_value ?? null,
-    gender: r.Gender || null,
-    enrollmentAmount: r.Enrollment_Amount || null,
-    address1: r.Address_1 || null,
-    address2: r.Address_2 || null,
-    alternatePhone: r.Alternate_Phone || null,
     status: r.Status || null,
+    notes: r.Notes || null,
     addedTime: r.Added_Time || null,
     modifiedTime: r.Modified_Time || null,
   };

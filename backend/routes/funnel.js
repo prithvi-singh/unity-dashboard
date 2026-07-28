@@ -177,7 +177,7 @@ async function _queryStageTimestamps(pool, months) {
         ap.PatientId,
         ap.CreatedDateTimeUtc AS registeredAt,
         ap.Status AS apStatus,
-        p.PatientID,
+        p.PatientID AS PatientCode,
         p.FirstName,
         p.LastName,
         c.CentreName
@@ -190,7 +190,7 @@ async function _queryStageTimestamps(pool, months) {
     ),
     -- First non-CaseAssigned audit event = assessment started
     assessment_started AS (
-      SELECT AllocatePatientId AS apId, MIN(CreatedDateTimeUtc) AS startedAt
+      SELECT AllocatePatientId AS apId, MIN(CreatedDateTime) AS startedAt
       FROM PatientAuditLog
       WHERE AllocatePatientId IN (SELECT apId FROM ap_scope)
         AND Type != 'CaseAssigned'
@@ -198,7 +198,7 @@ async function _queryStageTimestamps(pool, months) {
     ),
     -- AssessmentResultGenerated
     result_generated AS (
-      SELECT AllocatePatientId AS apId, MIN(CreatedDateTimeUtc) AS resultAt
+      SELECT AllocatePatientId AS apId, MIN(CreatedDateTime) AS resultAt
       FROM PatientAuditLog
       WHERE AllocatePatientId IN (SELECT apId FROM ap_scope)
         AND Type = 'AssessmentResultGenerated'
@@ -206,7 +206,7 @@ async function _queryStageTimestamps(pool, months) {
     ),
     -- ReportAdded
     report_added AS (
-      SELECT AllocatePatientId AS apId, MIN(CreatedDateTimeUtc) AS reportAt
+      SELECT AllocatePatientId AS apId, MIN(CreatedDateTime) AS reportAt
       FROM PatientAuditLog
       WHERE AllocatePatientId IN (SELECT apId FROM ap_scope)
         AND Type = 'ReportAdded'
@@ -214,7 +214,7 @@ async function _queryStageTimestamps(pool, months) {
     ),
     -- ReportPDFGenerated
     report_pdf AS (
-      SELECT AllocatePatientId AS apId, MIN(CreatedDateTimeUtc) AS pdfAt
+      SELECT AllocatePatientId AS apId, MIN(CreatedDateTime) AS pdfAt
       FROM PatientAuditLog
       WHERE AllocatePatientId IN (SELECT apId FROM ap_scope)
         AND Type = 'ReportPDFGenerated'
@@ -229,7 +229,7 @@ async function _queryStageTimestamps(pool, months) {
     ),
     -- Approved goal
     approved_goal AS (
-      SELECT pgar.AllocatePatientId AS apId, MIN(pgarg.CreatedDateTimeUtc) AS approvedAt
+      SELECT pgar.AllocatePatientId AS apId, MIN(pgarg.UpdatedDateTimeUtc) AS approvedAt
       FROM PatientGoalApprovalRequestGoal pgarg
       JOIN PatientGoalApprovalRequest pgar ON pgar.Id = pgarg.PatientGoalApprovalRequestId
       WHERE pgarg.Status = 'Approved'
@@ -239,7 +239,7 @@ async function _queryStageTimestamps(pool, months) {
     SELECT
       ap.apId,
       ap.PatientId,
-      ap.PatientID,
+      ap.PatientCode,
       ap.FirstName,
       ap.LastName,
       ap.CentreName,
@@ -676,27 +676,37 @@ router.get('/stalled', async (req, res, next) => {
 
     const result = await request.query(`
       SELECT
-        p.Id AS patientId,
-        p.PatientID,
-        p.FirstName,
-        p.LastName,
-        c.CentreName,
-        ap.CreatedDateTimeUtc AS registeredAt,
-        CAST(DATEDIFF_BIG(SECOND, ap.CreatedDateTimeUtc, GETUTCDATE()) / 86400.0 AS DECIMAL(10,1)) AS daysSinceRegistration
-      FROM AllocatePatient ap
-      JOIN Patient p ON p.Id = ap.PatientId
-      LEFT JOIN Centre c ON c.Id = p.CentreId
-      WHERE NOT EXISTS (
-        SELECT 1 FROM PatientAuditLog pal
-        WHERE pal.AllocatePatientId = ap.Id
-          AND pal.Type != 'CaseAssigned'
-      )
-      AND ap.CreatedDateTimeUtc >= '${cutoffISO}'
-      AND ap.Status NOT IN ('Completed', 'Cancelled')
-      AND ${FILTERS.centreExclusion('c')}
-      AND ${FILTERS.patientExclusion('p')}
-      HAVING CAST(DATEDIFF_BIG(SECOND, ap.CreatedDateTimeUtc, GETUTCDATE()) / 86400.0 AS DECIMAL(10,1)) > @thresholdDays
-      ORDER BY daysSinceRegistration DESC
+        sub.patientId,
+        sub.PatientCode,
+        sub.FirstName,
+        sub.LastName,
+        sub.CentreName,
+        sub.registeredAt,
+        sub.daysSinceRegistration
+      FROM (
+        SELECT
+          p.Id AS patientId,
+          p.PatientID AS PatientCode,
+          p.FirstName,
+          p.LastName,
+          c.CentreName,
+          ap.CreatedDateTimeUtc AS registeredAt,
+          CAST(DATEDIFF_BIG(SECOND, ap.CreatedDateTimeUtc, GETUTCDATE()) / 86400.0 AS DECIMAL(10,1)) AS daysSinceRegistration
+        FROM AllocatePatient ap
+        JOIN Patient p ON p.Id = ap.PatientId
+        LEFT JOIN Centre c ON c.Id = p.CentreId
+        WHERE NOT EXISTS (
+          SELECT 1 FROM PatientAuditLog pal
+          WHERE pal.AllocatePatientId = ap.Id
+            AND pal.Type != 'CaseAssigned'
+        )
+        AND ap.CreatedDateTimeUtc >= '${cutoffISO}'
+        AND ap.Status NOT IN ('Completed', 'Cancelled')
+        AND ${FILTERS.centreExclusion('c')}
+        AND ${FILTERS.patientExclusion('p')}
+      ) sub
+      WHERE sub.daysSinceRegistration > @thresholdDays
+      ORDER BY sub.daysSinceRegistration DESC
     `);
 
     // Build patient-code → lead lookup for enrollmentAmount cross-reference
@@ -711,10 +721,10 @@ router.get('/stalled', async (req, res, next) => {
     }
 
     const stalled = result.recordset.map((row) => {
-      const normCode = _normalizeCode(row.PatientID);
+      const normCode = _normalizeCode(row.PatientCode);
       const lead = normCode ? leadByNormCode.get(normCode) : null;
       return {
-        patientCode: row.PatientID || null,
+        patientCode: row.PatientCode || null,
         name: [row.FirstName, row.LastName].filter(Boolean).join(' '),
         centreName: row.CentreName || null,
         daysSinceRegistration: Number(row.daysSinceRegistration),

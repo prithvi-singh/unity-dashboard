@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePatientLink } from '@/lib/zoho/usePatientLink';
+import { usePatientJourney } from '@/lib/zoho/useFunnel';
 import type { PatientLinkZoho, PatientLinkUnity } from '@/lib/zoho/api';
+import PatientJourneyTimeline from './PatientJourneyTimeline';
 
 interface Props {
   open: boolean;
@@ -79,6 +81,13 @@ function Field({ label, value, mono }: { label: string; value: string | null; mo
 
 export default function PatientZohoDrawer({ open, patientCode, patientName, onClose }: Props) {
   const { data, loading, error, warming } = usePatientLink(open ? patientCode : null);
+  const {
+    data: journeyData,
+    loading: journeyLoading,
+    error: journeyError,
+    warming: journeyWarming,
+  } = usePatientJourney(open ? patientCode : null);
+  const [journeyOpen, setJourneyOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -239,6 +248,69 @@ export default function PatientZohoDrawer({ open, patientCode, patientName, onCl
                     </div>
                   )}
                 </section>
+              )}
+            </div>
+          )}
+
+          {/* Full Journey — collapsible timeline section */}
+          {(zoho || (data && !loading && !error && !warming)) && (
+            <div className="border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setJourneyOpen(!journeyOpen)}
+                className="w-full px-4 sm:px-6 py-3.5 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors"
+              >
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-gray-400">
+                    Full Journey
+                  </p>
+                  {journeyData && (
+                    <p className="text-[12px] text-gray-500 mt-0.5">
+                      {journeyData.timeline.length} event{journeyData.timeline.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+                <svg
+                  className={`w-4 h-4 text-gray-400 transition-transform ${journeyOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {journeyOpen && (
+                <div className="px-4 sm:px-6 pb-5">
+                  {journeyLoading && (
+                    <div className="py-6 animate-pulse text-[12px] text-gray-400 text-center">
+                      Loading journey…
+                    </div>
+                  )}
+
+                  {journeyWarming && (
+                    <div className="py-4 text-center text-[13px] text-amber-700 bg-amber-50 rounded-lg px-3 py-3">
+                      Zoho data still syncing — journey timeline will appear shortly.
+                    </div>
+                  )}
+
+                  {journeyError && (
+                    <div className="py-4 text-center text-[12px] text-gray-500">
+                      Unable to load journey timeline.
+                    </div>
+                  )}
+
+                  {!journeyLoading && !journeyError && !journeyWarming && journeyData && (
+                    <PatientJourneyTimeline timeline={journeyData.timeline} />
+                  )}
+
+                  {!journeyLoading && !journeyError && !journeyWarming && !journeyData && (
+                    <p className="text-[12px] text-gray-400 text-center py-4">
+                      No journey data available.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

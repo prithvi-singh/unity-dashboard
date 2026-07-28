@@ -9,6 +9,8 @@ import { useMemo, useState } from 'react';
 import { useZohoSummary, useZohoModule } from '@/lib/zoho/useZoho';
 import { ZOHO_MODULES, type ZohoModuleKey, type ZohoRecord } from '@/lib/zoho/types';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import FunnelChart from './FunnelChart';
+import FunnelGapTable from './FunnelGapTable';
 
 const PAGE_SIZE = 50;
 const MAX_TABLE_COLUMNS = 6;
@@ -324,6 +326,19 @@ function ModuleTable({ module }: { module: ZohoModuleKey }) {
   );
 }
 
+// ── Funnel section ───────────────────────────────────────────────────────────
+
+function FunnelSection() {
+  const [months, setMonths] = useState(6);
+
+  return (
+    <div className="space-y-3 sm:space-y-5">
+      <FunnelChart months={months} onMonthsChange={setMonths} />
+      <FunnelGapTable months={months} />
+    </div>
+  );
+}
+
 // ── Tab root ─────────────────────────────────────────────────────────────────
 
 export default function BusinessTab() {
@@ -331,6 +346,7 @@ export default function BusinessTab() {
 
   return (
     <div className="mt-3 sm:mt-5 space-y-3 sm:space-y-5">
+      <FunnelSection />
       <SummaryCards active={activeModule} onSelect={setActiveModule} />
       {/* key= forces clean state (search/page/sort) when switching modules */}
       <ModuleTable key={activeModule} module={activeModule} />
